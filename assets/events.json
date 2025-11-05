@@ -1,0 +1,20 @@
+[
+  {
+    "id": "evt_1",
+    "title": "Mercado artesanal",
+    "location": { "city": "Barbate", "venue": "Paseo Marítimo" },
+    "start_ts": "2025-09-12T18:00:00Z"
+  },
+  {
+    "id": "evt_2",
+    "title": "Ruta guiada por el casco histórico",
+    "location": { "city": "Zahara", "venue": "Plaza Principal" },
+    "start_ts": "2025-09-13T10:00:00Z"
+  },
+  {
+    "id": "evt_3",
+    "title": "Concierto en la plaza",
+    "location": { "city": "Vejer", "venue": "Plaza de España" },
+    "start_ts": "2025-09-14T20:30:00Z"
+  }
+]
