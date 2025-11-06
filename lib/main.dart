@@ -12,22 +12,28 @@ Future<void> main() async {
   await initializeDateFormatting('es');
 
   // Cargar .env
+  bool dotenvLoaded = false;
   try {
     await dotenv.load(fileName: ".env");
+    dotenvLoaded = true;
     debugPrint("✅ Archivo .env cargado correctamente");
   } catch (e) {
     debugPrint("⚠️ Error al cargar .env: $e");
   }
 
   // Inicializar Supabase si hay credenciales
-  final url = dotenv.env['SUPABASE_URL'];
-  final key = dotenv.env['SUPABASE_ANON_KEY'];
+  if (dotenvLoaded) {
+    final url = dotenv.env['SUPABASE_URL'];
+    final key = dotenv.env['SUPABASE_ANON_KEY'];
 
-  if (url == null || key == null || url.isEmpty || key.isEmpty) {
-    debugPrint("❌ Variables de entorno no encontradas");
+    if (url == null || key == null || url.isEmpty || key.isEmpty) {
+      debugPrint("❌ Variables de entorno no encontradas");
+    } else {
+      await Supabase.initialize(url: url, anonKey: key);
+      debugPrint("✅ Supabase inicializado con éxito");
+    }
   } else {
-    await Supabase.initialize(url: url, anonKey: key);
-    debugPrint("✅ Supabase inicializado con éxito");
+    debugPrint("⚠️ Supabase no inicializado (archivo .env no encontrado)");
   }
 
   runApp(const Fiestapp());
