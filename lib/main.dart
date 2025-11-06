@@ -5,7 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'models.dart';
+import 'ui/dashboard/dashboard_screen.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -81,74 +81,37 @@ class Fiestapp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final themeData = ThemeData(
+      useMaterial3: true,
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: const Color(0xFFF28C28), // naranja cálido
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF9F4EF),
+      appBarTheme: AppBarTheme(
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        titleTextStyle: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 24,
+        ),
+      ),
+      textTheme: TextTheme(
+        titleLarge: const TextStyle(
+          fontWeight: FontWeight.bold,
+          fontSize: 20,
+        ),
+      ),
+    );
+
     return MaterialApp(
       title: 'Fiestapp',
       navigatorKey: navigatorKey,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
-        useMaterial3: true,
-      ),
-      home: const _BootstrapScreen(),
+      theme: themeData,
+      darkTheme: ThemeData.dark(useMaterial3: true),
+      home: const DashboardScreen(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class _BootstrapScreen extends StatefulWidget {
-  const _BootstrapScreen();
-
-  @override
-  State<_BootstrapScreen> createState() => _BootstrapScreenState();
-}
-
-class _BootstrapScreenState extends State<_BootstrapScreen> {
-  List<Event> _events = [];
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEvents();
-  }
-
-  Future<void> _loadEvents() async {
-    try {
-      final String jsonString = await rootBundle.loadString('assets/events.json');
-      final List<dynamic> jsonList = json.decode(jsonString) as List<dynamic>;
-      
-      setState(() {
-        _events = jsonList.map((json) => Event.fromJson(json as Map<String, dynamic>)).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('❌ Error al cargar events.json: $e');
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('Fiestapp')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _events.isEmpty
-              ? const Center(
-                  child: Text('App arrancada. Supabase listo si .env está OK.'),
-                )
-              : ListView.builder(
-                  itemCount: _events.length,
-                  itemBuilder: (context, index) {
-                    final event = _events[index];
-                    return ListTile(
-                      title: Text(event.title),
-                      subtitle: Text(event.location.city),
-                      leading: const Icon(Icons.event),
-                    );
-                  },
-                ),
-    );
-  }
-}
