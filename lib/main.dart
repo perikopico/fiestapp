@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'models.dart';
 
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es');
@@ -37,6 +39,41 @@ Future<void> main() async {
   }
 
   runApp(const Fiestapp());
+
+  // Prueba de conexión a Supabase después de montar la app
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    testSupabase();
+  });
+}
+
+Future<void> testSupabase() async {
+  try {
+    final client = Supabase.instance.client;
+    final data = await client.from('events').select().limit(3);
+    debugPrint('SUPABASE TEST: ' + jsonEncode(data));
+
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      final int count = (data is List) ? data.length : 0;
+      ScaffoldMessenger.of(ctx).showSnackBar(
+        SnackBar(content: Text('Eventos cargados: ' + count.toString())),
+      );
+    } else {
+      debugPrint('SUPABASE TEST: Contexto no disponible para SnackBar');
+    }
+  } catch (e) {
+    debugPrint('SUPABASE TEST ERROR: ' + e.toString());
+  }
+}
+
+Future<void> _testSupabaseConnection() async {
+  try {
+    final client = Supabase.instance.client;
+    final data = await client.from('events').select().limit(3);
+    debugPrint('🔌 Supabase conectado. Primeras 3 filas: ' + jsonEncode(data));
+  } catch (e) {
+    debugPrint('❌ Error probando Supabase: ' + e.toString());
+  }
 }
 
 class Fiestapp extends StatelessWidget {
@@ -46,6 +83,7 @@ class Fiestapp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Fiestapp',
+      navigatorKey: navigatorKey,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
