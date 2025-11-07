@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../services/event_service.dart';
+import 'package:fiestapp/services/event_service.dart';
 import '../../services/category_service.dart';
 import '../../models/event.dart';
 import '../../models/category.dart';
@@ -21,7 +21,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Event? _featuredEvent;
   List<Event> _upcomingEvents = [];
-  List<Event> _popularEvents = [];
+  List<Event> _featuredEvents = [];
   List<Category> _categories = [];
   bool _isLoading = true;
   String? _error;
@@ -40,18 +40,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     try {
       final results = await Future.wait([
-        _eventService.fetchFeatured(limit: 1),
         _eventService.fetchUpcoming(limit: 10),
-        _eventService.fetchPopularWeek(limit: 10),
+        _eventService.fetchFeatured(limit: 10),
         _categoryService.fetchAll(),
       ]);
 
       setState(() {
-        final featured = results[0] as List<Event>;
+        final upcoming = results[0] as List<Event>;
+        final featured = results[1] as List<Event>;
+        _upcomingEvents = upcoming;
+        _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
-        _upcomingEvents = results[1] as List<Event>;
-        _popularEvents = results[2] as List<Event>;
-        _categories = results[3] as List<Category>;
+        _categories = results[2] as List<Category>;
         _isLoading = false;
       });
     } catch (e) {
@@ -90,9 +90,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Text(
                   _error!,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Colors.grey[600],
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                 ),
               ),
               const SizedBox(height: 16),
@@ -107,10 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fiestapp'),
-        elevation: 0,
-      ),
+      appBar: AppBar(title: const Text('Fiestapp'), elevation: 0),
       body: RefreshIndicator(
         onRefresh: _reloadEvents,
         child: SingleChildScrollView(
@@ -135,8 +132,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const SizedBox(height: 24),
 
-                // === Popular esta semana ===
-                PopularThisWeekSection(events: _popularEvents),
+                // === Destacados ===
+                PopularThisWeekSection(events: _featuredEvents),
               ],
             ),
           ),
@@ -212,4 +209,3 @@ class PopularThisWeekSection extends StatelessWidget {
     );
   }
 }
-

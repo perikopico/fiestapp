@@ -1,30 +1,11 @@
 import 'package:flutter/material.dart';
 import '../../../models/category.dart';
+import '../../icons/icon_mapper.dart';
 
 class CategoriesGrid extends StatelessWidget {
   final List<Category> categories;
 
   const CategoriesGrid({super.key, required this.categories});
-
-  IconData _getIconForCategory(String? iconName) {
-    if (iconName == null) return Icons.category;
-    
-    // Mapeo de nombres comunes a iconos de Material
-    final iconMap = {
-      'music': Icons.music_note,
-      'food': Icons.restaurant,
-      'sports': Icons.sports_soccer,
-      'art': Icons.palette,
-      'culture': Icons.museum,
-      'festival': Icons.celebration,
-      'market': Icons.shopping_cart,
-      'tradition': Icons.history,
-      'motor': Icons.directions_car,
-      'mercados': Icons.store,
-    };
-
-    return iconMap[iconName.toLowerCase()] ?? Icons.category;
-  }
 
   Color _getColorForCategory(String categoryName) {
     final name = categoryName.toLowerCase();
@@ -72,7 +53,6 @@ class CategoriesGrid extends StatelessWidget {
               childAspectRatio: 0.9,
               children: categories.map((category) {
                 final categoryColor = _getColorForCategory(category.name);
-                final iconData = _getIconForCategory(category.icon);
                 
                 return InkWell(
                   onTap: () {
@@ -90,9 +70,9 @@ class CategoriesGrid extends StatelessWidget {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            iconData,
-                            color: categoryColor,
+                            iconFromName(category.icon),
                             size: 28,
+                            color: Colors.black54,
                           ),
                           const SizedBox(height: 6),
                           Flexible(

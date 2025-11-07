@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/event.dart';
+import '../../icons/icon_mapper.dart';
 
 class UpcomingList extends StatelessWidget {
   final List<Event> events;
@@ -42,7 +43,7 @@ class UpcomingList extends StatelessWidget {
                   children: [
                     ClipRRect(
                       borderRadius: BorderRadius.circular(12),
-                      child: event.imageUrl != null
+                      child: event.imageUrl != null && event.imageUrl!.isNotEmpty
                           ? Image.network(
                               event.imageUrl!,
                               width: 80,
@@ -52,16 +53,24 @@ class UpcomingList extends StatelessWidget {
                                 return Container(
                                   width: 80,
                                   height: 80,
-                                  color: Colors.grey[300],
-                                  child: const Icon(Icons.event),
+                                  color: Colors.grey.shade200,
+                                  child: Icon(
+                                    iconFromName(event.categoryIcon),
+                                    size: 28,
+                                    color: Colors.grey.shade700,
+                                  ),
                                 );
                               },
                             )
                           : Container(
                               width: 80,
                               height: 80,
-                              color: Colors.grey[300],
-                              child: const Icon(Icons.event),
+                              color: Colors.grey.shade200,
+                              child: Icon(
+                                iconFromName(event.categoryIcon),
+                                size: 28,
+                                color: Colors.grey.shade700,
+                              ),
                             ),
                     ),
                     const SizedBox(width: 12),
@@ -77,7 +86,7 @@ class UpcomingList extends StatelessWidget {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            "${event.town ?? ''}${event.place != null ? ' · ' + event.place! : ''}",
+                            "${event.cityName ?? ''}${event.place != null ? ' · ' + event.place! : ''}",
                             style: const TextStyle(
                               fontWeight: FontWeight.w500,
                             ),
@@ -85,15 +94,13 @@ class UpcomingList extends StatelessWidget {
                         ],
                       ),
                     ),
-                    if (event.startsAt != null) ...[
-                      const SizedBox(width: 12),
-                      Text(
-                        event.formattedDate,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
-                            ),
-                      ),
-                    ],
+                    const SizedBox(width: 12),
+                    Text(
+                      event.formattedDate,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Colors.grey[600],
+                          ),
+                    ),
                   ],
                 ),
               ),

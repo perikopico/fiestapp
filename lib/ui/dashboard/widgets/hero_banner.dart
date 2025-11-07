@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/event.dart';
+import '../../icons/icon_mapper.dart';
 
 class HeroBanner extends StatelessWidget {
   final Event? featured;
@@ -21,17 +22,30 @@ class HeroBanner extends StatelessWidget {
           fit: StackFit.expand,
           children: [
             // Background image
-            Image.network(
-              featured!.imageUrl ?? '',
-              fit: BoxFit.cover,
-              height: 200,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.image, size: 64),
-                );
-              },
-            ),
+            featured!.imageUrl != null && featured!.imageUrl!.isNotEmpty
+                ? Image.network(
+                    featured!.imageUrl!,
+                    fit: BoxFit.cover,
+                    height: 200,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: Colors.grey.shade200,
+                        child: Icon(
+                          iconFromName(featured!.categoryIcon),
+                          size: 64,
+                          color: Colors.grey.shade700,
+                        ),
+                      );
+                    },
+                  )
+                : Container(
+                    color: Colors.grey.shade200,
+                    child: Icon(
+                      iconFromName(featured!.categoryIcon),
+                      size: 64,
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
             // Gradient overlay
             Container(
               decoration: BoxDecoration(
@@ -80,10 +94,10 @@ class HeroBanner extends StatelessWidget {
                           ],
                         ),
                   ),
-                  if (featured!.town != null || featured!.place != null) ...[
+                  if (featured!.cityName != null || featured!.place != null) ...[
                     const SizedBox(height: 4),
                     Text(
-                      "${featured!.town ?? ''}${featured!.place != null ? ' · ' + featured!.place! : ''}",
+                      "${featured!.cityName ?? ''}${featured!.place != null ? ' · ' + featured!.place! : ''}",
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Colors.white,
                             shadows: [

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../models/event.dart';
+import '../../icons/icon_mapper.dart';
 
 class PopularCarousel extends StatelessWidget {
   final List<Event> events;
@@ -53,21 +54,29 @@ class PopularCarousel extends StatelessWidget {
                       Container(
                         height: 115,
                         width: double.infinity,
-                        color: Colors.grey[300],
-                        child: event.imageUrl != null
+                        color: Colors.grey.shade200,
+                        child: event.imageUrl != null && event.imageUrl!.isNotEmpty
                             ? Image.network(
                                 event.imageUrl!,
                                 width: double.infinity,
                                 height: 115,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
-                                  return const Center(
-                                    child: Icon(Icons.event, size: 48),
+                                  return Center(
+                                    child: Icon(
+                                      iconFromName(event.categoryIcon),
+                                      size: 48,
+                                      color: Colors.grey.shade700,
+                                    ),
                                   );
                                 },
                               )
-                            : const Center(
-                                child: Icon(Icons.event, size: 48),
+                            : Center(
+                                child: Icon(
+                                  iconFromName(event.categoryIcon),
+                                  size: 48,
+                                  color: Colors.grey.shade700,
+                                ),
                               ),
                       ),
                       // Title and date below
@@ -86,15 +95,13 @@ class PopularCarousel extends StatelessWidget {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (event.startsAt != null) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                event.formattedDate,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      fontSize: 11,
-                                    ),
-                              ),
-                            ],
+                            const SizedBox(height: 3),
+                            Text(
+                              event.formattedDate,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    fontSize: 11,
+                                  ),
+                            ),
                           ],
                         ),
                       ),
