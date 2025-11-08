@@ -8,6 +8,7 @@ import 'widgets/hero_banner.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
+import '../icons/icon_mapper.dart';
 
 // Clase simple para ciudades
 class City {
@@ -162,13 +163,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const SizedBox(height: 16),
 
-                // === Filtro de ciudades ===
-                CitiesSection(
+                // === FilterBar: Ciudades y Categorías ===
+                _FilterBar(
                   cities: _cities,
+                  categories: _categories,
                   selectedCityId: _selectedCityId,
+                  selectedCategoryId: _selectedCategoryId,
                   onCityTap: (cityId) {
                     setState(() {
                       _selectedCityId = cityId;
+                    });
+                  },
+                  onCategoryTap: (categoryId) {
+                    setState(() {
+                      _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
                     });
                   },
                 ),
@@ -180,28 +188,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   events: _upcomingEvents,
                   selectedCategoryId: _selectedCategoryId,
                   selectedCityId: _selectedCityId,
-                  categories: _categories,
-                  onClearCategoryFilter: () {
-                    setState(() {
-                      _selectedCategoryId = null;
-                    });
-                  },
                 ),
 
                 const SizedBox(height: 24),
 
-                // === Categorías ===
-                CategoriesSection(
-                  categories: _categories,
-                  selectedCategoryId: _selectedCategoryId,
-                  onCategoryTap: (categoryId) {
-                    setState(() {
-                      _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
-                    });
-                  },
-                ),
+                // === Categorías (sección grande - comentada) ===
+                // CategoriesSection(
+                //   categories: _categories,
+                //   selectedCategoryId: _selectedCategoryId,
+                //   onCategoryTap: (categoryId) {
+                //     setState(() {
+                //       _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
+                //     });
+                //   },
+                // ),
 
-                const SizedBox(height: 24),
+                // const SizedBox(height: 24),
 
                 // === Destacados ===
                 PopularThisWeekSection(events: _featuredEvents),
@@ -231,16 +233,12 @@ class UpcomingEventsSection extends StatelessWidget {
   final List<Event> events;
   final int? selectedCategoryId;
   final int? selectedCityId;
-  final List<Category> categories;
-  final VoidCallback onClearCategoryFilter;
 
   const UpcomingEventsSection({
     super.key,
     required this.events,
     this.selectedCategoryId,
     this.selectedCityId,
-    required this.categories,
-    required this.onClearCategoryFilter,
   });
 
   @override
@@ -252,54 +250,79 @@ class UpcomingEventsSection extends StatelessWidget {
       return okCat && okCity;
     }).toList();
 
-    // Buscar la categoría seleccionada para mostrar el chip
-    Category? selectedCategory;
-    if (selectedCategoryId != null) {
-      selectedCategory = categories.firstWhere(
-        (c) => c.id == selectedCategoryId,
-        orElse: () => Category(name: '', id: null),
-      );
-      if (selectedCategory.id == null) {
-        selectedCategory = null;
-      }
-    }
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
       ),
+      child: UpcomingList(events: filtered),
+    );
+  }
+}
+
+// Widget privado FilterBar que contiene chips de ciudades y categorías
+class _FilterBar extends StatelessWidget {
+  final List<City> cities;
+  final List<Category> categories;
+  final int? selectedCityId;
+  final int? selectedCategoryId;
+  final ValueChanged<int?> onCityTap;
+  final ValueChanged<int?> onCategoryTap;
+
+  const _FilterBar({
+    required this.cities,
+    required this.categories,
+    this.selectedCityId,
+    this.selectedCategoryId,
+    required this.onCityTap,
+    required this.onCategoryTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (selectedCategory != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-              child: Row(
-                children: [
-                  Chip(
-                    label: Text(selectedCategory.name),
-                    onDeleted: onClearCategoryFilter,
-                    deleteIcon: const Icon(Icons.close, size: 18),
-                  ),
-                ],
-              ),
-            ),
-          UpcomingList(events: filtered),
+          // Fila de ciudades
+          _CityChips(
+            cities: cities,
+            selectedCityId: selectedCityId,
+            onCityTap: onCityTap,
+          ),
+          const SizedBox(height: 8),
+          // Fila de categorías
+          _CategoryChips(
+            categories: categories,
+            selectedCategoryId: selectedCategoryId,
+            onCategoryTap: onCategoryTap,
+          ),
         ],
       ),
     );
   }
 }
 
-class CitiesSection extends StatelessWidget {
+// Widget privado para chips de ciudades
+class _CityChips extends StatelessWidget {
   final List<City> cities;
   final int? selectedCityId;
   final ValueChanged<int?> onCityTap;
 
-  const CitiesSection({
-    super.key,
+  const _CityChips({
     required this.cities,
     this.selectedCityId,
     required this.onCityTap,
@@ -313,7 +336,6 @@ class CitiesSection extends StatelessWidget {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
         children: [
           // Chip "Todas"
@@ -327,6 +349,8 @@ class CitiesSection extends StatelessWidget {
                   onCityTap(null);
                 }
               },
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
           // Chips de ciudades
@@ -342,6 +366,76 @@ class CitiesSection extends StatelessWidget {
                     onCityTap(city.id);
                   }
                 },
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget privado para chips de categorías
+class _CategoryChips extends StatelessWidget {
+  final List<Category> categories;
+  final int? selectedCategoryId;
+  final ValueChanged<int?> onCategoryTap;
+
+  const _CategoryChips({
+    required this.categories,
+    this.selectedCategoryId,
+    required this.onCategoryTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (categories.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          // Chip "Todas"
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: const Text('Todas'),
+              selected: selectedCategoryId == null,
+              avatar: const Icon(Icons.grid_view, size: 16),
+              onSelected: (selected) {
+                if (selected) {
+                  onCategoryTap(null);
+                }
+              },
+              visualDensity: VisualDensity.compact,
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+          ),
+          // Chips de categorías
+          ...categories.map((category) {
+            final isSelected = category.id != null && category.id == selectedCategoryId;
+            final icon = iconFromName(category.icon);
+            
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(category.name),
+                selected: isSelected,
+                avatar: Icon(icon, size: 16),
+                onSelected: (selected) {
+                  if (selected) {
+                    onCategoryTap(category.id);
+                  } else if (isSelected) {
+                    // Toggle: si ya está seleccionado, deseleccionar
+                    onCategoryTap(null);
+                  }
+                },
+                visualDensity: VisualDensity.compact,
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
             );
           }).toList(),
