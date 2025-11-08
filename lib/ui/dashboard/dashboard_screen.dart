@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/event_service.dart';
 import '../../services/category_service.dart';
 import '../../models/event.dart';
@@ -7,6 +8,19 @@ import 'widgets/hero_banner.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
+
+// Clase simple para ciudades
+class City {
+  final int id;
+  final String name;
+  final String? slug;
+
+  City({
+    required this.id,
+    required this.name,
+    this.slug,
+  });
+}
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -25,6 +39,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Category> _categories = [];
   bool _isLoading = true;
   String? _error;
+  int? _selectedCategoryId;
+  int? _selectedCityId;
+  List<City> _cities = [];
 
   @override
   void initState() {
@@ -43,6 +60,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _eventService.fetchUpcoming(limit: 10),
         _eventService.fetchFeatured(limit: 10),
         _categoryService.fetchAll(),
+        _fetchCities(),
       ]);
 
       setState(() {
@@ -52,6 +70,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
         _categories = results[2] as List<Category>;
+        _cities = results[3] as List<City>;
         _isLoading = false;
       });
     } catch (e) {
@@ -61,6 +80,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     }
   }
+
+  Future<List<City>> _fetchCities() async {
+    try {
+      final rows = await Supabase.instance.client
+          .from('cities')
+          .select('id, name, slug')
+          .order('name', ascending: true);
+
+      return (rows as List)
+          .map((e) => City(
+                id: (e['id'] as num).toInt(),
+                name: e['name'] as String,
+                slug: e['slug'] as String?,
+              ))
+          .toList();
+    } catch (e) {
+      // Si falla, retornar lista vacía
+      return [];
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -122,13 +162,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
                 const SizedBox(height: 16),
 
+                // === Filtro de ciudades ===
+                CitiesSection(
+                  cities: _cities,
+                  selectedCityId: _selectedCityId,
+                  onCityTap: (cityId) {
+                    setState(() {
+                      _selectedCityId = cityId;
+                    });
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
                 // === Próximos eventos ===
-                UpcomingEventsSection(events: _upcomingEvents),
+                UpcomingEventsSection(
+                  events: _upcomingEvents,
+                  selectedCategoryId: _selectedCategoryId,
+                  selectedCityId: _selectedCityId,
+                  categories: _categories,
+                  onClearCategoryFilter: () {
+                    setState(() {
+                      _selectedCategoryId = null;
+                    });
+                  },
+                ),
 
                 const SizedBox(height: 24),
 
                 // === Categorías ===
-                CategoriesSection(categories: _categories),
+                CategoriesSection(
+                  categories: _categories,
+                  selectedCategoryId: _selectedCategoryId,
+                  onCategoryTap: (categoryId) {
+                    setState(() {
+                      _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
+                    });
+                  },
+                ),
 
                 const SizedBox(height: 24),
 
@@ -158,26 +229,139 @@ class DashboardHero extends StatelessWidget {
 
 class UpcomingEventsSection extends StatelessWidget {
   final List<Event> events;
+  final int? selectedCategoryId;
+  final int? selectedCityId;
+  final List<Category> categories;
+  final VoidCallback onClearCategoryFilter;
 
-  const UpcomingEventsSection({super.key, required this.events});
+  const UpcomingEventsSection({
+    super.key,
+    required this.events,
+    this.selectedCategoryId,
+    this.selectedCityId,
+    required this.categories,
+    required this.onClearCategoryFilter,
+  });
 
   @override
   Widget build(BuildContext context) {
+    // Aplicar filtros combinados: ciudad y categoría
+    final filtered = events.where((e) {
+      final okCat = selectedCategoryId == null || e.categoryId == selectedCategoryId;
+      final okCity = selectedCityId == null || e.cityId == selectedCityId;
+      return okCat && okCity;
+    }).toList();
+
+    // Buscar la categoría seleccionada para mostrar el chip
+    Category? selectedCategory;
+    if (selectedCategoryId != null) {
+      selectedCategory = categories.firstWhere(
+        (c) => c.id == selectedCategoryId,
+        orElse: () => Category(name: '', id: null),
+      );
+      if (selectedCategory.id == null) {
+        selectedCategory = null;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: UpcomingList(events: events),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (selectedCategory != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+              child: Row(
+                children: [
+                  Chip(
+                    label: Text(selectedCategory.name),
+                    onDeleted: onClearCategoryFilter,
+                    deleteIcon: const Icon(Icons.close, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          UpcomingList(events: filtered),
+        ],
+      ),
+    );
+  }
+}
+
+class CitiesSection extends StatelessWidget {
+  final List<City> cities;
+  final int? selectedCityId;
+  final ValueChanged<int?> onCityTap;
+
+  const CitiesSection({
+    super.key,
+    required this.cities,
+    this.selectedCityId,
+    required this.onCityTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (cities.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          // Chip "Todas"
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: ChoiceChip(
+              label: const Text('Todas'),
+              selected: selectedCityId == null,
+              onSelected: (selected) {
+                if (selected) {
+                  onCityTap(null);
+                }
+              },
+            ),
+          ),
+          // Chips de ciudades
+          ...cities.map((city) {
+            final isSelected = city.id == selectedCityId;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(city.name),
+                selected: isSelected,
+                onSelected: (selected) {
+                  if (selected) {
+                    onCityTap(city.id);
+                  }
+                },
+              ),
+            );
+          }).toList(),
+        ],
+      ),
     );
   }
 }
 
 class CategoriesSection extends StatelessWidget {
   final List<Category> categories;
+  final int? selectedCategoryId;
+  final ValueChanged<int?> onCategoryTap;
 
-  const CategoriesSection({super.key, required this.categories});
+  const CategoriesSection({
+    super.key,
+    required this.categories,
+    this.selectedCategoryId,
+    required this.onCategoryTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +371,11 @@ class CategoriesSection extends StatelessWidget {
         color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: CategoriesGrid(categories: categories),
+      child: CategoriesGrid(
+        categories: categories,
+        selectedCategoryId: selectedCategoryId,
+        onCategoryTap: onCategoryTap,
+      ),
     );
   }
 }

@@ -10,6 +10,8 @@ class Event {
   final DateTime startsAt;
   final String? place;
   final String? imageUrl;
+  final int? categoryId;
+  final int? cityId;
 
   Event({
     required this.id,
@@ -21,6 +23,8 @@ class Event {
     this.categoryColor,
     this.place,
     this.imageUrl,
+    this.categoryId,
+    this.cityId,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -34,6 +38,8 @@ class Event {
       categoryColor: m['category_color'] as String?,
       place: m['place'] as String?,
       imageUrl: m['image_url'] as String?,
+      categoryId: (m['category_id'] as num?)?.toInt(),
+      cityId: (m['city_id'] as num?)?.toInt(),
     );
   }
 }
