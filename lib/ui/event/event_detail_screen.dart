@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -132,23 +131,6 @@ class EventDetailScreen extends StatelessWidget {
                     label: const Text('Compartir'),
                   ),
                 ),
-                if (event.place != null) ...[
-                  const SizedBox(width: 12),
-                  TextButton.icon(
-                    onPressed: () async {
-                      final text = [
-                        if (event.place != null) event.place!,
-                        if (event.cityName != null) event.cityName!,
-                      ].where((s) => s.trim().isNotEmpty).join(' · ');
-                      await Clipboard.setData(ClipboardData(text: text));
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Dirección copiada')),
-                      );
-                    },
-                    icon: const Icon(Icons.content_copy),
-                    label: const Text('Copiar dirección'),
-                  ),
-                ],
               ],
             ),
           ],
