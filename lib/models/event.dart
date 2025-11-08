@@ -12,6 +12,8 @@ class Event {
   final String? imageUrl;
   final int? categoryId;
   final int? cityId;
+  final bool? isFree;
+  final String? mapsUrl;
 
   Event({
     required this.id,
@@ -25,6 +27,8 @@ class Event {
     this.imageUrl,
     this.categoryId,
     this.cityId,
+    this.isFree,
+    this.mapsUrl,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -40,6 +44,8 @@ class Event {
       imageUrl: m['image_url'] as String?,
       categoryId: (m['category_id'] as num?)?.toInt(),
       cityId: (m['city_id'] as num?)?.toInt(),
+      isFree: m['is_free'] as bool?,
+      mapsUrl: m['maps_url'] as String?,
     );
   }
 }
