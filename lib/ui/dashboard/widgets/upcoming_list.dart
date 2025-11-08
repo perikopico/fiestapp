@@ -65,11 +65,14 @@ class UpcomingList extends StatelessWidget {
                                     return Container(
                                       width: 80,
                                       height: 80,
-                                      color: Colors.grey.shade200,
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.surfaceVariant,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
                                       child: Icon(
                                         iconFromName(event.categoryIcon),
-                                        size: 28,
-                                        color: Colors.grey.shade700,
+                                        size: 56,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       ),
                                     );
                                   },
@@ -77,11 +80,14 @@ class UpcomingList extends StatelessWidget {
                               : Container(
                                   width: 80,
                                   height: 80,
-                                  color: Colors.grey.shade200,
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).colorScheme.surfaceVariant,
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
                                   child: Icon(
                                     iconFromName(event.categoryIcon),
-                                    size: 28,
-                                    color: Colors.grey.shade700,
+                                    size: 56,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                         ),
@@ -90,29 +96,25 @@ class UpcomingList extends StatelessWidget {
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Text(
                               event.title,
                               style: const TextStyle(
-                                fontWeight: FontWeight.w500,
+                                fontWeight: FontWeight.w700,
                               ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              "${event.cityName ?? ''}${event.place != null ? ' · ' + event.place! : ''}",
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w500,
-                              ),
+                              "${event.cityName ?? ''}${event.cityName != null && event.formattedTime.isNotEmpty ? ' · ' : ''}${event.formattedTime}",
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
                             ),
                           ],
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        event.formattedDate,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Colors.grey[600],
-                            ),
                       ),
                     ],
                   ),
