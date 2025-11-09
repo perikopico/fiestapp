@@ -228,190 +228,176 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(title: const Text('Fiestapp'), elevation: 0),
       body: RefreshIndicator(
         onRefresh: _reloadEvents,
-        child: CustomScrollView(
+        child: SingleChildScrollView(
           physics: defaultTargetPlatform == TargetPlatform.iOS
               ? const BouncingScrollPhysics()
               : const ClampingScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: DashboardHero(featured: _featuredEvent),
-                ),
-              ),
-            ),
-            if (!_isLoading)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _FilterHeaderDelegate(
-                  cities: _cities,
-                  categories: _categories,
-                  selectedCityId: _selectedCityId,
-                  selectedCategoryId: _selectedCategoryId,
-                  onCityTap: (cityId) {
-                    setState(() {
-                      _selectedCityId = cityId;
-                    });
-                  },
-                  onCategoryTap: (categoryId) {
-                    setState(() {
-                      _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
-                    });
-                  },
-                ),
-              ),
-            if (!_isLoading)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: _NearbyControlHeaderDelegate(
-                  radiusKm: _radiusKm,
-                  onRadiusChanged: (value) {
-                    setState(() {
-                      _radiusKm = value;
-                    });
-                    if (_userLat != null && _userLng != null) {
-                      _loadNearby();
-                    }
-                  },
-                  onUseLocation: _getUserLocation,
-                ),
-              ),
-            // Próximos eventos
-            if (_isLoading)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: 4,
-                      separatorBuilder: (BuildContext context, int index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (BuildContext context, int index) {
-                        return const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ShimmerBlock(height: 180),
-                            ShimmerBlock(height: 16, width: 180),
-                            ShimmerBlock(height: 14, width: 120),
-                          ],
-                        );
-                      },
-                    ),
+          child: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                    child: DashboardHero(featured: _featuredEvent),
                   ),
                 ),
-              )
-            else
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: UpcomingEventsSection(
-                    events: _upcomingEvents,
-                    selectedCategoryId: _selectedCategoryId,
+                if (!_isLoading)
+                  _FilterHeaderWidget(
+                    cities: _cities,
+                    categories: _categories,
                     selectedCityId: _selectedCityId,
-                    onClearFilters: _clearFilters,
+                    selectedCategoryId: _selectedCategoryId,
+                    onCityTap: (cityId) {
+                      setState(() {
+                        _selectedCityId = cityId;
+                      });
+                    },
+                    onCategoryTap: (categoryId) {
+                      setState(() {
+                        _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
+                      });
+                    },
                   ),
-                ),
-              ),
-            // Popular esta semana
-            if (_isLoading)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: SizedBox(
-                      height: 210,
+                if (!_isLoading)
+                  _NearbyControlWidget(
+                    radiusKm: _radiusKm,
+                    onRadiusChanged: (value) {
+                      setState(() {
+                        _radiusKm = value;
+                      });
+                      if (_userLat != null && _userLng != null) {
+                        _loadNearby();
+                      }
+                    },
+                    onUseLocation: _getUserLocation,
+                  ),
+                // Próximos eventos
+                if (_isLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                       child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        scrollDirection: Axis.horizontal,
-                        itemCount: 5,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: 4,
                         separatorBuilder: (BuildContext context, int index) =>
-                            const SizedBox(width: 12),
+                            const SizedBox(height: 12),
                         itemBuilder: (BuildContext context, int index) {
-                          return const SizedBox(
-                            width: 280,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ShimmerBlock(height: 150),
-                                ShimmerBlock(height: 16, width: 160),
-                                ShimmerBlock(height: 14, width: 120),
-                              ],
-                            ),
+                          return const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ShimmerBlock(height: 180),
+                              ShimmerBlock(height: 16, width: 180),
+                              ShimmerBlock(height: 14, width: 120),
+                            ],
                           );
                         },
                       ),
                     ),
-                  ),
-                ),
-              )
-            else
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                  child: PopularThisWeekSection(
-                    events: _featuredEvents,
-                    onClearFilters: _clearFilters,
-                  ),
-                ),
-              ),
-            // Cerca de ti
-            if (_isNearbyLoading)
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      physics: const NeverScrollableScrollPhysics(),
-                      shrinkWrap: true,
-                      itemCount: 4,
-                      separatorBuilder: (BuildContext context, int index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (BuildContext context, int index) {
-                        return const Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            ShimmerBlock(height: 180),
-                            ShimmerBlock(height: 16, width: 180),
-                            ShimmerBlock(height: 14, width: 120),
-                          ],
-                        );
-                      },
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                    child: UpcomingEventsSection(
+                      events: _upcomingEvents,
+                      selectedCategoryId: _selectedCategoryId,
+                      selectedCityId: _selectedCityId,
+                      onClearFilters: _clearFilters,
                     ),
                   ),
-                ),
-              )
-            else
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                  child: NearbyEventsSection(
-                    events: _nearbyEvents,
+                // Popular esta semana
+                if (_isLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: SizedBox(
+                        height: 210,
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          scrollDirection: Axis.horizontal,
+                          itemCount: 5,
+                          separatorBuilder: (BuildContext context, int index) =>
+                              const SizedBox(width: 12),
+                          itemBuilder: (BuildContext context, int index) {
+                            return const SizedBox(
+                              width: 280,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ShimmerBlock(height: 150),
+                                  ShimmerBlock(height: 16, width: 160),
+                                  ShimmerBlock(height: 14, width: 120),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                    child: PopularThisWeekSection(
+                      events: _featuredEvents,
+                      onClearFilters: _clearFilters,
+                    ),
                   ),
-                ),
-              ),
-            const SliverToBoxAdapter(child: SizedBox(height: 24)),
-          ],
+                // Cerca de ti
+                if (_isNearbyLoading)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.7),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        physics: const NeverScrollableScrollPhysics(),
+                        shrinkWrap: true,
+                        itemCount: 4,
+                        separatorBuilder: (BuildContext context, int index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (BuildContext context, int index) {
+                          return const Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ShimmerBlock(height: 180),
+                              ShimmerBlock(height: 16, width: 180),
+                              ShimmerBlock(height: 14, width: 120),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                    child: NearbyEventsSection(
+                      events: _nearbyEvents,
+                    ),
+                  ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
         ),
       ),
     );
@@ -591,7 +577,247 @@ class NearbyEventsSection extends StatelessWidget {
   }
 }
 
-// Delegate para SliverPersistentHeader de filtros
+// Widget para filtros de ciudad y categoría
+class _FilterHeaderWidget extends StatelessWidget {
+  const _FilterHeaderWidget({
+    required this.cities,
+    required this.categories,
+    this.selectedCityId,
+    this.selectedCategoryId,
+    required this.onCityTap,
+    required this.onCategoryTap,
+  });
+
+  final List<City> cities;
+  final List<Category> categories;
+  final int? selectedCityId;
+  final int? selectedCategoryId;
+  final ValueChanged<int?> onCityTap;
+  final ValueChanged<int?> onCategoryTap;
+
+  List<Widget> buildCityChips(BuildContext context) {
+    final theme = Theme.of(context);
+    final chips = <Widget>[];
+
+    // Chip "Todas"
+    chips.add(
+      ChoiceChip(
+        label: Text('Todas', style: theme.textTheme.bodySmall),
+        selected: selectedCityId == null,
+        onSelected: (selected) {
+          if (selected) {
+            onCityTap(null);
+          }
+        },
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+
+    // Nombres oficiales completos permitidos
+    const officialCityNames = {
+      'Barbate',
+      'Vejer de la Frontera',
+      'Zahara de los Atunes',
+    };
+
+    // Filtrar ciudades para mostrar solo nombres oficiales completos
+    final filteredCities = cities.where((city) => 
+      officialCityNames.contains(city.name)
+    ).toList();
+
+    // Ordenar según el orden deseado
+    filteredCities.sort((a, b) {
+      const order = ['Barbate', 'Vejer de la Frontera', 'Zahara de los Atunes'];
+      final indexA = order.indexOf(a.name);
+      final indexB = order.indexOf(b.name);
+      if (indexA == -1) return 1;
+      if (indexB == -1) return -1;
+      return indexA.compareTo(indexB);
+    });
+
+    // Chips de ciudades (solo nombres oficiales completos)
+    for (final city in filteredCities) {
+      final isSelected = city.id == selectedCityId;
+      chips.add(
+        ChoiceChip(
+          label: Text(city.name, style: theme.textTheme.bodySmall),
+          selected: isSelected,
+          onSelected: (selected) {
+            if (selected) {
+              onCityTap(city.id);
+            }
+          },
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      );
+    }
+
+    return chips;
+  }
+
+  List<Widget> buildCategoryChips(BuildContext context) {
+    final theme = Theme.of(context);
+    final chips = <Widget>[];
+
+    // Chip "Todas"
+    chips.add(
+      ChoiceChip(
+        label: Text('Todas', style: theme.textTheme.bodySmall),
+        selected: selectedCategoryId == null,
+        avatar: const Icon(Icons.grid_view, size: 16),
+        onSelected: (selected) {
+          if (selected) {
+            onCategoryTap(null);
+          }
+        },
+        visualDensity: VisualDensity.compact,
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+    );
+
+    // Chips de categorías (solo mostrar categorías con id)
+    for (final category in categories.where((Category c) => c.id != null)) {
+      final isSelected = category.id == selectedCategoryId;
+      final icon = iconFromName(category.icon);
+
+      chips.add(
+        ChoiceChip(
+          label: Text(category.name, style: theme.textTheme.bodySmall),
+          selected: isSelected,
+          avatar: Icon(icon, size: 16),
+          onSelected: (selected) {
+            if (selected) {
+              onCategoryTap(category.id);
+            } else if (isSelected) {
+              // Toggle: si ya está seleccionado, deseleccionar
+              onCategoryTap(null);
+            }
+          },
+          visualDensity: VisualDensity.compact,
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        ),
+      );
+    }
+
+    return chips;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Fila 1: chips de ciudades (scroll horizontal "ligero")
+            SizedBox(
+              height: 36,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    ...buildCityChips(context),
+                  ]
+                      .expand((w) => [w, const SizedBox(width: 8)])
+                      .toList()
+                    ..removeLast(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            // Fila 2: chips de categorías (scroll horizontal "ligero")
+            SizedBox(
+              height: 36,
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    ...buildCategoryChips(context),
+                  ]
+                      .expand((w) => [w, const SizedBox(width: 8)])
+                      .toList()
+                    ..removeLast(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Widget para control de eventos cercanos
+class _NearbyControlWidget extends StatelessWidget {
+  const _NearbyControlWidget({
+    required this.radiusKm,
+    required this.onRadiusChanged,
+    required this.onUseLocation,
+  });
+
+  final double radiusKm;
+  final ValueChanged<double> onRadiusChanged;
+  final VoidCallback onUseLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'A ${radiusKm.round()} km',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
+                      Slider(
+                        value: radiusKm,
+                        min: 5,
+                        max: 100,
+                        divisions: 19,
+                        label: '${radiusKm.round()} km',
+                        onChanged: onRadiusChanged,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                ElevatedButton.icon(
+                  onPressed: onUseLocation,
+                  icon: const Icon(Icons.location_on, size: 18),
+                  label: const Text('Usar mi ubicación'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// Delegate para SliverPersistentHeader de filtros (mantenido por compatibilidad, pero ya no se usa)
 class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   _FilterHeaderDelegate({
     required this.cities,
@@ -840,6 +1066,7 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
                           label: '${radiusKm.round()} km',
                           onChanged: onRadiusChanged,
                         ),
+                        const SizedBox(height: 12),
                       ],
                     ),
                   ),
