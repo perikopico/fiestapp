@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:fiestapp/services/event_service.dart';
+import 'package:fiestapp/data/events_repository.dart';
+import 'package:fiestapp/models/event.dart' as model;
 import '../../services/category_service.dart';
 import '../../models/event.dart';
-import '../../models/category.dart' as model;
+import '../../models/category.dart';
 import 'widgets/hero_banner.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
@@ -35,21 +38,30 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final EventService _eventService = EventService();
   final CategoryService _categoryService = CategoryService();
+  final _repo = EventsRepository();
+  final _repoNearby = EventsRepository();
 
   Event? _featuredEvent;
   List<Event> _upcomingEvents = [];
   List<Event> _featuredEvents = [];
-  List<model.Category> _categories = [];
+  List<Category> _categories = [];
   bool _isLoading = true;
   String? _error;
   int? _selectedCategoryId;
   int? _selectedCityId;
   List<City> _cities = [];
+  
+  // Nearby events state
+  double _radiusKm = 25;
+  double? _userLat = 36.1927; // Barbate (temporal)
+  double? _userLng = -5.9219; // Barbate (temporal)
+  bool _isNearbyLoading = false;
+  List<model.Event> _nearbyEvents = [];
 
   @override
   void initState() {
     super.initState();
-    _reloadEvents();
+    _reloadEvents().then((_) => _loadNearby());
   }
 
   Future<void> _reloadEvents() async {
@@ -72,7 +84,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _upcomingEvents = upcoming;
         _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
-        _categories = results[2] as List<model.Category>;
+        _categories = results[2] as List<Category>;
         _cities = results[3] as List<City>;
         _isLoading = false;
       });
@@ -123,6 +135,55 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _selectedCategoryId = null;
       _selectedCityId = null;
     });
+  }
+
+  Future<void> _loadNearby() async {
+    if (_userLat == null || _userLng == null) return;
+
+    setState(() => _isNearbyLoading = true);
+
+    try {
+      final list = await _repoNearby.fetchNearby(
+        lat: _userLat!,
+        lng: _userLng!,
+        radiusKm: _radiusKm,
+      );
+      setState(() => _nearbyEvents = list);
+    } finally {
+      if (mounted) setState(() => _isNearbyLoading = false);
+    }
+  }
+
+  Future<void> _getUserLocation() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      debugPrint('Servicios de ubicación desactivados.');
+      return;
+    }
+
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debugPrint('Permiso de ubicación denegado.');
+        return;
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      debugPrint('Permiso de ubicación denegado permanentemente.');
+      return;
+    }
+
+    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    setState(() {
+      _userLat = pos.latitude;
+      _userLng = pos.longitude;
+    });
+    await _loadNearby();
   }
 
 
@@ -199,6 +260,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
                     });
                   },
+                ),
+              ),
+            if (!_isLoading)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _NearbyControlHeaderDelegate(
+                  radiusKm: _radiusKm,
+                  onRadiusChanged: (value) {
+                    setState(() {
+                      _radiusKm = value;
+                    });
+                    if (_userLat != null && _userLng != null) {
+                      _loadNearby();
+                    }
+                  },
+                  onUseLocation: _getUserLocation,
                 ),
               ),
             // Próximos eventos
@@ -292,6 +369,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ),
+            // Cerca de ti
+            if (_isNearbyLoading)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      itemCount: 4,
+                      separatorBuilder: (BuildContext context, int index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (BuildContext context, int index) {
+                        return const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShimmerBlock(height: 180),
+                            ShimmerBlock(height: 16, width: 180),
+                            ShimmerBlock(height: 14, width: 120),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: NearbyEventsSection(
+                    events: _nearbyEvents,
+                  ),
+                ),
+              ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
@@ -350,7 +468,7 @@ class UpcomingEventsSection extends StatelessWidget {
 }
 
 class CategoriesSection extends StatelessWidget {
-  final List<model.Category> categories;
+  final List<Category> categories;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCategoryTap;
 
@@ -404,6 +522,75 @@ class PopularThisWeekSection extends StatelessWidget {
   }
 }
 
+class NearbyEventsSection extends StatelessWidget {
+  final List<model.Event> events;
+
+  const NearbyEventsSection({
+    super.key,
+    required this.events,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.7),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: events.isEmpty
+          ? Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Text(
+                  'No hay eventos en este radio.',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    'Cerca de ti',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: UpcomingList(
+                    events: events.map((e) => Event(
+                      id: e.id,
+                      title: e.title,
+                      startsAt: e.startsAt,
+                      cityName: e.cityName,
+                      categoryName: e.categoryName,
+                      categoryIcon: e.categoryIcon,
+                      categoryColor: e.categoryColor,
+                      place: e.place,
+                      imageUrl: e.imageUrl,
+                      categoryId: e.categoryId,
+                      cityId: e.cityId,
+                      isFree: e.isFree,
+                      mapsUrl: e.mapsUrl,
+                      description: e.description,
+                    )).toList(),
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
 // Delegate para SliverPersistentHeader de filtros
 class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   _FilterHeaderDelegate({
@@ -418,7 +605,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   });
 
   final List<City> cities;
-  final List<model.Category> categories;
+  final List<Category> categories;
   final int? selectedCityId;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCityTap;
@@ -451,8 +638,30 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
       ),
     );
 
-    // Chips de ciudades
-    for (final city in cities) {
+    // Nombres oficiales completos permitidos
+    const officialCityNames = {
+      'Barbate',
+      'Vejer de la Frontera',
+      'Zahara de los Atunes',
+    };
+
+    // Filtrar ciudades para mostrar solo nombres oficiales completos
+    final filteredCities = cities.where((city) => 
+      officialCityNames.contains(city.name)
+    ).toList();
+
+    // Ordenar según el orden deseado
+    filteredCities.sort((a, b) {
+      const order = ['Barbate', 'Vejer de la Frontera', 'Zahara de los Atunes'];
+      final indexA = order.indexOf(a.name);
+      final indexB = order.indexOf(b.name);
+      if (indexA == -1) return 1;
+      if (indexB == -1) return -1;
+      return indexA.compareTo(indexB);
+    });
+
+    // Chips de ciudades (solo nombres oficiales completos)
+    for (final city in filteredCities) {
       final isSelected = city.id == selectedCityId;
       chips.add(
         ChoiceChip(
@@ -493,7 +702,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
     );
 
     // Chips de categorías (solo mostrar categorías con id)
-    for (final category in categories.where((model.Category c) => c.id != null)) {
+    for (final category in categories.where((Category c) => c.id != null)) {
       final isSelected = category.id == selectedCategoryId;
       final icon = iconFromName(category.icon);
 
@@ -576,5 +785,84 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
         old.selectedCategoryId != selectedCategoryId ||
         old.cities.length != cities.length ||
         old.categories.length != categories.length;
+  }
+}
+
+// Delegate para SliverPersistentHeader de control nearby
+class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
+  _NearbyControlHeaderDelegate({
+    required this.radiusKm,
+    required this.onRadiusChanged,
+    required this.onUseLocation,
+    this.min = 80.0,
+    this.max = 80.0,
+  });
+
+  final double radiusKm;
+  final ValueChanged<double> onRadiusChanged;
+  final VoidCallback onUseLocation;
+  final double min;
+  final double max;
+
+  @override
+  double get minExtent => min;
+
+  @override
+  double get maxExtent => max;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Material(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: SizedBox.expand(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'A ${radiusKm.round()} km',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        Slider(
+                          value: radiusKm,
+                          min: 5,
+                          max: 100,
+                          divisions: 19,
+                          label: '${radiusKm.round()} km',
+                          onChanged: onRadiusChanged,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  ElevatedButton.icon(
+                    onPressed: onUseLocation,
+                    icon: const Icon(Icons.location_on, size: 18),
+                    label: const Text('Usar mi ubicación'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  bool shouldRebuild(covariant _NearbyControlHeaderDelegate old) {
+    return old.radiusKm != radiusKm;
   }
 }
