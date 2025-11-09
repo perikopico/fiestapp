@@ -5,13 +5,56 @@ import '../../event/event_detail_screen.dart';
 
 class PopularCarousel extends StatelessWidget {
   final List<Event> events;
+  final VoidCallback? onClearFilters;
 
-  const PopularCarousel({super.key, required this.events});
+  const PopularCarousel({
+    super.key,
+    required this.events,
+    this.onClearFilters,
+  });
 
   @override
   Widget build(BuildContext context) {
     if (events.isEmpty) {
-      return const SizedBox.shrink();
+      return Card(
+        margin: const EdgeInsets.all(16),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.event_busy,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No hay eventos para estos filtros',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Prueba cambiando de ciudad o categoría.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+              if (onClearFilters != null) ...[
+                const SizedBox(height: 16),
+                OutlinedButton(
+                  onPressed: onClearFilters,
+                  child: const Text('Borrar filtros'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      );
     }
 
     return Column(

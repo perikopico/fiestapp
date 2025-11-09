@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' hide Category;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/event_service.dart';
 import '../../services/category_service.dart';
 import '../../models/event.dart';
-import '../../models/category.dart';
+import '../../models/category.dart' as model;
 import 'widgets/hero_banner.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
@@ -37,7 +38,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Event? _featuredEvent;
   List<Event> _upcomingEvents = [];
   List<Event> _featuredEvents = [];
-  List<Category> _categories = [];
+  List<model.Category> _categories = [];
   bool _isLoading = true;
   String? _error;
   int? _selectedCategoryId;
@@ -70,7 +71,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _upcomingEvents = upcoming;
         _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
-        _categories = results[2] as List<Category>;
+        _categories = results[2] as List<model.Category>;
         _cities = results[3] as List<City>;
         _isLoading = false;
       });
@@ -114,6 +115,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Si falla, retornar lista vacía
       return [];
     }
+  }
+
+  void _clearFilters() {
+    setState(() {
+      _selectedCategoryId = null;
+      _selectedCityId = null;
+    });
   }
 
 
@@ -166,7 +174,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       body: RefreshIndicator(
         onRefresh: _reloadEvents,
         child: CustomScrollView(
-          physics: const BouncingScrollPhysics(),
+          physics: defaultTargetPlatform == TargetPlatform.iOS
+              ? const BouncingScrollPhysics()
+              : const ClampingScrollPhysics(),
           slivers: [
             SliverToBoxAdapter(
               child: SafeArea(
@@ -204,6 +214,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   events: _upcomingEvents,
                   selectedCategoryId: _selectedCategoryId,
                   selectedCityId: _selectedCityId,
+                  onClearFilters: _clearFilters,
                 ),
               ),
             ),
@@ -211,7 +222,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: PopularThisWeekSection(events: _featuredEvents),
+                child: PopularThisWeekSection(
+                  events: _featuredEvents,
+                  onClearFilters: _clearFilters,
+                ),
               ),
             ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -239,12 +253,14 @@ class UpcomingEventsSection extends StatelessWidget {
   final List<Event> events;
   final int? selectedCategoryId;
   final int? selectedCityId;
+  final VoidCallback? onClearFilters;
 
   const UpcomingEventsSection({
     super.key,
     required this.events,
     this.selectedCategoryId,
     this.selectedCityId,
+    this.onClearFilters,
   });
 
   @override
@@ -261,35 +277,16 @@ class UpcomingEventsSection extends StatelessWidget {
         color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: filtered.isEmpty
-          ? Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.event_busy,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Sin eventos para estos filtros',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            )
-          : UpcomingList(events: filtered),
+      child: UpcomingList(
+        events: filtered,
+        onClearFilters: onClearFilters,
+      ),
     );
   }
 }
 
 class CategoriesSection extends StatelessWidget {
-  final List<Category> categories;
+  final List<model.Category> categories;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCategoryTap;
 
@@ -319,8 +316,13 @@ class CategoriesSection extends StatelessWidget {
 
 class PopularThisWeekSection extends StatelessWidget {
   final List<Event> events;
+  final VoidCallback? onClearFilters;
 
-  const PopularThisWeekSection({super.key, required this.events});
+  const PopularThisWeekSection({
+    super.key,
+    required this.events,
+    this.onClearFilters,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -330,7 +332,10 @@ class PopularThisWeekSection extends StatelessWidget {
         color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(16),
       ),
-      child: PopularCarousel(events: events),
+      child: PopularCarousel(
+        events: events,
+        onClearFilters: onClearFilters,
+      ),
     );
   }
 }
@@ -349,7 +354,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   });
 
   final List<City> cities;
-  final List<Category> categories;
+  final List<model.Category> categories;
   final int? selectedCityId;
   final int? selectedCategoryId;
   final ValueChanged<int?> onCityTap;
@@ -424,7 +429,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
     );
 
     // Chips de categorías (solo mostrar categorías con id)
-    for (final category in categories.where((c) => c.id != null)) {
+    for (final category in categories.where((model.Category c) => c.id != null)) {
       final isSelected = category.id == selectedCategoryId;
       final icon = iconFromName(category.icon);
 
