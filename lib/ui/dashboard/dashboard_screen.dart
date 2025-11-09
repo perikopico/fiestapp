@@ -10,6 +10,7 @@ import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
 import '../icons/icon_mapper.dart';
+import 'package:fiestapp/ui/common/shimmer_widgets.dart';
 
 // Clase simple para ciudades
 class City {
@@ -127,14 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Fiestapp')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_error != null) {
+    if (_error != null && !_isLoading) {
       return Scaffold(
         appBar: AppBar(title: const Text('Fiestapp')),
         body: Center(
@@ -187,47 +181,117 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ),
             ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _FilterHeaderDelegate(
-                cities: _cities,
-                categories: _categories,
-                selectedCityId: _selectedCityId,
-                selectedCategoryId: _selectedCategoryId,
-                onCityTap: (cityId) {
-                  setState(() {
-                    _selectedCityId = cityId;
-                  });
-                },
-                onCategoryTap: (categoryId) {
-                  setState(() {
-                    _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
-                  });
-                },
-              ),
-            ),
-            // Próximos eventos
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: UpcomingEventsSection(
-                  events: _upcomingEvents,
-                  selectedCategoryId: _selectedCategoryId,
+            if (!_isLoading)
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _FilterHeaderDelegate(
+                  cities: _cities,
+                  categories: _categories,
                   selectedCityId: _selectedCityId,
-                  onClearFilters: _clearFilters,
+                  selectedCategoryId: _selectedCategoryId,
+                  onCityTap: (cityId) {
+                    setState(() {
+                      _selectedCityId = cityId;
+                    });
+                  },
+                  onCategoryTap: (categoryId) {
+                    setState(() {
+                      _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
+                    });
+                  },
                 ),
               ),
-            ),
+            // Próximos eventos
+            if (_isLoading)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      physics: const NeverScrollableScrollPhysics(),
+                      shrinkWrap: true,
+                      itemCount: 4,
+                      separatorBuilder: (BuildContext context, int index) =>
+                          const SizedBox(height: 12),
+                      itemBuilder: (BuildContext context, int index) {
+                        return const Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ShimmerBlock(height: 180),
+                            ShimmerBlock(height: 16, width: 180),
+                            ShimmerBlock(height: 14, width: 120),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: UpcomingEventsSection(
+                    events: _upcomingEvents,
+                    selectedCategoryId: _selectedCategoryId,
+                    selectedCityId: _selectedCityId,
+                    onClearFilters: _clearFilters,
+                  ),
+                ),
+              ),
             // Popular esta semana
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                child: PopularThisWeekSection(
-                  events: _featuredEvents,
-                  onClearFilters: _clearFilters,
+            if (_isLoading)
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.7),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: SizedBox(
+                      height: 210,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        scrollDirection: Axis.horizontal,
+                        itemCount: 5,
+                        separatorBuilder: (BuildContext context, int index) =>
+                            const SizedBox(width: 12),
+                        itemBuilder: (BuildContext context, int index) {
+                          return const SizedBox(
+                            width: 280,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ShimmerBlock(height: 150),
+                                ShimmerBlock(height: 16, width: 160),
+                                ShimmerBlock(height: 14, width: 120),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              )
+            else
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                  child: PopularThisWeekSection(
+                    events: _featuredEvents,
+                    onClearFilters: _clearFilters,
+                  ),
                 ),
               ),
-            ),
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
