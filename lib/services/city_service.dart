@@ -65,5 +65,20 @@ class CityService {
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((m) => City.fromMap(m)).toList();
   }
+
+  Future<List<City>> searchCities(String query) async {
+    final q = query.trim();
+
+    if (q.isEmpty) return [];
+
+    final dynamic res = await _c
+        .from('cities')
+        .select('id, name, slug, province_id')
+        .ilike('name', '%$q%')
+        .order('name');
+
+    final list = (res as List).cast<Map<String, dynamic>>();
+    return list.map((m) => City.fromMap(m)).toList();
+  }
 }
 

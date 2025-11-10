@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -47,6 +48,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isNearbyLoading = false;
   List<model.Event> _nearbyEvents = [];
   List<City> _nearbyCities = [];
+  
+  // Search state
+  final _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+  Timer? _searchDebouncer;
+  bool _isSearching = false;
+  List<Event> _searchResults = [];
+  
+  // City search state
+  final _citySearchCtrl = TextEditingController();
+  String _citySearchQuery = '';
+  Timer? _citySearchDebouncer;
+  bool _isCitySearching = false;
+  List<City> _citySearchResults = [];
 
   @override
   void initState() {
@@ -54,6 +69,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _reloadEvents().then((_) => _loadNearby());
     _loadCities();
     _loadNearbyCities();
+  }
+
+  @override
+  void dispose() {
+    _searchDebouncer?.cancel();
+    _searchCtrl.dispose();
+    _citySearchDebouncer?.cancel();
+    _citySearchCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _reloadEvents() async {
@@ -225,6 +249,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _buildProvinceCityChips();
   }
 
+  Future<void> _runSearch(String q) async {
+    setState(() {
+      _isSearching = true;
+      _searchQuery = q;
+    });
+
+    final events = await EventService().searchEvents(
+      query: q,
+      cityId: _selectedCityId,       // respeta filtro si hay
+      // provinceId: ... (si lo tienes en estado)
+      // lat/lng/radius si quieres mezclar con "cerca de ti" más adelante
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _searchResults = events;
+      _isSearching = false;
+    });
+  }
+
+  Future<void> _runCitySearch(String q) async {
+    setState(() {
+      _isCitySearching = true;
+      _citySearchQuery = q;
+    });
+
+    final res = await CityService().searchCities(q);
+
+    if (!mounted) return;
+
+    setState(() {
+      _citySearchResults = res;
+      _isCitySearching = false;
+    });
+  }
+
   Future<void> _getUserLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -320,6 +381,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 8),
                   _buildCityChips(),
                   const SizedBox(height: 8),
+                  TextField(
+                    controller: _citySearchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")',
+                      prefixIcon: const Icon(Icons.location_city),
+                      suffixIcon: _citySearchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _citySearchCtrl.clear();
+                                setState(() {
+                                  _citySearchQuery = '';
+                                  _citySearchResults = [];
+                                });
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      isDense: true,
+                    ),
+                    onChanged: (txt) {
+                      _citySearchDebouncer?.cancel();
+                      _citySearchDebouncer = Timer(const Duration(milliseconds: 300), () {
+                        final t = txt.trim();
+                        if (t.isEmpty) {
+                          setState(() {
+                            _citySearchQuery = '';
+                            _citySearchResults = [];
+                          });
+                        } else {
+                          _runCitySearch(t);
+                        }
+                      });
+                    },
+                  ),
+                  if (_citySearchQuery.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    if (_isCitySearching)
+                      const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                    if (!_isCitySearching && _citySearchResults.isEmpty)
+                      const Text('Sin ciudades para esa búsqueda'),
+                    if (!_isCitySearching && _citySearchResults.isNotEmpty)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: _citySearchResults.map((c) => Padding(
+                            padding: const EdgeInsets.only(right: 8.0),
+                            child: ActionChip(
+                              label: Text(c.name),
+                              onPressed: () {
+                                // fijamos ciudad seleccionada y limpiamos búsqueda
+                                setState(() {
+                                  _selectedCityId = c.id;
+                                  _citySearchCtrl.clear();
+                                  _citySearchQuery = '';
+                                  _citySearchResults = [];
+                                });
+                                // opcional: scroll a la sección de eventos
+                              },
+                            ),
+                          )).toList(),
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                  ],
+                  TextField(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar eventos (ej. flamenco, mercadillo…) ',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                _searchCtrl.clear();
+                                setState(() {
+                                  _searchQuery = '';
+                                  _searchResults = [];
+                                });
+                              },
+                            )
+                          : null,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      isDense: true,
+                    ),
+                    onChanged: (txt) {
+                      _searchDebouncer?.cancel();
+                      _searchDebouncer = Timer(const Duration(milliseconds: 350), () {
+                        if (txt.trim().isEmpty) {
+                          setState(() {
+                            _searchQuery = '';
+                            _searchResults = [];
+                          });
+                        } else {
+                          _runSearch(txt.trim());
+                        }
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
                   _FilterHeaderWidget(
                     cities: _cities,
                     categories: _categories,
@@ -352,6 +513,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                     onUseLocation: _getUserLocation,
                   ),
+                // Resultados de búsqueda
+                if (_searchQuery.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('Resultados para "$_searchQuery"', style: Theme.of(context).textTheme.titleMedium),
+                      if (_isSearching) const SizedBox(width: 16),
+                      if (_isSearching) const SizedBox(
+                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  if (_searchResults.isEmpty && !_isSearching)
+                    const Text('Sin resultados'),
+                  if (_searchResults.isNotEmpty)
+                    // reutiliza tu widget de lista de eventos
+                    UpcomingList(events: _searchResults),
+                  const SizedBox(height: 16),
+                ],
                 // Próximos eventos
                 if (_isLoading)
                   Padding(
