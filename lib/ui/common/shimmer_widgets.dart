@@ -17,18 +17,15 @@ class ShimmerBlock extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.6);
-    final high = Theme.of(context).colorScheme.surface.withOpacity(0.9);
-
     return Shimmer.fromColors(
-      baseColor: base,
-      highlightColor: high,
+      baseColor: Colors.black.withOpacity(0.04),
+      highlightColor: Colors.white.withOpacity(0.6),
       child: Container(
         height: height,
         width: width,
         margin: margin,
         decoration: BoxDecoration(
-          color: base,
+          color: Colors.black.withOpacity(0.04),
           borderRadius: borderRadius,
         ),
       ),
@@ -58,9 +55,20 @@ class ShimmerHorizontalCards extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ShimmerBlock(height: 150), // imagen
-                  ShimmerBlock(height: 16, width: 160),
-                  ShimmerBlock(height: 14, width: 120),
+                  ShimmerBlock(
+                    height: 150,
+                    borderRadius: BorderRadius.all(Radius.circular(16)),
+                  ), // imagen
+                  ShimmerBlock(
+                    height: 16,
+                    width: 160,
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
+                  ShimmerBlock(
+                    height: 14,
+                    width: 120,
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                  ),
                 ],
               ),
             );
@@ -90,9 +98,20 @@ class ShimmerVerticalList extends StatelessWidget {
           return const Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ShimmerBlock(height: 180), // imagen
-              ShimmerBlock(height: 16, width: 180), // título
-              ShimmerBlock(height: 14, width: 120), // subtítulo
+              ShimmerBlock(
+                height: 180,
+                borderRadius: BorderRadius.all(Radius.circular(16)),
+              ), // imagen
+              ShimmerBlock(
+                height: 16,
+                width: 180,
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ), // título
+              ShimmerBlock(
+                height: 14,
+                width: 120,
+                borderRadius: BorderRadius.all(Radius.circular(12)),
+              ), // subtítulo
             ],
           );
         },

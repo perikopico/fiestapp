@@ -62,34 +62,35 @@ class UpcomingList extends StatelessWidget {
       children: [
         Text(
           'Próximos eventos',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 12),
-        ListView.separated(
+        ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           padding: EdgeInsets.zero,
           itemCount: events.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final event = events[index];
-            return InkWell(
-              onTap: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => EventDetailScreen(event: event),
-                  ),
-                );
-              },
-              borderRadius: BorderRadius.circular(16),
-              child: Card(
-                elevation: 0.3,
-                color: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
+            final isMobile = MediaQuery.of(context).size.width < 600;
+            final imageSize = isMobile ? 64.0 : 72.0;
+            
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              elevation: 0.3,
+              color: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => EventDetailScreen(event: event),
+                    ),
+                  );
+                },
+                borderRadius: BorderRadius.circular(16),
                 child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(
@@ -101,35 +102,35 @@ class UpcomingList extends StatelessWidget {
                           child: event.imageUrl != null && event.imageUrl!.isNotEmpty
                               ? Image.network(
                                   event.imageUrl!,
-                                  width: 80,
-                                  height: 80,
+                                  width: imageSize,
+                                  height: imageSize,
                                   fit: BoxFit.cover,
                                   errorBuilder: (context, error, stackTrace) {
                                     return Container(
-                                      width: 80,
-                                      height: 80,
+                                      width: imageSize,
+                                      height: imageSize,
                                       decoration: BoxDecoration(
                                         color: Theme.of(context).colorScheme.surfaceVariant,
                                         borderRadius: BorderRadius.circular(10),
                                       ),
                                       child: Icon(
                                         iconFromName(event.categoryIcon),
-                                        size: 56,
+                                        size: imageSize * 0.7,
                                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                                       ),
                                     );
                                   },
                                 )
                               : Container(
-                                  width: 80,
-                                  height: 80,
+                                  width: imageSize,
+                                  height: imageSize,
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).colorScheme.surfaceVariant,
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: Icon(
                                     iconFromName(event.categoryIcon),
-                                    size: 56,
+                                    size: imageSize * 0.7,
                                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
@@ -146,18 +147,27 @@ class UpcomingList extends StatelessWidget {
                               style: const TextStyle(
                                 fontWeight: FontWeight.w700,
                               ),
-                              maxLines: 2,
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              "${event.cityName ?? ''}${event.cityName != null && event.formattedTime.isNotEmpty ? ' · ' : ''}${event.formattedTime}",
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                            ),
+                            if (event.cityName != null || event.place != null) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                '${event.cityName ?? ''}${event.cityName != null && event.place != null ? ' · ' : ''}${event.place ?? ''}',
+                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                    ),
+                              ),
+                            ],
                           ],
                         ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        event.formattedTime,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                            ),
                       ),
                     ],
                   ),

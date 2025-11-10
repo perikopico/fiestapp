@@ -184,59 +184,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildProvinceCityChips() {
     if (_cities.isEmpty) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: _cities.map((city) => Padding(
-          padding: const EdgeInsets.only(right: 8.0),
-          child: ChoiceChip(
-            label: Text(city.name),
-            selected: _selectedCityId == city.id,
-            onSelected: (_) {
-              setState(() {
-                _selectedCityId = city.id;
-              });
-              // aquí si filtras por ciudad en la lista principal, refresca como ya hacías
-            },
-          ),
-        )).toList(),
-      ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _cities.map((city) => ChoiceChip(
+        label: Text(city.name, style: Theme.of(context).textTheme.labelLarge),
+        selected: _selectedCityId == city.id,
+        onSelected: (_) {
+          setState(() {
+            _selectedCityId = city.id;
+          });
+          // aquí si filtras por ciudad en la lista principal, refresca como ya hacías
+        },
+        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        visualDensity: VisualDensity.compact,
+      )).toList(),
     );
   }
 
   Widget _buildNearbyCityChips() {
     if (_nearbyCities.isEmpty) return const SizedBox.shrink();
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ChoiceChip(
-              label: const Text('Todas'),
-              selected: _selectedCityId == null,
-              onSelected: (_) {
-                setState(() {
-                  _selectedCityId = null; // todas las ciudades del radio
-                });
-              },
-            ),
-          ),
-          ..._nearbyCities.map((city) => Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ChoiceChip(
-              label: Text(city.name),
-              selected: _selectedCityId == city.id,
-              onSelected: (_) {
-                setState(() {
-                  _selectedCityId = city.id;
-                });
-              },
-            ),
-          )),
-        ],
-      ),
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ChoiceChip(
+          label: Text('Todas', style: Theme.of(context).textTheme.labelLarge),
+          selected: _selectedCityId == null,
+          onSelected: (_) {
+            setState(() {
+              _selectedCityId = null; // todas las ciudades del radio
+            });
+          },
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        ),
+        ..._nearbyCities.map((city) => ChoiceChip(
+          label: Text(city.name, style: Theme.of(context).textTheme.labelLarge),
+          selected: _selectedCityId == city.id,
+          onSelected: (_) {
+            setState(() {
+              _selectedCityId = city.id;
+            });
+          },
+          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          visualDensity: VisualDensity.compact,
+        )),
+      ],
     );
   }
 
@@ -373,19 +368,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 SafeArea(
                   bottom: false,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 12),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: DashboardHero(featured: _featuredEvent),
                   ),
                 ),
                 if (!_isLoading) ...[
-                  const SizedBox(height: 8),
-                  _buildCityChips(),
-                  const SizedBox(height: 8),
                   TextField(
                     controller: _citySearchCtrl,
                     decoration: InputDecoration(
                       hintText: 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")',
-                      prefixIcon: const Icon(Icons.location_city),
+                      prefixIcon: const Icon(Icons.location_searching, size: 20),
                       suffixIcon: _citySearchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear),
@@ -423,34 +415,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     if (!_isCitySearching && _citySearchResults.isEmpty)
                       const Text('Sin ciudades para esa búsqueda'),
                     if (!_isCitySearching && _citySearchResults.isNotEmpty)
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children: _citySearchResults.map((c) => Padding(
-                            padding: const EdgeInsets.only(right: 8.0),
-                            child: ActionChip(
-                              label: Text(c.name),
-                              onPressed: () {
-                                // fijamos ciudad seleccionada y limpiamos búsqueda
-                                setState(() {
-                                  _selectedCityId = c.id;
-                                  _citySearchCtrl.clear();
-                                  _citySearchQuery = '';
-                                  _citySearchResults = [];
-                                });
-                                // opcional: scroll a la sección de eventos
-                              },
-                            ),
-                          )).toList(),
-                        ),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _citySearchResults.map((c) => ActionChip(
+                          label: Text(c.name, style: Theme.of(context).textTheme.labelLarge),
+                          onPressed: () {
+                            // fijamos ciudad seleccionada y limpiamos búsqueda
+                            setState(() {
+                              _selectedCityId = c.id;
+                              _citySearchCtrl.clear();
+                              _citySearchQuery = '';
+                              _citySearchResults = [];
+                            });
+                            // opcional: scroll a la sección de eventos
+                          },
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        )).toList(),
                       ),
                     const SizedBox(height: 8),
                   ],
+                  const SizedBox(height: 10),
                   TextField(
                     controller: _searchCtrl,
                     decoration: InputDecoration(
-                      hintText: 'Buscar eventos (ej. flamenco, mercadillo…) ',
-                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
+                      prefixIcon: const Icon(Icons.search, size: 20),
                       suffixIcon: _searchQuery.isNotEmpty
                           ? IconButton(
                               icon: const Icon(Icons.clear),
@@ -513,6 +504,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                     onUseLocation: _getUserLocation,
                   ),
+                if (!_isLoading) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16, bottom: 6),
+                    child: Text(
+                      'Ciudades dentro del radio',
+                      style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: const Color(0xFF5b351f),
+                      ),
+                    ),
+                  ),
+                  _buildCityChips(),
+                  const SizedBox(height: 8),
+                ],
                 // Resultados de búsqueda
                 if (_searchQuery.isNotEmpty) ...[
                   const SizedBox(height: 16),
@@ -566,7 +572,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   )
                 else
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
                     child: UpcomingEventsSection(
                       events: _upcomingEvents,
                       selectedCategoryId: _selectedCategoryId,
@@ -675,7 +681,18 @@ class DashboardHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return HeroBanner(featured: featured);
+    if (featured == null) {
+      return const SizedBox.shrink();
+    }
+
+    return HeroBanner(
+      title: featured!.title,
+      subtitle: 'Temporada actual',
+      imageUrl: featured!.imageUrl ?? '',
+      onFeaturedTap: () {
+        // TODO: Navegar a eventos destacados
+      },
+    );
   }
 }
 
@@ -806,9 +823,7 @@ class NearbyEventsSection extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Text(
                     'Cerca de ti',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.titleMedium,
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -860,14 +875,19 @@ class _FilterHeaderWidget extends StatelessWidget {
   final bool showCityChips;
 
   List<Widget> buildCityChips(BuildContext context) {
-    final theme = Theme.of(context);
     final chips = <Widget>[];
 
     // Chip "Todas"
+    final isAllSelected = selectedCityId == null;
     chips.add(
       ChoiceChip(
-        label: Text('Todas', style: theme.textTheme.bodySmall),
-        selected: selectedCityId == null,
+        label: const Text(
+          'Todas',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        avatar: const Icon(Icons.place_outlined, size: 16),
+        selected: isAllSelected,
+        selectedColor: const Color(0xFFFFE9DC),
         onSelected: (selected) {
           if (selected) {
             onCityTap(null);
@@ -883,8 +903,12 @@ class _FilterHeaderWidget extends StatelessWidget {
       final isSelected = city.id == selectedCityId;
       chips.add(
         ChoiceChip(
-          label: Text(city.name, style: theme.textTheme.bodySmall),
+          label: Text(
+            city.name,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
           selected: isSelected,
+          selectedColor: const Color(0xFFFFE9DC),
           onSelected: (selected) {
             if (selected) {
               onCityTap(city.id);
@@ -900,14 +924,18 @@ class _FilterHeaderWidget extends StatelessWidget {
   }
 
   List<Widget> buildCategoryChips(BuildContext context) {
-    final theme = Theme.of(context);
     final chips = <Widget>[];
 
     // Chip "Todas"
+    final isAllSelected = selectedCategoryId == null;
     chips.add(
       ChoiceChip(
-        label: Text('Todas', style: theme.textTheme.bodySmall),
-        selected: selectedCategoryId == null,
+        label: const Text(
+          'Todas',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        selected: isAllSelected,
+        selectedColor: const Color(0xFFFFE9DC),
         avatar: const Icon(Icons.grid_view, size: 16),
         onSelected: (selected) {
           if (selected) {
@@ -926,8 +954,12 @@ class _FilterHeaderWidget extends StatelessWidget {
 
       chips.add(
         ChoiceChip(
-          label: Text(category.name, style: theme.textTheme.bodySmall),
+          label: Text(
+            category.name,
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
           selected: isSelected,
+          selectedColor: const Color(0xFFFFE9DC),
           avatar: Icon(icon, size: 16),
           onSelected: (selected) {
             if (selected) {
@@ -956,13 +988,13 @@ class _FilterHeaderWidget extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Fila 1: chips de ciudades (scroll horizontal "ligero")
+            // Fila 1: chips de ciudades (scroll horizontal)
             if (showCityChips) ...[
               SizedBox(
-                height: 36,
+                height: 40,
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [
                       ...buildCityChips(context),
@@ -975,12 +1007,12 @@ class _FilterHeaderWidget extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
-            // Fila 2: chips de categorías (scroll horizontal "ligero")
+            // Fila 2: chips de categorías (scroll horizontal)
             SizedBox(
-              height: 36,
+              height: 40,
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Row(
                   children: [
                     ...buildCategoryChips(context),
@@ -1025,31 +1057,51 @@ class _NearbyControlWidget extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'A ${radiusKm.round()} km',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Radio',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                          ),
+                          Text(
+                            '${radiusKm.toInt()} km',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ],
                       ),
-                      Slider(
-                        value: radiusKm,
-                        min: 5,
-                        max: 100,
-                        divisions: 19,
-                        label: '${radiusKm.round()} km',
-                        onChanged: onRadiusChanged,
+                      const SizedBox(height: 4),
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 4,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 8,
+                          ),
+                        ),
+                        child: Slider(
+                          value: radiusKm,
+                          min: 5,
+                          max: 100,
+                          divisions: 19,
+                          label: '${radiusKm.round()} km',
+                          onChanged: onRadiusChanged,
+                        ),
                       ),
                       const SizedBox(height: 12),
                     ],
                   ),
                 ),
                 const SizedBox(width: 12),
-                ElevatedButton.icon(
+                OutlinedButton.icon(
                   onPressed: onUseLocation,
                   icon: const Icon(Icons.location_on, size: 18),
                   label: const Text('Usar mi ubicación'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
                   ),
                 ),
               ],
@@ -1096,7 +1148,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
     // Chip "Todas"
     chips.add(
       ChoiceChip(
-        label: Text('Todas', style: theme.textTheme.bodySmall),
+        label: Text('Todas', style: theme.textTheme.labelLarge),
         selected: selectedCityId == null,
         onSelected: (selected) {
           if (selected) {
@@ -1135,7 +1187,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
       final isSelected = city.id == selectedCityId;
       chips.add(
         ChoiceChip(
-          label: Text(city.name, style: theme.textTheme.bodySmall),
+          label: Text(city.name, style: theme.textTheme.labelLarge),
           selected: isSelected,
           onSelected: (selected) {
             if (selected) {
@@ -1158,7 +1210,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
     // Chip "Todas"
     chips.add(
       ChoiceChip(
-        label: Text('Todas', style: theme.textTheme.bodySmall),
+        label: Text('Todas', style: theme.textTheme.labelLarge),
         selected: selectedCategoryId == null,
         avatar: const Icon(Icons.grid_view, size: 16),
         onSelected: (selected) {
@@ -1178,7 +1230,7 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
 
       chips.add(
         ChoiceChip(
-          label: Text(category.name, style: theme.textTheme.bodySmall),
+          label: Text(category.name, style: theme.textTheme.labelLarge),
           selected: isSelected,
           avatar: Icon(icon, size: 16),
           onSelected: (selected) {

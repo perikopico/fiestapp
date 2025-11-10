@@ -83,23 +83,67 @@ class Fiestapp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeData = ThemeData(
       useMaterial3: true,
+      visualDensity: VisualDensity.adaptivePlatformDensity,
+      fontFamily: 'Inter',
       colorScheme: ColorScheme.fromSeed(
         seedColor: const Color(0xFFF28C28), // naranja cálido
       ),
       scaffoldBackgroundColor: const Color(0xFFF9F4EF),
+      textTheme: const TextTheme(
+        headlineSmall: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
+        titleMedium: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+        bodyMedium: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        bodySmall: TextStyle(fontWeight: FontWeight.w400, fontSize: 12),
+      ),
       appBarTheme: AppBarTheme(
         centerTitle: true,
         elevation: 0,
         backgroundColor: Colors.transparent,
         titleTextStyle: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 24,
+          fontSize: 20,
+          fontWeight: FontWeight.w600,
+          color: Colors.black87,
         ),
       ),
-      textTheme: TextTheme(
-        titleLarge: const TextStyle(
-          fontWeight: FontWeight.bold,
-          fontSize: 20,
+      chipTheme: const ChipThemeData(
+        labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        side: BorderSide(width: .6, color: Color(0x22000000)),
+        shape: StadiumBorder(),
+        selectedColor: Color(0xFFFFE9DC),
+        secondarySelectedColor: Color(0xFFFFE9DC),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          minimumSize: const Size(0, 40),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          elevation: 2,
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        margin: EdgeInsets.zero,
+        elevation: 1.5,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(16)),
+        ),
+      ),
+      inputDecorationTheme: const InputDecorationTheme(
+        filled: true,
+        fillColor: Color(0xFFFAF6F2),
+        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0x22000000), width: .7),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0x22000000), width: .7),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.all(Radius.circular(14)),
+          borderSide: BorderSide(color: Color(0xFFd9a17e), width: 1.2),
         ),
       ),
     );

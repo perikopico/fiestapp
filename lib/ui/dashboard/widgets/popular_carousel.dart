@@ -62,9 +62,7 @@ class PopularCarousel extends StatelessWidget {
       children: [
         Text(
           'Popular esta semana',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 12),
         SizedBox(
