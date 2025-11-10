@@ -5,6 +5,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:fiestapp/services/event_service.dart';
 import 'package:fiestapp/data/events_repository.dart';
 import 'package:fiestapp/models/event.dart' as model;
+import 'package:fiestapp/services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/event.dart';
 import '../../models/category.dart';
@@ -14,19 +15,6 @@ import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
-
-// Clase simple para ciudades
-class City {
-  final int id;
-  final String name;
-  final String? slug;
-
-  City({
-    required this.id,
-    required this.name,
-    this.slug,
-  });
-}
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -38,6 +26,7 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   final EventService _eventService = EventService();
   final CategoryService _categoryService = CategoryService();
+  final CityService _cityService = CityService();
   final _repo = EventsRepository();
   final _repoNearby = EventsRepository();
 
@@ -57,11 +46,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double? _userLng = -5.9219; // Barbate (temporal)
   bool _isNearbyLoading = false;
   List<model.Event> _nearbyEvents = [];
+  List<City> _nearbyCities = [];
 
   @override
   void initState() {
     super.initState();
     _reloadEvents().then((_) => _loadNearby());
+    _loadCities();
+    _loadNearbyCities();
   }
 
   Future<void> _reloadEvents() async {
@@ -75,7 +67,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _eventService.fetchUpcoming(limit: 10),
         _eventService.fetchFeatured(limit: 10),
         _categoryService.fetchAll(),
-        _fetchCities(),
       ]);
 
       setState(() {
@@ -85,7 +76,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
         _categories = results[2] as List<Category>;
-        _cities = results[3] as List<City>;
         _isLoading = false;
       });
     } catch (e) {
@@ -110,24 +100,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<List<City>> _fetchCities() async {
-    try {
-      final rows = await Supabase.instance.client
-          .from('cities')
-          .select('id, name, slug')
-          .order('name', ascending: true);
-
-      return (rows as List)
-          .map((e) => City(
-                id: (e['id'] as num).toInt(),
-                name: e['name'] as String,
-                slug: e['slug'] as String?,
-              ))
-          .toList();
-    } catch (e) {
-      // Si falla, retornar lista vacía
-      return [];
-    }
+  Future<void> _loadCities() async {
+    // por ahora usamos Cádiz por slug (para producción usaremos selector)
+    final provId = await _cityService.getProvinceIdBySlug('cadiz');
+    final cities = await _cityService.fetchCities(provinceId: provId);
+    if (!mounted) return;
+    setState(() {
+      _cities = cities;
+      // si no hay selección, seleccionar la primera o mantener null (tu criterio)
+      _selectedCityId ??= _cities.isNotEmpty ? _cities.first.id : null;
+    });
   }
 
   void _clearFilters() {
@@ -152,6 +134,95 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } finally {
       if (mounted) setState(() => _isNearbyLoading = false);
     }
+  }
+
+  Future<void> _loadNearbyCities() async {
+    if (_userLat == null || _userLng == null) return;
+
+    final cities = await CityService().fetchNearbyCities(
+      lat: _userLat!,
+      lng: _userLng!,
+      radiusKm: _radiusKm,
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _nearbyCities = cities;
+      // Limpia selección si la ciudad elegida ya no está en el radio
+      if (_selectedCityId != null &&
+          !_nearbyCities.any((c) => c.id == _selectedCityId)) {
+        _selectedCityId = null;
+      }
+    });
+  }
+
+  Widget _buildProvinceCityChips() {
+    if (_cities.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: _cities.map((city) => Padding(
+          padding: const EdgeInsets.only(right: 8.0),
+          child: ChoiceChip(
+            label: Text(city.name),
+            selected: _selectedCityId == city.id,
+            onSelected: (_) {
+              setState(() {
+                _selectedCityId = city.id;
+              });
+              // aquí si filtras por ciudad en la lista principal, refresca como ya hacías
+            },
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  Widget _buildNearbyCityChips() {
+    if (_nearbyCities.isEmpty) return const SizedBox.shrink();
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: const Text('Todas'),
+              selected: _selectedCityId == null,
+              onSelected: (_) {
+                setState(() {
+                  _selectedCityId = null; // todas las ciudades del radio
+                });
+              },
+            ),
+          ),
+          ..._nearbyCities.map((city) => Padding(
+            padding: const EdgeInsets.only(right: 8.0),
+            child: ChoiceChip(
+              label: Text(city.name),
+              selected: _selectedCityId == city.id,
+              onSelected: (_) {
+                setState(() {
+                  _selectedCityId = city.id;
+                });
+              },
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCityChips() {
+    // Si hay resultado por radio, mostramos solo esa fila.
+    if (_nearbyCities.isNotEmpty) {
+      return _buildNearbyCityChips();
+    }
+    // Si no hay ciudades cercanas (no hay ubicación o radio pequeño), mostramos la fila estática
+    return _buildProvinceCityChips();
   }
 
   Future<void> _getUserLocation() async {
@@ -184,6 +255,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _userLng = pos.longitude;
     });
     await _loadNearby();
+    await _loadNearbyCities();
   }
 
 
@@ -244,7 +316,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: DashboardHero(featured: _featuredEvent),
                   ),
                 ),
-                if (!_isLoading)
+                if (!_isLoading) ...[
+                  const SizedBox(height: 8),
+                  _buildCityChips(),
+                  const SizedBox(height: 8),
                   _FilterHeaderWidget(
                     cities: _cities,
                     categories: _categories,
@@ -260,16 +335,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
                       });
                     },
+                    showCityChips: false,
                   ),
+                ],
                 if (!_isLoading)
                   _NearbyControlWidget(
                     radiusKm: _radiusKm,
-                    onRadiusChanged: (value) {
+                    onRadiusChanged: (value) async {
                       setState(() {
                         _radiusKm = value;
                       });
                       if (_userLat != null && _userLng != null) {
-                        _loadNearby();
+                        await _loadNearby();
+                        await _loadNearbyCities();
                       }
                     },
                     onUseLocation: _getUserLocation,
@@ -391,7 +469,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                     child: NearbyEventsSection(
-                      events: _nearbyEvents,
+                      events: _selectedCityId == null
+                          ? _nearbyEvents
+                          : _nearbyEvents.where((e) => e.cityId == _selectedCityId).toList(),
                     ),
                   ),
                 const SizedBox(height: 24),
@@ -586,6 +666,7 @@ class _FilterHeaderWidget extends StatelessWidget {
     this.selectedCategoryId,
     required this.onCityTap,
     required this.onCategoryTap,
+    this.showCityChips = true,
   });
 
   final List<City> cities;
@@ -594,6 +675,7 @@ class _FilterHeaderWidget extends StatelessWidget {
   final int? selectedCategoryId;
   final ValueChanged<int?> onCityTap;
   final ValueChanged<int?> onCategoryTap;
+  final bool showCityChips;
 
   List<Widget> buildCityChips(BuildContext context) {
     final theme = Theme.of(context);
@@ -614,30 +696,8 @@ class _FilterHeaderWidget extends StatelessWidget {
       ),
     );
 
-    // Nombres oficiales completos permitidos
-    const officialCityNames = {
-      'Barbate',
-      'Vejer de la Frontera',
-      'Zahara de los Atunes',
-    };
-
-    // Filtrar ciudades para mostrar solo nombres oficiales completos
-    final filteredCities = cities.where((city) => 
-      officialCityNames.contains(city.name)
-    ).toList();
-
-    // Ordenar según el orden deseado
-    filteredCities.sort((a, b) {
-      const order = ['Barbate', 'Vejer de la Frontera', 'Zahara de los Atunes'];
-      final indexA = order.indexOf(a.name);
-      final indexB = order.indexOf(b.name);
-      if (indexA == -1) return 1;
-      if (indexB == -1) return -1;
-      return indexA.compareTo(indexB);
-    });
-
-    // Chips de ciudades (solo nombres oficiales completos)
-    for (final city in filteredCities) {
+    // Chips de ciudades (construidos dinámicamente desde cities)
+    for (final city in cities) {
       final isSelected = city.id == selectedCityId;
       chips.add(
         ChoiceChip(
@@ -715,22 +775,24 @@ class _FilterHeaderWidget extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Fila 1: chips de ciudades (scroll horizontal "ligero")
-            SizedBox(
-              height: 36,
-              child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                child: Row(
-                  children: [
-                    ...buildCityChips(context),
-                  ]
-                      .expand((w) => [w, const SizedBox(width: 8)])
-                      .toList()
-                    ..removeLast(),
+            if (showCityChips) ...[
+              SizedBox(
+                height: 36,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Row(
+                    children: [
+                      ...buildCityChips(context),
+                    ]
+                        .expand((w) => [w, const SizedBox(width: 8)])
+                        .toList()
+                      ..removeLast(),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 8),
+              const SizedBox(height: 8),
+            ],
             // Fila 2: chips de categorías (scroll horizontal "ligero")
             SizedBox(
               height: 36,
