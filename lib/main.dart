@@ -102,6 +102,10 @@ class Fiestapp extends StatelessWidget {
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(color: Color(0xFFD9C8BC)),
           ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFFD9C8BC)),
+          ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(color: Color(0xFFB0907B), width: 1.6),
