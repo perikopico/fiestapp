@@ -17,6 +17,7 @@ import 'widgets/popular_carousel.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
 import '../../utils/date_ranges.dart';
+import 'package:intl/intl.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -31,6 +32,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final CityService _cityService = CityService();
   final _repo = EventsRepository();
   final _repoNearby = EventsRepository();
+  final DateFormat _df = DateFormat('d MMM');
 
   Event? _featuredEvent;
   List<Event> _upcomingEvents = [];
@@ -43,6 +45,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<City> _cities = [];
   DateTime? _fromDate;
   DateTime? _toDate;
+  String? _selectedDatePreset;
+  bool _isToday = false;
+  bool _isWeekend = false;
+  bool _isThisMonth = false;
   
   // Nearby events state
   double _radiusKm = 25;
@@ -152,17 +158,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _toDate = to;
       _isLoading = true;
     });
-    final events = await EventService().listEvents(
-      cityId: _selectedCityId,
-      categoryId: _selectedCategoryId,
-      from: _fromDate,
-      to: _toDate,
+    try {
+      final events = await EventService().listEvents(
+        cityId: _selectedCityId,
+        categoryId: _selectedCategoryId,
+        from: _fromDate,
+        to: _toDate,
+      );
+      if (!mounted) return;
+      setState(() {
+        _upcomingEvents = events; // nunca null
+      });
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudieron cargar eventos del rango seleccionado')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Widget _activeDatePill() {
+    if (_fromDate == null && _toDate == null) return const SizedBox.shrink();
+
+    final fromTxt = _fromDate != null ? _df.format(_fromDate!) : '–';
+    final toTxt = _toDate != null ? _df.format(_toDate!) : '–';
+
+    return Padding(
+      padding: const EdgeInsets.only(left: 8, right: 8, bottom: 6),
+      child: Row(
+        children: [
+          InputChip(
+            label: Text('Fechas: $fromTxt → $toTxt'),
+            onDeleted: () => _reloadWithDateRange(from: null, to: null),
+          ),
+        ],
+      ),
     );
-    if (!mounted) return;
-    setState(() {
-      _upcomingEvents = events;
-      _isLoading = false;
-    });
   }
 
   Future<void> _loadNearby() async {
@@ -558,6 +595,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   : null,
                             );
                             if (picked != null) {
+                              setState(() {
+                                _selectedDatePreset = null; // si usas enum/flag para Hoy/Fin de semana/Este mes
+                                _isToday = false;
+                                _isWeekend = false;
+                                _isThisMonth = false;
+                              });
                               _reloadWithDateRange(from: picked.start, to: picked.end);
                             }
                           },
@@ -567,17 +610,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-                  if (_fromDate != null || _toDate != null) ...[
-                    const SizedBox(height: 6),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton.icon(
-                        icon: const Icon(Icons.close),
-                        label: const Text('Borrar filtro de fecha'),
-                        onPressed: () => _reloadWithDateRange(from: null, to: null),
-                      ),
-                    ),
-                  ],
+                  _activeDatePill(),
                 ],
                 if (!_isLoading)
                   _NearbyControlWidget(

@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 
 import '../models/event.dart';
 
@@ -52,27 +53,56 @@ class EventService {
     int? categoryId,
     DateTime? from,
     DateTime? to,
+    String? textQuery,
+    double? radiusKm,
+    double? userLat,
+    double? userLng,
+    int limit = 50,
   }) async {
-    dynamic qb = Supabase.instance.client
-        .from('events')
-        .select('id, title, place, starts_at, image_url, city_id, category_id, is_free, is_featured')
-        .order('starts_at');
+    final supa = Supabase.instance.client;
 
-    if (cityId != null) {
-      qb = qb.eq('city_id', cityId);
-    }
-    if (categoryId != null) {
-      qb = qb.eq('category_id', categoryId);
-    }
-    if (from != null) {
-      qb = qb.gte('starts_at', from.toUtc().toIso8601String());
-    }
-    if (to != null) {
-      qb = qb.lte('starts_at', to.toUtc().toIso8601String());
+    // --- Base query ---
+    dynamic qb = supa.from('events_view').select('''
+    id, title, image_url, maps_url, place, is_featured, is_free,
+    starts_at, city_id, category_id,
+    city_name, category_name, category_icon, category_color
+  ''');
+
+    // --- Fechas (en UTC, rango inclusivo/exclusivo) ---
+    DateTime? startUtc;
+    DateTime? endUtc;
+    if (from != null) startUtc = DateTime.utc(from.year, from.month, from.day);
+    if (to != null) endUtc = DateTime.utc(to.year, to.month, to.day).add(const Duration(days: 1));
+
+    if (startUtc != null) qb = qb.gte('starts_at', startUtc.toIso8601String());
+    if (endUtc != null) qb = qb.lt('starts_at', endUtc.toIso8601String());
+
+    // --- Filtros por ciudad y categoría ---
+    if (cityId != null) qb = qb.eq('city_id', cityId);
+    if (categoryId != null) qb = qb.eq('category_id', categoryId);
+
+    // --- Búsqueda por texto ---
+    if (textQuery != null && textQuery.trim().isNotEmpty) {
+      final q = textQuery.trim();
+      qb = qb.ilike('title', '%$q%');
     }
 
-    final res = await qb;
-    final list = (res as List).cast<Map<String, dynamic>>();
-    return list.map((m) => Event.fromMap(m)).toList();
+    // --- Logs de depuración ---
+    debugPrint('[EVENTS] params -> cityId=$cityId categoryId=$categoryId from=$from to=$to text="$textQuery"');
+
+    // --- Ejecución final con orden y límite ---
+    final rows = await qb.order('starts_at', ascending: true).limit(limit);
+
+    final events = (rows as List)
+        .cast<Map<String, dynamic>>()
+        .map(Event.fromMap)
+        .toList();
+
+    debugPrint('[EVENTS] results -> ${events.length} items');
+    for (final e in events.take(10)) {
+      debugPrint(' - ${e.title} @ ${e.startsAt.toIso8601String()} (cityId=${e.cityId}, catId=${e.categoryId})');
+    }
+
+    return events;
   }
 }
