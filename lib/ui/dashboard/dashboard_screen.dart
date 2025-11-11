@@ -16,6 +16,7 @@ import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
+import '../../utils/date_ranges.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -40,6 +41,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int? _selectedCategoryId;
   int? _selectedCityId;
   List<City> _cities = [];
+  DateTime? _fromDate;
+  DateTime? _toDate;
   
   // Nearby events state
   double _radiusKm = 25;
@@ -140,6 +143,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
     setState(() {
       _selectedCategoryId = null;
       _selectedCityId = null;
+    });
+  }
+
+  Future<void> _reloadWithDateRange({DateTime? from, DateTime? to}) async {
+    setState(() {
+      _fromDate = from;
+      _toDate = to;
+      _isLoading = true;
+    });
+    final events = await EventService().listEvents(
+      cityId: _selectedCityId,
+      categoryId: _selectedCategoryId,
+      from: _fromDate,
+      to: _toDate,
+    );
+    if (!mounted) return;
+    setState(() {
+      _upcomingEvents = events;
+      _isLoading = false;
     });
   }
 
@@ -489,6 +511,73 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                     showCityChips: false,
                   ),
+                  const SizedBox(height: 8),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          label: const Text('Hoy'),
+                          onPressed: () {
+                            final r = todayRange();
+                            _reloadWithDateRange(from: r.from, to: r.to);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          label: const Text('Fin de semana'),
+                          onPressed: () {
+                            final r = weekendRange();
+                            _reloadWithDateRange(from: r.from, to: r.to);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        ActionChip(
+                          label: const Text('Este mes'),
+                          onPressed: () {
+                            final r = thisMonthRange();
+                            _reloadWithDateRange(from: r.from, to: r.to);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          icon: const Icon(Icons.date_range, size: 18),
+                          label: const Text('Rango...'),
+                          onPressed: () async {
+                            final now = DateTime.now();
+                            final first = DateTime(now.year - 1, 1, 1);
+                            final last = DateTime(now.year + 2, 12, 31);
+
+                            final picked = await showDateRangePicker(
+                              context: context,
+                              firstDate: first,
+                              lastDate: last,
+                              initialDateRange: (_fromDate != null && _toDate != null)
+                                  ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                                  : null,
+                            );
+                            if (picked != null) {
+                              _reloadWithDateRange(from: picked.start, to: picked.end);
+                            }
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  if (_fromDate != null || _toDate != null) ...[
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        icon: const Icon(Icons.close),
+                        label: const Text('Borrar filtro de fecha'),
+                        onPressed: () => _reloadWithDateRange(from: null, to: null),
+                      ),
+                    ),
+                  ],
                 ],
                 if (!_isLoading)
                   _NearbyControlWidget(

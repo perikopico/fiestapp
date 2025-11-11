@@ -46,4 +46,33 @@ class EventService {
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((m) => Event.fromMap(m)).toList();
   }
+
+  Future<List<Event>> listEvents({
+    int? cityId,
+    int? categoryId,
+    DateTime? from,
+    DateTime? to,
+  }) async {
+    dynamic qb = Supabase.instance.client
+        .from('events')
+        .select('id, title, place, starts_at, image_url, city_id, category_id, is_free, is_featured')
+        .order('starts_at');
+
+    if (cityId != null) {
+      qb = qb.eq('city_id', cityId);
+    }
+    if (categoryId != null) {
+      qb = qb.eq('category_id', categoryId);
+    }
+    if (from != null) {
+      qb = qb.gte('starts_at', from.toUtc().toIso8601String());
+    }
+    if (to != null) {
+      qb = qb.lte('starts_at', to.toUtc().toIso8601String());
+    }
+
+    final res = await qb;
+    final list = (res as List).cast<Map<String, dynamic>>();
+    return list.map((m) => Event.fromMap(m)).toList();
+  }
 }
