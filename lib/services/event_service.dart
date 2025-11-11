@@ -4,16 +4,78 @@ import 'package:flutter/foundation.dart';
 import '../models/event.dart';
 
 class EventService {
-  final _c = Supabase.instance.client;
+  EventService._();
+
+  static final instance = EventService._();
+
+  final supa = Supabase.instance.client;
 
   Future<List<Event>> fetchUpcoming({int limit = 50}) async {
-    final r = await _c.from('events_view').select().order('starts_at', ascending: true).limit(limit);
+    final r = await supa.from('events_view').select().order('starts_at', ascending: true).limit(limit);
     return (r as List).map((e) => Event.fromMap(e as Map<String, dynamic>)).toList();
   }
 
   Future<List<Event>> fetchFeatured({int limit = 10}) async {
-    final r = await _c.from('events_view').select().eq('is_featured', true).order('starts_at', ascending: true).limit(limit);
+    final r = await supa.from('events_view').select().eq('is_featured', true).order('starts_at', ascending: true).limit(limit);
     return (r as List).map((e) => Event.fromMap(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<Event>> fetchEvents({
+    List<int>? cityIds,
+    int? categoryId,
+    DateTime? from,
+    DateTime? to,
+    double? radiusKm,
+    dynamic center, // si tienes LatLng usa tu tipo; aquí evitamos lios tipados
+    String? searchTerm, // término libre para título/descr
+    int limit = 50,
+  }) async {
+    // Usamos la vista/materializada "events_view" (ajústalo si usas otra)
+    dynamic qb = supa.from('events_view').select(
+      'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,is_free,category_icon,category_color',
+    );
+
+    // Filtros básicos
+    if (cityIds != null && cityIds.isNotEmpty) {
+      // Para múltiples cityIds, usamos el operador 'in' de PostgREST
+      if (cityIds.length == 1) {
+        qb = qb.eq('city_id', cityIds.first);
+      } else {
+        // Construimos condición OR para múltiples valores: (city_id.eq.1,city_id.eq.2)
+        final orCondition = cityIds.map((id) => 'city_id.eq.$id').join(',');
+        qb = qb.or(orCondition);
+      }
+    }
+    if (categoryId != null) qb = qb.eq('category_id', categoryId);
+    if (from != null) qb = qb.gte('starts_at', from.toIso8601String());
+    if (to != null) qb = qb.lt('starts_at', to.toIso8601String());
+
+    // Búsqueda libre por evento (título/descr)
+    if (searchTerm != null && searchTerm.trim().isNotEmpty) {
+      final t = searchTerm.trim();
+      // Para búsqueda en título o descripción, usamos ilike en ambos campos
+      // PostgREST permite múltiples filtros, pero si ya hay un 'or', necesitamos combinarlos
+      // Por simplicidad, buscamos solo en title por ahora (se puede mejorar)
+      qb = qb.ilike('title', '%$t%');
+    }
+
+    // Radio (si aplica). Si usas RPC, llama a tu función y obvia cityIds.
+    if (radiusKm != null && center != null && radiusKm > 0) {
+      // Si tienes una RPC como events_within_radius(lat, lng, km)
+      // comenta lo anterior y usa algo así:
+      // qb = supa.rpc('events_within_radius', params: {
+      //   'lat': center['lat'],
+      //   'lng': center['lng'],
+      //   'km': radiusKm,
+      // });
+    }
+
+    final res = await qb.order('starts_at', ascending: true).limit(limit);
+    
+    if (res is List) {
+      return res.map((m) => Event.fromMap(m as Map<String, dynamic>)).toList();
+    }
+    return [];
   }
 
   Future<List<Event>> searchEvents({
@@ -29,7 +91,7 @@ class EventService {
     // Si no hay query y tampoco filtro por ciudad, devolvemos vacío (UI decide)
     if (q.isEmpty && cityId == null) return [];
 
-    dynamic qb = Supabase.instance.client
+    dynamic qb = supa
         .from('events')
         .select('id, title, place, starts_at, image_url, city_id, category_id, is_free, is_featured');
 
@@ -59,8 +121,6 @@ class EventService {
     double? userLng,
     int limit = 50,
   }) async {
-    final supa = Supabase.instance.client;
-
     // --- Base query ---
     dynamic qb = supa.from('events_view').select('''
     id, title, image_url, maps_url, place, is_featured, is_free,

@@ -19,6 +19,13 @@ import 'package:fiestapp/ui/common/shimmer_widgets.dart';
 import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
+// ==== Ámbito de búsqueda (solo uno a la vez) ====
+// Ciudad => se aplican chips/selección de ciudades; Radio => se aplica slider y ubicación.
+enum LocationMode { city, radius }
+
+// ==== Búsqueda unificada ====
+enum SearchMode { city, event }
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -27,12 +34,17 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final EventService _eventService = EventService();
+  final EventService _eventService = EventService.instance;
   final CategoryService _categoryService = CategoryService();
-  final CityService _cityService = CityService();
+  final CityService _cityService = CityService.instance;
   final _repo = EventsRepository();
   final _repoNearby = EventsRepository();
   final DateFormat _df = DateFormat('d MMM');
+
+  LocationMode _mode = LocationMode.city;
+  SearchMode _searchMode = SearchMode.city;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String? _searchEventTerm;
 
   Event? _featuredEvent;
   List<Event> _upcomingEvents = [];
@@ -42,6 +54,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   String? _error;
   int? _selectedCategoryId;
   int? _selectedCityId;
+  Set<int> _selectedCityIds = {};
+  String? _selectedCityName;
   List<City> _cities = [];
   DateTime? _fromDate;
   DateTime? _toDate;
@@ -51,21 +65,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isThisMonth = false;
   
   // Nearby events state
-  double _radiusKm = 25;
+  double _radiusKm = 5;
   double? _userLat = 36.1927; // Barbate (temporal)
   double? _userLng = -5.9219; // Barbate (temporal)
   bool _isNearbyLoading = false;
   List<model.Event> _nearbyEvents = [];
   List<City> _nearbyCities = [];
   
-  // Search state
-  final _searchCtrl = TextEditingController();
+  // Legacy search state (mantener por compatibilidad)
   String _searchQuery = '';
   Timer? _searchDebouncer;
   bool _isSearching = false;
   List<Event> _searchResults = [];
   
-  // City search state
+  // Legacy city search state (mantener por compatibilidad)
   final _citySearchCtrl = TextEditingController();
   String _citySearchQuery = '';
   Timer? _citySearchDebouncer;
@@ -89,6 +102,114 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
+  void _switchMode(LocationMode mode) {
+    if (_mode == mode) return;
+    setState(() {
+      _mode = mode;
+      if (_mode == LocationMode.city) {
+        // Al volver a Ciudad, el radio no se aplica (pero mantenemos el valor para cuando vuelvas a Radio)
+        // No hacemos nada con _radiusKm
+      } else {
+        // Al ir a Radio, descartamos selección de ciudad para evitar conflicto visual/lógico
+        _selectedCityId = null;
+        _selectedCityIds.clear();
+        _selectedCityName = null;
+        // Inicializar radio a un valor válido si está en 0
+        if (_radiusKm == 0 || _radiusKm < 5) _radiusKm = 25;
+      }
+    });
+    _reloadEvents();
+  }
+
+  Widget _buildScopeToggle() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SegmentedButton<LocationMode>(
+        segments: const [
+          ButtonSegment(value: LocationMode.city, label: Text('Ciudad'), icon: Icon(Icons.location_city)),
+          ButtonSegment(value: LocationMode.radius, label: Text('Radio'), icon: Icon(Icons.radar)),
+        ],
+        selected: <LocationMode>{_mode},
+        onSelectionChanged: (sel) {
+          if (sel.isNotEmpty) _switchMode(sel.first);
+        },
+      ),
+    );
+  }
+
+  Widget _buildActiveScopePill() {
+    final text = _mode == LocationMode.city
+        ? (_selectedCityName != null ? 'Ámbito: Ciudad (${_selectedCityName})' : 'Ámbito: Ciudad')
+        : 'Ámbito: Radio (${_radiusKm.toStringAsFixed(0)} km)';
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Chip(label: Text(text)),
+    );
+  }
+
+  // ==== Búsqueda unificada ====
+  Widget _buildUnifiedSearch() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Selector Localidad | Evento
+          SegmentedButton<SearchMode>(
+            segments: const [
+              ButtonSegment(value: SearchMode.city, label: Text('Localidad'), icon: Icon(Icons.place_outlined)),
+              ButtonSegment(value: SearchMode.event, label: Text('Evento'), icon: Icon(Icons.search)),
+            ],
+            selected: <SearchMode>{_searchMode},
+            onSelectionChanged: (s) {
+              if (s.isNotEmpty) setState(() => _searchMode = s.first);
+            },
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _searchCtrl,
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              hintText: _searchMode == SearchMode.city
+                  ? 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")'
+                  : 'Buscar eventos (ej. flamenco, mercadillo...)',
+              prefixIcon: const Icon(Icons.search),
+            ),
+            onSubmitted: (q) async {
+              final query = q.trim();
+              if (query.isEmpty) {
+                setState(() => _searchEventTerm = null);
+                _reloadEvents();
+                return;
+              }
+              if (_searchMode == SearchMode.city) {
+                // Buscar ciudad por nombre aproximado y seleccionarla.
+                final cityId = await CityService.instance.findCityIdByQuery(query);
+                if (cityId != null) {
+                  // Buscar la ciudad completa para obtener el nombre
+                  final cities = await _cityService.searchCities(query);
+                  final city = cities.firstWhere((c) => c.id == cityId, orElse: () => cities.first);
+                  setState(() {
+                    _mode = LocationMode.city;
+                    _selectedCityId = cityId;
+                    _selectedCityIds = {cityId};
+                    _selectedCityName = city.name;
+                    _radiusKm = 5;
+                  });
+                  _reloadEvents();
+                }
+              } else {
+                // Evento: aplicamos término libre en EventService
+                setState(() => _searchEventTerm = query);
+                _reloadEvents();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _reloadEvents() async {
     setState(() {
       _isLoading = true;
@@ -96,8 +217,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
+      final List<int>? cityIds =
+          _mode == LocationMode.city
+              ? (_selectedCityIds.isNotEmpty
+                    ? _selectedCityIds.toList()
+                    : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
+              : null;
+
+      final double? radius =
+          _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
+
+      // Crear objeto center para el modo radio
+      dynamic center;
+      if (_mode == LocationMode.radius && _userLat != null && _userLng != null) {
+        center = {'lat': _userLat, 'lng': _userLng};
+      }
+
       final results = await Future.wait([
-        _eventService.fetchUpcoming(limit: 10),
+        EventService.instance.fetchEvents(
+          cityIds: cityIds,
+          categoryId: _selectedCategoryId,
+          from: _fromDate,
+          to: _toDate,
+          radiusKm: radius,
+          center: center,
+          searchTerm: _searchEventTerm,
+        ),
         _eventService.fetchFeatured(limit: 10),
         _categoryService.fetchAll(),
       ]);
@@ -142,6 +287,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _cities = cities;
       // si no hay selección, seleccionar la primera o mantener null (tu criterio)
       _selectedCityId ??= _cities.isNotEmpty ? _cities.first.id : null;
+      if (_selectedCityId != null) {
+        final city = _cities.firstWhere((c) => c.id == _selectedCityId, orElse: () => _cities.first);
+        _selectedCityName = city.name;
+        _selectedCityIds = {city.id};
+      }
     });
   }
 
@@ -159,11 +309,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _isLoading = true;
     });
     try {
-      final events = await EventService().listEvents(
-        cityId: _selectedCityId,
+      final List<int>? cityIds =
+          _mode == LocationMode.city
+              ? (_selectedCityIds.isNotEmpty
+                    ? _selectedCityIds.toList()
+                    : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
+              : null;
+
+      final double? radius =
+          _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
+
+      // Crear objeto center para el modo radio
+      dynamic center;
+      if (_mode == LocationMode.radius && _userLat != null && _userLng != null) {
+        center = {'lat': _userLat, 'lng': _userLng};
+      }
+
+      final events = await EventService.instance.fetchEvents(
+        cityIds: cityIds,
         categoryId: _selectedCategoryId,
         from: _fromDate,
         to: _toDate,
+        radiusKm: radius,
+        center: center,
+        searchTerm: _searchEventTerm,
       );
       if (!mounted) return;
       setState(() {
@@ -222,7 +391,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _loadNearbyCities() async {
     if (_userLat == null || _userLng == null) return;
 
-    final cities = await CityService().fetchNearbyCities(
+    final cities = await CityService.instance.fetchNearbyCities(
       lat: _userLat!,
       lng: _userLng!,
       radiusKm: _radiusKm,
@@ -252,6 +421,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         onSelected: (_) {
           setState(() {
             _selectedCityId = city.id;
+            _selectedCityName = city.name;
+            _selectedCityIds = {city.id};
           });
           // aquí si filtras por ciudad en la lista principal, refresca como ya hacías
         },
@@ -274,6 +445,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onSelected: (_) {
             setState(() {
               _selectedCityId = null; // todas las ciudades del radio
+              _selectedCityName = null;
+              _selectedCityIds.clear();
             });
           },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -285,6 +458,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onSelected: (_) {
             setState(() {
               _selectedCityId = city.id;
+              _selectedCityName = city.name;
+              _selectedCityIds = {city.id};
             });
           },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -303,13 +478,127 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _buildProvinceCityChips();
   }
 
+  Widget _buildCityChipsRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: _buildCityChips(),
+    );
+  }
+
+  Widget _buildCategoryChips() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: _FilterHeaderWidget(
+        cities: _cities,
+        categories: _categories,
+        selectedCityId: _selectedCityId,
+        selectedCategoryId: _selectedCategoryId,
+        onCityTap: (cityId) {
+          if (cityId == null) return;
+          setState(() {
+            _selectedCityId = cityId;
+            final city = _cities.firstWhere((c) => c.id == cityId, orElse: () => _cities.first);
+            _selectedCityName = city.name;
+            _selectedCityIds = {cityId};
+          });
+        },
+        onCategoryTap: (categoryId) {
+          setState(() {
+            _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
+          });
+        },
+        showCityChips: false,
+      ),
+    );
+  }
+
+  Widget _buildQuickDateRow() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            ActionChip(
+              label: const Text('Hoy'),
+              onPressed: () {
+                final r = todayRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            ActionChip(
+              label: const Text('Fin de semana'),
+              onPressed: () {
+                final r = weekendRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            ActionChip(
+              label: const Text('Este mes'),
+              onPressed: () {
+                final r = thisMonthRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.date_range, size: 18),
+              label: const Text('Rango...'),
+              onPressed: () async {
+                final now = DateTime.now();
+                final first = DateTime(now.year - 1, 1, 1);
+                final last = DateTime(now.year + 2, 12, 31);
+
+                final picked = await showDateRangePicker(
+                  context: context,
+                  firstDate: first,
+                  lastDate: last,
+                  initialDateRange: (_fromDate != null && _toDate != null)
+                      ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                      : null,
+                );
+                if (picked != null) {
+                  setState(() {
+                    _selectedDatePreset = null;
+                    _isToday = false;
+                    _isWeekend = false;
+                    _isThisMonth = false;
+                  });
+                  _reloadWithDateRange(from: picked.start, to: picked.end);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRadiusAndLocationRow() {
+    return _NearbyControlWidget(
+      radiusKm: _radiusKm,
+      onRadiusChanged: (value) async {
+        setState(() {
+          _radiusKm = value;
+        });
+        if (_userLat != null && _userLng != null) {
+          await _loadNearby();
+          await _loadNearbyCities();
+        }
+      },
+      onUseLocation: _getUserLocation,
+    );
+  }
+
   Future<void> _runSearch(String q) async {
     setState(() {
       _isSearching = true;
       _searchQuery = q;
     });
 
-    final events = await EventService().searchEvents(
+    final events = await EventService.instance.searchEvents(
       query: q,
       cityId: _selectedCityId,       // respeta filtro si hay
       // provinceId: ... (si lo tienes en estado)
@@ -330,7 +619,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _citySearchQuery = q;
     });
 
-    final res = await CityService().searchCities(q);
+    final res = await CityService.instance.searchCities(q);
 
     if (!mounted) return;
 
@@ -413,380 +702,175 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Fiestapp'), elevation: 0),
-      body: RefreshIndicator(
-        onRefresh: _reloadEvents,
-        child: SingleChildScrollView(
-          physics: defaultTargetPlatform == TargetPlatform.iOS
-              ? const BouncingScrollPhysics()
-              : const ClampingScrollPhysics(),
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SafeArea(
-                  bottom: false,
-                  child: Padding(
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _reloadEvents,
+          child: CustomScrollView(
+            slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: DashboardHero(featured: _featuredEvent),
                   ),
-                ),
-                if (!_isLoading) ...[
-                  TextField(
-                    controller: _citySearchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")',
-                      prefixIcon: const Icon(Icons.location_searching, size: 20),
-                      suffixIcon: _citySearchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _citySearchCtrl.clear();
-                                setState(() {
-                                  _citySearchQuery = '';
-                                  _citySearchResults = [];
-                                });
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      isDense: true,
-                    ),
-                    onChanged: (txt) {
-                      _citySearchDebouncer?.cancel();
-                      _citySearchDebouncer = Timer(const Duration(milliseconds: 300), () {
-                        final t = txt.trim();
-                        if (t.isEmpty) {
-                          setState(() {
-                            _citySearchQuery = '';
-                            _citySearchResults = [];
-                          });
-                        } else {
-                          _runCitySearch(t);
-                        }
-                      });
-                    },
-                  ),
-                  if (_citySearchQuery.isNotEmpty) ...[
+                  if (!_isLoading) ...[
+                    // Toggle de Ámbito y etiqueta de estado
+                    _buildScopeToggle(),
+                    _buildActiveScopePill(),
+                    // Búsqueda unificada
+                    _buildUnifiedSearch(),
+                    // Chips de categorías
+                    _buildCategoryChips(),
+                    // Fecha rápida / rango
+                    _buildQuickDateRow(),
+                    // Radio solo si el modo es Radio
+                    if (_mode == LocationMode.radius) _buildRadiusAndLocationRow(),
+                    // Chips de ciudades solo si el modo es Ciudad
+                    if (_mode == LocationMode.city) _buildCityChipsRow(),
+                  ],
+                  // Resultados de búsqueda
+                  if (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    if (_isCitySearching)
-                      const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
-                    if (!_isCitySearching && _citySearchResults.isEmpty)
-                      const Text('Sin ciudades para esa búsqueda'),
-                    if (!_isCitySearching && _citySearchResults.isNotEmpty)
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _citySearchResults.map((c) => ActionChip(
-                          label: Text(c.name, style: Theme.of(context).textTheme.labelLarge),
-                          onPressed: () {
-                            // fijamos ciudad seleccionada y limpiamos búsqueda
-                            setState(() {
-                              _selectedCityId = c.id;
-                              _citySearchCtrl.clear();
-                              _citySearchQuery = '';
-                              _citySearchResults = [];
-                            });
-                            // opcional: scroll a la sección de eventos
-                          },
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        )).toList(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Resultados para "$_searchEventTerm"', style: Theme.of(context).textTheme.titleMedium),
+                        ],
                       ),
+                    ),
                     const SizedBox(height: 8),
                   ],
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
-                      prefixIcon: const Icon(Icons.search, size: 20),
-                      suffixIcon: _searchQuery.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchCtrl.clear();
-                                setState(() {
-                                  _searchQuery = '';
-                                  _searchResults = [];
-                                });
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      isDense: true,
-                    ),
-                    onChanged: (txt) {
-                      _searchDebouncer?.cancel();
-                      _searchDebouncer = Timer(const Duration(milliseconds: 350), () {
-                        if (txt.trim().isEmpty) {
-                          setState(() {
-                            _searchQuery = '';
-                            _searchResults = [];
-                          });
-                        } else {
-                          _runSearch(txt.trim());
-                        }
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 8),
-                  _FilterHeaderWidget(
-                    cities: _cities,
-                    categories: _categories,
-                    selectedCityId: _selectedCityId,
-                    selectedCategoryId: _selectedCategoryId,
-                    onCityTap: (cityId) {
-                      setState(() {
-                        _selectedCityId = cityId;
-                      });
-                    },
-                    onCategoryTap: (categoryId) {
-                      setState(() {
-                        _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
-                      });
-                    },
-                    showCityChips: false,
-                  ),
-                  const SizedBox(height: 8),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      children: [
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: const Text('Hoy'),
-                          onPressed: () {
-                            final r = todayRange();
-                            _reloadWithDateRange(from: r.from, to: r.to);
-                          },
+                  // Próximos eventos
+                  if (_isLoading)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: const Text('Fin de semana'),
-                          onPressed: () {
-                            final r = weekendRange();
-                            _reloadWithDateRange(from: r.from, to: r.to);
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        ActionChip(
-                          label: const Text('Este mes'),
-                          onPressed: () {
-                            final r = thisMonthRange();
-                            _reloadWithDateRange(from: r.from, to: r.to);
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                        OutlinedButton.icon(
-                          icon: const Icon(Icons.date_range, size: 18),
-                          label: const Text('Rango...'),
-                          onPressed: () async {
-                            final now = DateTime.now();
-                            final first = DateTime(now.year - 1, 1, 1);
-                            final last = DateTime(now.year + 2, 12, 31);
-
-                            final picked = await showDateRangePicker(
-                              context: context,
-                              firstDate: first,
-                              lastDate: last,
-                              initialDateRange: (_fromDate != null && _toDate != null)
-                                  ? DateTimeRange(start: _fromDate!, end: _toDate!)
-                                  : null,
-                            );
-                            if (picked != null) {
-                              setState(() {
-                                _selectedDatePreset = null; // si usas enum/flag para Hoy/Fin de semana/Este mes
-                                _isToday = false;
-                                _isWeekend = false;
-                                _isThisMonth = false;
-                              });
-                              _reloadWithDateRange(from: picked.start, to: picked.end);
-                            }
-                          },
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  _activeDatePill(),
-                ],
-                if (!_isLoading)
-                  _NearbyControlWidget(
-                    radiusKm: _radiusKm,
-                    onRadiusChanged: (value) async {
-                      setState(() {
-                        _radiusKm = value;
-                      });
-                      if (_userLat != null && _userLng != null) {
-                        await _loadNearby();
-                        await _loadNearbyCities();
-                      }
-                    },
-                    onUseLocation: _getUserLocation,
-                  ),
-                if (!_isLoading) ...[
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 16, bottom: 6),
-                    child: Text(
-                      'Ciudades dentro del radio',
-                      style: Theme.of(context).textTheme.titleMedium!.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: const Color(0xFF5b351f),
-                      ),
-                    ),
-                  ),
-                  _buildCityChips(),
-                  const SizedBox(height: 8),
-                ],
-                // Resultados de búsqueda
-                if (_searchQuery.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Resultados para "$_searchQuery"', style: Theme.of(context).textTheme.titleMedium),
-                      if (_isSearching) const SizedBox(width: 16),
-                      if (_isSearching) const SizedBox(
-                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  if (_searchResults.isEmpty && !_isSearching)
-                    const Text('Sin resultados'),
-                  if (_searchResults.isNotEmpty)
-                    // reutiliza tu widget de lista de eventos
-                    UpcomingList(events: _searchResults),
-                  const SizedBox(height: 8),
-                ],
-                // Próximos eventos
-                if (_isLoading)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: 4,
-                        separatorBuilder: (BuildContext context, int index) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (BuildContext context, int index) {
-                          return const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ShimmerBlock(height: 180),
-                              ShimmerBlock(height: 16, width: 180),
-                              ShimmerBlock(height: 14, width: 120),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-                    child: UpcomingEventsSection(
-                      events: _upcomingEvents,
-                      selectedCategoryId: _selectedCategoryId,
-                      selectedCityId: _selectedCityId,
-                      onClearFilters: _clearFilters,
-                    ),
-                  ),
-                // Popular esta semana
-                if (_isLoading)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: SizedBox(
-                        height: 210,
                         child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          scrollDirection: Axis.horizontal,
-                          itemCount: 5,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: 4,
                           separatorBuilder: (BuildContext context, int index) =>
-                              const SizedBox(width: 12),
+                              const SizedBox(height: 12),
                           itemBuilder: (BuildContext context, int index) {
-                            return const SizedBox(
-                              width: 280,
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ShimmerBlock(height: 150),
-                                  ShimmerBlock(height: 16, width: 160),
-                                  ShimmerBlock(height: 14, width: 120),
-                                ],
-                              ),
+                            return const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ShimmerBlock(height: 180),
+                                ShimmerBlock(height: 16, width: 180),
+                                ShimmerBlock(height: 14, width: 120),
+                              ],
                             );
                           },
                         ),
                       ),
-                    ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                    child: PopularThisWeekSection(
-                      events: _featuredEvents,
-                      onClearFilters: _clearFilters,
-                    ),
-                  ),
-                // Cerca de ti
-                if (_isNearbyLoading)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: ListView.separated(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        physics: const NeverScrollableScrollPhysics(),
-                        shrinkWrap: true,
-                        itemCount: 4,
-                        separatorBuilder: (BuildContext context, int index) =>
-                            const SizedBox(height: 12),
-                        itemBuilder: (BuildContext context, int index) {
-                          return const Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ShimmerBlock(height: 180),
-                              ShimmerBlock(height: 16, width: 180),
-                              ShimmerBlock(height: 14, width: 120),
-                            ],
-                          );
-                        },
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                      child: UpcomingEventsSection(
+                        events: _upcomingEvents,
+                        selectedCategoryId: _selectedCategoryId,
+                        selectedCityId: _selectedCityId,
+                        onClearFilters: _clearFilters,
                       ),
                     ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                    child: NearbyEventsSection(
-                      events: _selectedCityId == null
-                          ? _nearbyEvents
-                          : _nearbyEvents.where((e) => e.cityId == _selectedCityId).toList(),
+                  // Popular esta semana
+                  if (_isLoading)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: SizedBox(
+                          height: 210,
+                          child: ListView.separated(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            scrollDirection: Axis.horizontal,
+                            itemCount: 5,
+                            separatorBuilder: (BuildContext context, int index) =>
+                                const SizedBox(width: 12),
+                            itemBuilder: (BuildContext context, int index) {
+                              return const SizedBox(
+                                width: 280,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ShimmerBlock(height: 150),
+                                    ShimmerBlock(height: 16, width: 160),
+                                    ShimmerBlock(height: 14, width: 120),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                      child: PopularThisWeekSection(
+                        events: _featuredEvents,
+                        onClearFilters: _clearFilters,
+                      ),
                     ),
-                  ),
-                const SizedBox(height: 24),
-              ],
+                  // Cerca de ti
+                  if (_isNearbyLoading)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: ListView.separated(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          physics: const NeverScrollableScrollPhysics(),
+                          shrinkWrap: true,
+                          itemCount: 4,
+                          separatorBuilder: (BuildContext context, int index) =>
+                              const SizedBox(height: 12),
+                          itemBuilder: (BuildContext context, int index) {
+                            return const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                ShimmerBlock(height: 180),
+                                ShimmerBlock(height: 16, width: 180),
+                                ShimmerBlock(height: 14, width: 120),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                      child: NearbyEventsSection(
+                        events: _selectedCityId == null
+                            ? _nearbyEvents
+                            : _nearbyEvents.where((e) => e.cityId == _selectedCityId).toList(),
+                      ),
+                    ),
+                  const SizedBox(height: 24),
+                ],
+              ),
             ),
+          ],
           ),
         ),
       ),

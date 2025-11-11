@@ -17,19 +17,23 @@ class City {
 }
 
 class CityService {
-  final _c = Supabase.instance.client;
+  CityService._();
+
+  static final instance = CityService._();
+
+  final supa = Supabase.instance.client;
 
   Future<List<City>> fetchCities({int? provinceId}) async {
     dynamic res;
 
     if (provinceId != null) {
-      res = await _c
+      res = await supa
           .from('cities')
           .select('id, name, slug, province_id')
           .eq('province_id', provinceId)
           .order('name');
     } else {
-      res = await _c
+      res = await supa
           .from('cities')
           .select('id, name, slug, province_id')
           .order('name');
@@ -40,7 +44,7 @@ class CityService {
   }
 
   Future<int?> getProvinceIdBySlug(String slug) async {
-    final dynamic r = await _c
+    final dynamic r = await supa
         .from('provinces')
         .select('id')
         .eq('slug', slug)
@@ -56,7 +60,7 @@ class CityService {
     required double lng,
     double radiusKm = 25,
   }) async {
-    final dynamic res = await _c.rpc('cities_within_radius', params: {
+    final dynamic res = await supa.rpc('cities_within_radius', params: {
       'center_lat': lat,
       'center_lng': lng,
       'radius_km': radiusKm,
@@ -71,7 +75,7 @@ class CityService {
 
     if (q.isEmpty) return [];
 
-    final dynamic res = await _c
+    final dynamic res = await supa
         .from('cities')
         .select('id, name, slug, province_id')
         .ilike('name', '%$q%')
@@ -79,6 +83,22 @@ class CityService {
 
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((m) => City.fromMap(m)).toList();
+  }
+
+  /// Devuelve el id de la primera ciudad cuyo nombre contenga [q] (ilike).
+  Future<int?> findCityIdByQuery(String q) async {
+    final term = q.trim();
+    if (term.isEmpty) return null;
+    final res = await supa
+        .from('cities')
+        .select('id,name')
+        .ilike('name', '%$term%')
+        .limit(1);
+    if (res is List && res.isNotEmpty) {
+      final m = res.first as Map<String, dynamic>;
+      return m['id'] as int?;
+    }
+    return null;
   }
 }
 

@@ -125,7 +125,8 @@ class Fiestapp extends StatelessWidget {
           selectedColor: Color(0xFFEAD7CC),
           side: BorderSide(color: Color(0xFFE6D6CC)),
         ),
-        cardTheme: CardTheme(
+        cardTheme: const CardThemeData(
+          clipBehavior: Clip.antiAlias,
           elevation: 0,
           margin: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
           shape: RoundedRectangleBorder(
