@@ -643,7 +643,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ],
                 // Resultados de búsqueda
                 if (_searchQuery.isNotEmpty) ...[
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -660,7 +660,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   if (_searchResults.isNotEmpty)
                     // reutiliza tu widget de lista de eventos
                     UpcomingList(events: _searchResults),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                 ],
                 // Próximos eventos
                 if (_isLoading)
@@ -1131,18 +1131,34 @@ class _FilterHeaderWidget extends StatelessWidget {
             ],
             // Fila 2: chips de categorías (scroll horizontal)
             SizedBox(
-              height: 40,
-              child: SingleChildScrollView(
+              height: 42,
+              child: ListView.separated(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    ...buildCategoryChips(context),
-                  ]
-                      .expand((w) => [w, const SizedBox(width: 8)])
-                      .toList()
-                    ..removeLast(),
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                itemBuilder: (context, i) {
+                  if (i == 0) {
+                    // Chip "Todas"
+                    final isAllSelected = selectedCategoryId == null;
+                    return FilterChip(
+                      avatar: const Icon(Icons.grid_view, size: 16),
+                      label: const Text('Todas'),
+                      selected: isAllSelected,
+                      onSelected: (_) => onCategoryTap(null),
+                    );
+                  }
+                  // Chips de categorías
+                  final category = categories.where((Category c) => c.id != null).toList()[i - 1];
+                  final selected = selectedCategoryId == category.id;
+                  final icon = iconFromName(category.icon);
+                  return FilterChip(
+                    avatar: Icon(icon, size: 16),
+                    label: Text(category.name),
+                    selected: selected,
+                    onSelected: (_) => onCategoryTap(category.id),
+                  );
+                },
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemCount: categories.where((Category c) => c.id != null).length + 1,
               ),
             ),
           ],

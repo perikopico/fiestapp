@@ -66,96 +66,70 @@ Future<void> testSupabase() async {
   }
 }
 
-Future<void> _testSupabaseConnection() async {
-  try {
-    final client = Supabase.instance.client;
-    final data = await client.from('events').select().limit(3);
-    debugPrint('🔌 Supabase conectado. Primeras 3 filas: ' + jsonEncode(data));
-  } catch (e) {
-    debugPrint('❌ Error probando Supabase: ' + e.toString());
-  }
-}
-
 class Fiestapp extends StatelessWidget {
   const Fiestapp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final themeData = ThemeData(
-      useMaterial3: true,
-      visualDensity: VisualDensity.adaptivePlatformDensity,
-      fontFamily: 'Inter',
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: const Color(0xFFF28C28), // naranja cálido
-      ),
-      scaffoldBackgroundColor: const Color(0xFFF9F4EF),
-      textTheme: const TextTheme(
-        headlineSmall: TextStyle(fontWeight: FontWeight.w700, fontSize: 20),
-        titleMedium: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-        bodyMedium: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
-        bodySmall: TextStyle(fontWeight: FontWeight.w400, fontSize: 12),
-      ),
-      appBarTheme: AppBarTheme(
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        titleTextStyle: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w600,
-          color: Colors.black87,
-        ),
-      ),
-      chipTheme: const ChipThemeData(
-        labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        side: BorderSide(width: .6, color: Color(0x22000000)),
-        shape: StadiumBorder(),
-        selectedColor: Color(0xFFFFE9DC),
-        secondarySelectedColor: Color(0xFFFFE9DC),
-      ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          minimumSize: const Size(0, 40),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-          elevation: 2,
-        ),
-      ),
-      cardTheme: const CardThemeData(
-        margin: EdgeInsets.zero,
-        elevation: 1.5,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.all(Radius.circular(16)),
-        ),
-      ),
-      inputDecorationTheme: const InputDecorationTheme(
-        filled: true,
-        fillColor: Color(0xFFFAF6F2),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Color(0x22000000), width: .7),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Color(0x22000000), width: .7),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.all(Radius.circular(14)),
-          borderSide: BorderSide(color: Color(0xFFd9a17e), width: 1.2),
-        ),
-      ),
-    );
-
     return MaterialApp(
       title: 'Fiestapp',
       navigatorKey: navigatorKey,
-      theme: themeData,
-      darkTheme: ThemeData.dark(useMaterial3: true),
-      home: const DashboardScreen(),
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: const ColorScheme.light(
+          primary: Color(0xFFB0907B),
+          secondary: Color(0xFFDCC4B5),
+          surface: Color(0xFFFCF8F5),
+          onSurface: Color(0xFF3A2B22),
+        ),
+        scaffoldBackgroundColor: const Color(0xFFFCF8F5),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ).apply(
+          bodyColor: Color(0xFF3A2B22),
+          displayColor: Color(0xFF3A2B22),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          hintStyle: TextStyle(color: Color(0xFF8A6D5A)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFFD9C8BC)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFFB0907B), width: 1.6),
+          ),
+        ),
+        chipTheme: ChipThemeData(
+          labelStyle: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF3A2B22),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+          ),
+          backgroundColor: Color(0xFFF3EAE4),
+          selectedColor: Color(0xFFEAD7CC),
+          side: BorderSide(color: Color(0xFFE6D6CC)),
+        ),
+        cardTheme: CardTheme(
+          elevation: 0,
+          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+        ),
+      ),
+      home: const DashboardScreen(),
     );
   }
 }
-
