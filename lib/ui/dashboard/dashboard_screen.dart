@@ -154,25 +154,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Selector Localidad | Evento
-          SegmentedButton<SearchMode>(
-            segments: const [
-              ButtonSegment(value: SearchMode.city, label: Text('Localidad'), icon: Icon(Icons.place_outlined)),
-              ButtonSegment(value: SearchMode.event, label: Text('Evento'), icon: Icon(Icons.search)),
-            ],
-            selected: <SearchMode>{_searchMode},
-            onSelectionChanged: (s) {
-              if (s.isNotEmpty) setState(() => _searchMode = s.first);
-            },
-          ),
-          const SizedBox(height: 8),
+          // Selector Localidad | Evento (solo en modo Ciudad)
+          if (_mode == LocationMode.city)
+            SegmentedButton<SearchMode>(
+              segments: const [
+                ButtonSegment(value: SearchMode.city, label: Text('Localidad'), icon: Icon(Icons.place_outlined)),
+                ButtonSegment(value: SearchMode.event, label: Text('Evento'), icon: Icon(Icons.search)),
+              ],
+              selected: <SearchMode>{_searchMode},
+              onSelectionChanged: (s) {
+                if (s.isNotEmpty) setState(() => _searchMode = s.first);
+              },
+            ),
+          if (_mode == LocationMode.city) const SizedBox(height: 8),
           TextField(
             controller: _searchCtrl,
             textInputAction: TextInputAction.search,
             decoration: InputDecoration(
-              hintText: _searchMode == SearchMode.city
-                  ? 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")'
-                  : 'Buscar eventos (ej. flamenco, mercadillo...)',
+              hintText: _mode == LocationMode.city
+                  ? (_searchMode == SearchMode.city
+                      ? 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")'
+                      : 'Buscar eventos (ej. flamenco, mercadillo...)')
+                  : 'Filtrar por evento (opcional)',
               prefixIcon: const Icon(Icons.search),
             ),
             onSubmitted: (q) async {
@@ -182,7 +185,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _reloadEvents();
                 return;
               }
-              if (_searchMode == SearchMode.city) {
+              // En modo Radio, solo buscar eventos
+              if (_mode == LocationMode.radius) {
+                setState(() => _searchEventTerm = query);
+                _reloadEvents();
+              } else if (_searchMode == SearchMode.city) {
                 // Buscar ciudad por nombre aproximado y seleccionarla.
                 final cityId = await CityService.instance.findCityIdByQuery(query);
                 if (cityId != null) {
@@ -485,6 +492,213 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  String _getSelectedCategoryName() {
+    if (_selectedCategoryId == null) return 'Todas las categorías';
+    final selectedCategory = _categories.firstWhere(
+      (c) => c.id == _selectedCategoryId,
+      orElse: () => _categories.first,
+    );
+    return selectedCategory.name;
+  }
+
+  String _getSelectedDateLabel() {
+    if (_fromDate == null && _toDate == null) return '';
+    
+    // Si hay un rango personalizado, mostrar formato corto
+    if (_fromDate != null && _toDate != null) {
+      final fromTxt = _df.format(_fromDate!);
+      final toTxt = _df.format(_toDate!);
+      return '$fromTxt → $toTxt';
+    }
+    
+    return '';
+  }
+
+  String _getFiltersSubtitle() {
+    final categoryName = _selectedCategoryId != null ? _getSelectedCategoryName() : null;
+    final hasDateFilter = _fromDate != null || _toDate != null;
+    
+    // Detectar el preset de fecha usando los estados existentes o comparando fechas
+    String? dateLabel;
+    if (hasDateFilter) {
+      if (_isToday) {
+        dateLabel = 'Hoy';
+      } else if (_isWeekend) {
+        dateLabel = 'Fin de semana';
+      } else if (_isThisMonth) {
+        dateLabel = 'Este mes';
+      } else if (_fromDate != null && _toDate != null) {
+        // Rango personalizado
+        dateLabel = _getSelectedDateLabel();
+      }
+    }
+    
+    // Construir el subtítulo
+    if (categoryName == null && dateLabel == null) {
+      return 'Categoría y fecha';
+    } else if (categoryName != null && dateLabel == null) {
+      return 'Categoría: $categoryName';
+    } else if (categoryName == null && dateLabel != null) {
+      return 'Fecha: $dateLabel';
+    } else {
+      return '$categoryName · $dateLabel';
+    }
+  }
+
+  Widget _buildCategoryChipsContent() {
+    if (_categories.isEmpty) return const SizedBox.shrink();
+    
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          // Chip "Todas"
+          FilterChip(
+            avatar: const Icon(Icons.grid_view, size: 16),
+            label: const Text('Todas'),
+            selected: _selectedCategoryId == null,
+            onSelected: (_) {
+              setState(() {
+                _selectedCategoryId = null;
+              });
+              _reloadEvents();
+            },
+          ),
+          // Chips de categorías
+          ..._categories.where((Category c) => c.id != null).map((category) {
+            final isSelected = category.id == _selectedCategoryId;
+            final icon = iconFromName(category.icon);
+            return FilterChip(
+              avatar: Icon(icon, size: 16),
+              label: Text(category.name),
+              selected: isSelected,
+              onSelected: (_) {
+                setState(() {
+                  _selectedCategoryId = isSelected ? null : category.id;
+                });
+                _reloadEvents();
+              },
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickDateRowContent() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Row(
+          children: [
+            ActionChip(
+              label: const Text('Hoy'),
+              onPressed: () {
+                final r = todayRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            ActionChip(
+              label: const Text('Fin de semana'),
+              onPressed: () {
+                final r = weekendRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            ActionChip(
+              label: const Text('Este mes'),
+              onPressed: () {
+                final r = thisMonthRange();
+                _reloadWithDateRange(from: r.from, to: r.to);
+              },
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.date_range, size: 18),
+              label: const Text('Rango...'),
+              onPressed: () async {
+                final now = DateTime.now();
+                final first = DateTime(now.year - 1, 1, 1);
+                final last = DateTime(now.year + 2, 12, 31);
+
+                final picked = await showDateRangePicker(
+                  context: context,
+                  firstDate: first,
+                  lastDate: last,
+                  initialDateRange: (_fromDate != null && _toDate != null)
+                      ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                      : null,
+                );
+                if (picked != null) {
+                  setState(() {
+                    _selectedDatePreset = null;
+                    _isToday = false;
+                    _isWeekend = false;
+                    _isThisMonth = false;
+                  });
+                  _reloadWithDateRange(from: picked.start, to: picked.end);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRadiusAndLocationContent() {
+    return _NearbyControlWidget(
+      radiusKm: _radiusKm,
+      onRadiusChanged: (value) async {
+        setState(() {
+          _radiusKm = value;
+        });
+        if (_userLat != null && _userLng != null) {
+          await _loadNearby();
+          await _loadNearbyCities();
+        }
+      },
+      onUseLocation: _getUserLocation,
+    );
+  }
+
+  Widget _buildCityChipsContent() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: _buildCityChips(),
+    );
+  }
+
+  Widget _buildFiltersSection() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        child: ExpansionTile(
+          title: const Text('Filtros'),
+          subtitle: Text(_getFiltersSubtitle()),
+          leading: const Icon(Icons.filter_list),
+          children: [
+            // 1. Categorías
+            _buildCategoryChips(),
+            const SizedBox(height: 12),
+            // 2. Selector de fecha rápida / rango
+            _buildQuickDateRow(),
+            const SizedBox(height: 12),
+            // 3. Chips de ciudades solo en modo Ciudad (el radio está fuera del panel)
+            if (_mode == LocationMode.city) _buildCityChipsRow(),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildCategoryChips() {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -523,6 +737,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Hoy'),
               onPressed: () {
                 final r = todayRange();
+                setState(() {
+                  _isToday = true;
+                  _isWeekend = false;
+                  _isThisMonth = false;
+                });
                 _reloadWithDateRange(from: r.from, to: r.to);
               },
             ),
@@ -531,6 +750,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Fin de semana'),
               onPressed: () {
                 final r = weekendRange();
+                setState(() {
+                  _isToday = false;
+                  _isWeekend = true;
+                  _isThisMonth = false;
+                });
                 _reloadWithDateRange(from: r.from, to: r.to);
               },
             ),
@@ -539,6 +763,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: const Text('Este mes'),
               onPressed: () {
                 final r = thisMonthRange();
+                setState(() {
+                  _isToday = false;
+                  _isWeekend = false;
+                  _isThisMonth = true;
+                });
                 _reloadWithDateRange(from: r.from, to: r.to);
               },
             ),
@@ -716,19 +945,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: DashboardHero(featured: _featuredEvent),
                   ),
                   if (!_isLoading) ...[
-                    // Toggle de Ámbito y etiqueta de estado
+                    // Toggle de Ámbito
                     _buildScopeToggle(),
+                    const SizedBox(height: 8),
+                    // Etiqueta de estado
                     _buildActiveScopePill(),
-                    // Búsqueda unificada
+                    const SizedBox(height: 8),
+                    // Selector de radio (solo en modo Radio, fuera del panel de filtros)
+                    if (_mode == LocationMode.radius) ...[
+                      _buildRadiusAndLocationRow(),
+                      const SizedBox(height: 8),
+                    ],
+                    // Búsqueda unificada (visible en ambos modos con placeholders diferentes)
                     _buildUnifiedSearch(),
-                    // Chips de categorías
-                    _buildCategoryChips(),
-                    // Fecha rápida / rango
-                    _buildQuickDateRow(),
-                    // Radio solo si el modo es Radio
-                    if (_mode == LocationMode.radius) _buildRadiusAndLocationRow(),
-                    // Chips de ciudades solo si el modo es Ciudad
-                    if (_mode == LocationMode.city) _buildCityChipsRow(),
+                    const SizedBox(height: 8),
+                    // Sección de filtros (categorías, fechas, ciudades)
+                    _buildFiltersSection(),
                   ],
                   // Resultados de búsqueda
                   if (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ...[
