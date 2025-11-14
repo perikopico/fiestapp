@@ -14,14 +14,14 @@ import 'widgets/hero_banner.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
+import 'widgets/unified_search_bar.dart';
+import 'widgets/city_radio_toggle.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
 import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
-// ==== Ámbito de búsqueda (solo uno a la vez) ====
-// Ciudad => se aplican chips/selección de ciudades; Radio => se aplica slider y ubicación.
-enum LocationMode { city, radius }
+import '../../utils/dashboard_utils.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final _repoNearby = EventsRepository();
   final DateFormat _df = DateFormat('d MMM');
 
-  LocationMode _mode = LocationMode.city;
+  LocationMode _mode = LocationMode.radius;
   SearchMode _searchMode = SearchMode.city;
   final TextEditingController _searchCtrl = TextEditingController();
   String? _searchEventTerm;
@@ -121,101 +121,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _reloadEvents();
   }
 
-  Widget _buildScopeToggle() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SegmentedButton<LocationMode>(
-        segments: const [
-          ButtonSegment(value: LocationMode.city, label: Text('Ciudad'), icon: Icon(Icons.location_city)),
-          ButtonSegment(value: LocationMode.radius, label: Text('Radio'), icon: Icon(Icons.radar)),
-        ],
-        selected: <LocationMode>{_mode},
-        onSelectionChanged: (sel) {
-          if (sel.isNotEmpty) _switchMode(sel.first);
-        },
-      ),
-    );
-  }
-
-  Widget _buildActiveScopePill() {
-    final text = _mode == LocationMode.city
-        ? (_selectedCityName != null ? 'Ámbito: Ciudad (${_selectedCityName})' : 'Ámbito: Ciudad')
-        : 'Ámbito: Radio (${_radiusKm.toStringAsFixed(0)} km)';
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      child: Chip(label: Text(text)),
-    );
-  }
-
-  // ==== Búsqueda unificada ====
-  Widget _buildUnifiedSearch() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Selector Localidad | Evento (solo en modo Ciudad)
-          if (_mode == LocationMode.city)
-            SegmentedButton<SearchMode>(
-              segments: const [
-                ButtonSegment(value: SearchMode.city, label: Text('Localidad'), icon: Icon(Icons.place_outlined)),
-                ButtonSegment(value: SearchMode.event, label: Text('Evento'), icon: Icon(Icons.search)),
-              ],
-              selected: <SearchMode>{_searchMode},
-              onSelectionChanged: (s) {
-                if (s.isNotEmpty) setState(() => _searchMode = s.first);
-              },
-            ),
-          if (_mode == LocationMode.city) const SizedBox(height: 8),
-          TextField(
-            controller: _searchCtrl,
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              hintText: _mode == LocationMode.city
-                  ? (_searchMode == SearchMode.city
-                      ? 'Buscar ciudad o pueblo (ej. "Zahara", "Vejer")'
-                      : 'Buscar eventos (ej. flamenco, mercadillo...)')
-                  : 'Filtrar por evento (opcional)',
-              prefixIcon: const Icon(Icons.search),
-            ),
-            onSubmitted: (q) async {
-              final query = q.trim();
-              if (query.isEmpty) {
-                setState(() => _searchEventTerm = null);
-                _reloadEvents();
-                return;
-              }
-              // En modo Radio, solo buscar eventos
-              if (_mode == LocationMode.radius) {
-                setState(() => _searchEventTerm = query);
-                _reloadEvents();
-              } else if (_searchMode == SearchMode.city) {
-                // Buscar ciudad por nombre aproximado y seleccionarla.
-                final cityId = await CityService.instance.findCityIdByQuery(query);
-                if (cityId != null) {
-                  // Buscar la ciudad completa para obtener el nombre
-                  final cities = await _cityService.searchCities(query);
-                  final city = cities.firstWhere((c) => c.id == cityId, orElse: () => cities.first);
-                  setState(() {
-                    _mode = LocationMode.city;
-                    _selectedCityId = cityId;
-                    _selectedCityIds = {cityId};
-                    _selectedCityName = city.name;
-                    _radiusKm = 5;
-                  });
-                  _reloadEvents();
-                }
-              } else {
-                // Evento: aplicamos término libre en EventService
-                setState(() => _searchEventTerm = query);
-                _reloadEvents();
-              }
-            },
-          ),
-        ],
-      ),
-    );
-  }
 
   Future<void> _reloadEvents() async {
     setState(() {
@@ -431,7 +336,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             _selectedCityName = city.name;
             _selectedCityIds = {city.id};
           });
-          // aquí si filtras por ciudad en la lista principal, refresca como ya hacías
+          _reloadEvents();
         },
         materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
         visualDensity: VisualDensity.compact,
@@ -455,6 +360,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _selectedCityName = null;
               _selectedCityIds.clear();
             });
+            _reloadEvents();
           },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
@@ -468,6 +374,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               _selectedCityName = city.name;
               _selectedCityIds = {city.id};
             });
+            _reloadEvents();
           },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
@@ -477,20 +384,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildCityChips() {
-    // Si hay resultado por radio, mostramos solo esa fila.
-    if (_nearbyCities.isNotEmpty) {
-      return _buildNearbyCityChips();
-    }
-    // Si no hay ciudades cercanas (no hay ubicación o radio pequeño), mostramos la fila estática
+    // En modo Ciudad, siempre mostramos las ciudades de la provincia, no las del radio
     return _buildProvinceCityChips();
   }
 
-  Widget _buildCityChipsRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: _buildCityChips(),
-    );
-  }
+
 
   String _getSelectedCategoryName() {
     if (_selectedCategoryId == null) return 'Todas las categorías';
@@ -587,69 +485,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildQuickDateRowContent() {
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Row(
-          children: [
-            ActionChip(
-              label: const Text('Hoy'),
-              onPressed: () {
-                final r = todayRange();
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            ActionChip(
-              label: const Text('Fin de semana'),
-              onPressed: () {
-                final r = weekendRange();
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            ActionChip(
-              label: const Text('Este mes'),
-              onPressed: () {
-                final r = thisMonthRange();
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.date_range, size: 18),
-              label: const Text('Rango...'),
-              onPressed: () async {
-                final now = DateTime.now();
-                final first = DateTime(now.year - 1, 1, 1);
-                final last = DateTime(now.year + 2, 12, 31);
-
-                final picked = await showDateRangePicker(
-                  context: context,
-                  firstDate: first,
-                  lastDate: last,
-                  initialDateRange: (_fromDate != null && _toDate != null)
-                      ? DateTimeRange(start: _fromDate!, end: _toDate!)
-                      : null,
-                );
-                if (picked != null) {
-                  setState(() {
-                    _selectedDatePreset = null;
-                    _isToday = false;
-                    _isWeekend = false;
-                    _isThisMonth = false;
-                  });
-                  _reloadWithDateRange(from: picked.start, to: picked.end);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 
   Widget _buildRadiusAndLocationContent() {
     return _NearbyControlWidget(
@@ -662,164 +497,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           await _loadNearby();
           await _loadNearbyCities();
         }
+        _reloadEvents();
       },
       onUseLocation: _getUserLocation,
     );
   }
 
-  Widget _buildCityChipsContent() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: _buildCityChips(),
-    );
-  }
 
-  Widget _buildFiltersSection() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 0,
-        child: ExpansionTile(
-          title: const Text('Filtros'),
-          subtitle: Text(_getFiltersSubtitle()),
-          leading: const Icon(Icons.filter_list),
-          children: [
-            // 1. Categorías
-            _buildCategoryChips(),
-            const SizedBox(height: 12),
-            // 2. Selector de fecha rápida / rango
-            _buildQuickDateRow(),
-            const SizedBox(height: 12),
-            // 3. Chips de ciudades solo en modo Ciudad (el radio está fuera del panel)
-            if (_mode == LocationMode.city) _buildCityChipsRow(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChips() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: _FilterHeaderWidget(
-        cities: _cities,
-        categories: _categories,
-        selectedCityId: _selectedCityId,
-        selectedCategoryId: _selectedCategoryId,
-        onCityTap: (cityId) {
-          if (cityId == null) return;
-          setState(() {
-            _selectedCityId = cityId;
-            final city = _cities.firstWhere((c) => c.id == cityId, orElse: () => _cities.first);
-            _selectedCityName = city.name;
-            _selectedCityIds = {cityId};
-          });
-        },
-        onCategoryTap: (categoryId) {
-          setState(() {
-            _selectedCategoryId = _selectedCategoryId == categoryId ? null : categoryId;
-          });
-        },
-        showCityChips: false,
-      ),
-    );
-  }
-
-  Widget _buildQuickDateRow() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            ActionChip(
-              label: const Text('Hoy'),
-              onPressed: () {
-                final r = todayRange();
-                setState(() {
-                  _isToday = true;
-                  _isWeekend = false;
-                  _isThisMonth = false;
-                });
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            ActionChip(
-              label: const Text('Fin de semana'),
-              onPressed: () {
-                final r = weekendRange();
-                setState(() {
-                  _isToday = false;
-                  _isWeekend = true;
-                  _isThisMonth = false;
-                });
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            ActionChip(
-              label: const Text('Este mes'),
-              onPressed: () {
-                final r = thisMonthRange();
-                setState(() {
-                  _isToday = false;
-                  _isWeekend = false;
-                  _isThisMonth = true;
-                });
-                _reloadWithDateRange(from: r.from, to: r.to);
-              },
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.date_range, size: 18),
-              label: const Text('Rango...'),
-              onPressed: () async {
-                final now = DateTime.now();
-                final first = DateTime(now.year - 1, 1, 1);
-                final last = DateTime(now.year + 2, 12, 31);
-
-                final picked = await showDateRangePicker(
-                  context: context,
-                  firstDate: first,
-                  lastDate: last,
-                  initialDateRange: (_fromDate != null && _toDate != null)
-                      ? DateTimeRange(start: _fromDate!, end: _toDate!)
-                      : null,
-                );
-                if (picked != null) {
-                  setState(() {
-                    _selectedDatePreset = null;
-                    _isToday = false;
-                    _isWeekend = false;
-                    _isThisMonth = false;
-                  });
-                  _reloadWithDateRange(from: picked.start, to: picked.end);
-                }
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRadiusAndLocationRow() {
-    return _NearbyControlWidget(
-      radiusKm: _radiusKm,
-      onRadiusChanged: (value) async {
-        setState(() {
-          _radiusKm = value;
-        });
-        if (_userLat != null && _userLng != null) {
-          await _loadNearby();
-          await _loadNearbyCities();
-        }
-      },
-      onUseLocation: _getUserLocation,
-    );
-  }
 
   Future<void> _runSearch(String q) async {
     setState(() {
@@ -891,6 +575,353 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _loadNearbyCities();
   }
 
+  void _openSearchBottomSheet() {
+    final searchController = TextEditingController(text: _searchEventTerm ?? '');
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          left: 16,
+          right: 16,
+          top: 16,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Buscar eventos',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: searchController,
+              autofocus: true,
+              textInputAction: TextInputAction.search,
+              decoration: const InputDecoration(
+                hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
+                prefixIcon: Icon(Icons.search),
+              ),
+              onSubmitted: (value) {
+                final query = value.trim();
+                setState(() {
+                  _searchEventTerm = query.isEmpty ? null : query;
+                });
+                _reloadEvents();
+                Navigator.pop(context);
+              },
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: () {
+                    final query = searchController.text.trim();
+                    setState(() {
+                      _searchEventTerm = query.isEmpty ? null : query;
+                    });
+                    _reloadEvents();
+                    Navigator.pop(context);
+                  },
+                  child: const Text('Buscar'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterPanel() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        elevation: 0,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 1. Toggle Ciudad/Radio
+              CityRadioToggle(
+                selectedMode: _mode,
+                onModeChanged: (mode) {
+                  if (mode != _mode) {
+                    _switchMode(mode);
+                  }
+                },
+                selectedCityName: _selectedCityName,
+                radiusKm: _radiusKm,
+              ),
+              const SizedBox(height: 12),
+              // 2. Contenido dependiente del modo
+              if (_mode == LocationMode.city)
+                // Barra de búsqueda unificada (solo en modo Ciudad)
+                UnifiedSearchBar(
+                  selectedCityId: _selectedCityId,
+                  onCitySelected: (city) {
+                    if (mounted) {
+                      setState(() {
+                        _selectedCityId = city.id;
+                        _selectedCityIds = {city.id};
+                        _selectedCityName = city.name;
+                      });
+                      _reloadEvents();
+                    }
+                  },
+                  onSearchChanged: _reloadEvents,
+                )
+              else
+                // Slider de radio + botón "Usar mi ubicación" (solo en modo Radio)
+                _buildRadiusAndLocationContent(),
+              const SizedBox(height: 12),
+              // 3. Chips rápidos de fecha
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    ActionChip(
+                      label: const Text('Hoy'),
+                      onPressed: () {
+                        final r = todayRange();
+                        setState(() {
+                          _isToday = true;
+                          _isWeekend = false;
+                          _isThisMonth = false;
+                        });
+                        _reloadWithDateRange(from: r.from, to: r.to);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ActionChip(
+                      label: const Text('Fin de semana'),
+                      onPressed: () {
+                        final r = weekendRange();
+                        setState(() {
+                          _isToday = false;
+                          _isWeekend = true;
+                          _isThisMonth = false;
+                        });
+                        _reloadWithDateRange(from: r.from, to: r.to);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    ActionChip(
+                      label: const Text('Este mes'),
+                      onPressed: () {
+                        final r = thisMonthRange();
+                        setState(() {
+                          _isToday = false;
+                          _isWeekend = false;
+                          _isThisMonth = true;
+                        });
+                        _reloadWithDateRange(from: r.from, to: r.to);
+                      },
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.date_range, size: 18),
+                      label: const Text('Rango...'),
+                      onPressed: () async {
+                        final now = DateTime.now();
+                        final first = DateTime(now.year - 1, 1, 1);
+                        final last = DateTime(now.year + 2, 12, 31);
+
+                        final picked = await showDateRangePicker(
+                          context: context,
+                          firstDate: first,
+                          lastDate: last,
+                          initialDateRange: (_fromDate != null && _toDate != null)
+                              ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                              : null,
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _selectedDatePreset = null;
+                            _isToday = false;
+                            _isWeekend = false;
+                            _isThisMonth = false;
+                          });
+                          _reloadWithDateRange(from: picked.start, to: picked.end);
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              // 4. ExpansionTile "Filtros" (categorías + rango de fecha)
+              ExpansionTile(
+                title: const Text('Filtros'),
+                subtitle: Text(
+                  _buildFiltersSubtitle(),
+                ),
+                leading: const Icon(Icons.filter_list),
+                children: [
+                  // Categorías
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Categoría',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (_categories.isEmpty)
+                          const Text('No hay categorías disponibles')
+                        else
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              // Chip "Todas"
+                              FilterChip(
+                                avatar: const Icon(Icons.grid_view, size: 16),
+                                label: const Text('Todas'),
+                                selected: _selectedCategoryId == null,
+                                onSelected: (_) {
+                                  setState(() {
+                                    _selectedCategoryId = null;
+                                  });
+                                  _reloadEvents();
+                                },
+                              ),
+                              // Chips de categorías
+                              ..._categories.where((Category c) => c.id != null).map((category) {
+                                final isSelected = category.id == _selectedCategoryId;
+                                final icon = iconFromName(category.icon);
+                                return FilterChip(
+                                  avatar: Icon(icon, size: 16),
+                                  label: Text(category.name),
+                                  selected: isSelected,
+                                  onSelected: (_) {
+                                    setState(() {
+                                      _selectedCategoryId = isSelected ? null : category.id;
+                                    });
+                                    _reloadEvents();
+                                  },
+                                );
+                              }),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  // Rango de fecha
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Rango de fecha',
+                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(Icons.date_range, size: 18),
+                                label: Text(
+                                  _fromDate != null && _toDate != null
+                                      ? '${_df.format(_fromDate!)} → ${_df.format(_toDate!)}'
+                                      : 'Seleccionar rango',
+                                ),
+                                onPressed: () async {
+                                  final now = DateTime.now();
+                                  final first = DateTime(now.year - 1, 1, 1);
+                                  final last = DateTime(now.year + 2, 12, 31);
+
+                                  final picked = await showDateRangePicker(
+                                    context: context,
+                                    firstDate: first,
+                                    lastDate: last,
+                                    initialDateRange: (_fromDate != null && _toDate != null)
+                                        ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                                        : null,
+                                  );
+                                  if (picked != null) {
+                                    setState(() {
+                                      _selectedDatePreset = null;
+                                      _isToday = false;
+                                      _isWeekend = false;
+                                      _isThisMonth = false;
+                                    });
+                                    _reloadWithDateRange(from: picked.start, to: picked.end);
+                                  }
+                                },
+                              ),
+                            ),
+                            if (_fromDate != null || _toDate != null) ...[
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.clear),
+                                onPressed: () {
+                                  setState(() {
+                                    _isToday = false;
+                                    _isWeekend = false;
+                                    _isThisMonth = false;
+                                  });
+                                  _reloadWithDateRange(from: null, to: null);
+                                },
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _buildFiltersSubtitle() {
+    final parts = <String>[];
+    
+    if (_selectedCategoryId != null) {
+      parts.add(_getSelectedCategoryName());
+    }
+    
+    if (_fromDate != null && _toDate != null) {
+      parts.add('${_df.format(_fromDate!)} → ${_df.format(_toDate!)}');
+    } else if (_isToday) {
+      parts.add('Hoy');
+    } else if (_isWeekend) {
+      parts.add('Fin de semana');
+    } else if (_isThisMonth) {
+      parts.add('Este mes');
+    }
+    
+    return parts.isEmpty ? 'Todos los filtros' : parts.join(' · ');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -930,7 +961,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Fiestapp'), elevation: 0),
+      appBar: AppBar(
+        title: const Text('Fiestapp'),
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _openSearchBottomSheet,
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _reloadEvents,
@@ -945,22 +985,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     child: DashboardHero(featured: _featuredEvent),
                   ),
                   if (!_isLoading) ...[
-                    // Toggle de Ámbito
-                    _buildScopeToggle(),
-                    const SizedBox(height: 8),
-                    // Etiqueta de estado
-                    _buildActiveScopePill(),
-                    const SizedBox(height: 8),
-                    // Selector de radio (solo en modo Radio, fuera del panel de filtros)
-                    if (_mode == LocationMode.radius) ...[
-                      _buildRadiusAndLocationRow(),
-                      const SizedBox(height: 8),
-                    ],
-                    // Búsqueda unificada (visible en ambos modos con placeholders diferentes)
-                    _buildUnifiedSearch(),
-                    const SizedBox(height: 8),
-                    // Sección de filtros (categorías, fechas, ciudades)
-                    _buildFiltersSection(),
+                    _buildFilterPanel(),
                   ],
                   // Resultados de búsqueda
                   if (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ...[
