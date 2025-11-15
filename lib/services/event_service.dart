@@ -61,13 +61,43 @@ class EventService {
 
     // Radio (si aplica). Si usas RPC, llama a tu función y obvia cityIds.
     if (radiusKm != null && center != null && radiusKm > 0) {
-      // Si tienes una RPC como events_within_radius(lat, lng, km)
-      // comenta lo anterior y usa algo así:
-      // qb = supa.rpc('events_within_radius', params: {
-      //   'lat': center['lat'],
-      //   'lng': center['lng'],
-      //   'km': radiusKm,
-      // });
+      // Cuando se usa radio, usamos la función RPC que filtra por distancia
+      // y luego aplicamos los otros filtros en el cliente
+      final lat = center['lat'] as double;
+      final lng = center['lng'] as double;
+      
+      final rpcRes = await supa.rpc('events_within_radius', params: {
+        'p_lat': lat,
+        'p_lng': lng,
+        'p_radius_km': radiusKm,
+      });
+      
+      if (rpcRes is! List) return [];
+      
+      // Convertir resultados de la RPC a eventos
+      List<Event> events = (rpcRes as List)
+          .cast<Map<String, dynamic>>()
+          .map((m) => Event.fromMap(m))
+          .toList();
+      
+      // Aplicar filtros adicionales en el cliente
+      if (categoryId != null) {
+        events = events.where((e) => e.categoryId == categoryId).toList();
+      }
+      if (from != null) {
+        events = events.where((e) => e.startsAt.isAfter(from.subtract(const Duration(seconds: 1)))).toList();
+      }
+      if (to != null) {
+        events = events.where((e) => e.startsAt.isBefore(to)).toList();
+      }
+      if (searchTerm != null && searchTerm.trim().isNotEmpty) {
+        final t = searchTerm.trim().toLowerCase();
+        events = events.where((e) => e.title.toLowerCase().contains(t)).toList();
+      }
+      
+      // Ordenar y limitar
+      events.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      return events.take(limit).toList();
     }
 
     final res = await qb.order('starts_at', ascending: true).limit(limit);

@@ -140,9 +140,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
 
       // Crear objeto center para el modo radio
+      // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
       dynamic center;
-      if (_mode == LocationMode.radius && _userLat != null && _userLng != null) {
-        center = {'lat': _userLat, 'lng': _userLng};
+      if (_mode == LocationMode.radius) {
+        if (_userLat != null && _userLng != null) {
+          center = {'lat': _userLat, 'lng': _userLng};
+        } else {
+          // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
+          center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
+        }
       }
 
       final results = await Future.wait([
@@ -232,9 +238,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
 
       // Crear objeto center para el modo radio
+      // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
       dynamic center;
-      if (_mode == LocationMode.radius && _userLat != null && _userLng != null) {
-        center = {'lat': _userLat, 'lng': _userLng};
+      if (_mode == LocationMode.radius) {
+        if (_userLat != null && _userLng != null) {
+          center = {'lat': _userLat, 'lng': _userLng};
+        } else {
+          // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
+          center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
+        }
       }
 
       final events = await EventService.instance.fetchEvents(
@@ -493,10 +505,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           _radiusKm = value;
         });
+        // Actualizar eventos cercanos con el nuevo radio
         if (_userLat != null && _userLng != null) {
           await _loadNearby();
           await _loadNearbyCities();
+        } else {
+          // Si no hay ubicación del usuario, usar valores por defecto para cargar eventos cercanos
+          final defaultLat = 36.1927; // Barbate
+          final defaultLng = -5.9219;
+          setState(() => _isNearbyLoading = true);
+          try {
+            final list = await _repoNearby.fetchNearby(
+              lat: defaultLat,
+              lng: defaultLng,
+              radiusKm: _radiusKm,
+            );
+            setState(() => _nearbyEvents = list);
+          } finally {
+            if (mounted) setState(() => _isNearbyLoading = false);
+          }
+          // Cargar ciudades cercanas con valores por defecto
+          final cities = await CityService.instance.fetchNearbyCities(
+            lat: defaultLat,
+            lng: defaultLng,
+            radiusKm: _radiusKm,
+          );
+          if (mounted) {
+            setState(() => _nearbyCities = cities);
+          }
         }
+        // Recargar eventos principales con el nuevo radio
         _reloadEvents();
       },
       onUseLocation: _getUserLocation,
@@ -1037,7 +1075,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: UpcomingEventsSection(
                         events: _upcomingEvents,
                         selectedCategoryId: _selectedCategoryId,
-                        selectedCityId: _selectedCityId,
+                        // En modo Radio no aplicamos filtro por ciudad
+                        selectedCityId: _mode == LocationMode.city ? _selectedCityId : null,
                         onClearFilters: _clearFilters,
                       ),
                     ),
@@ -1114,15 +1153,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         ),
                       ),
                     )
-                  else
+                  else if (_mode == LocationMode.city)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                       child: NearbyEventsSection(
                         events: _selectedCityId == null
                             ? _nearbyEvents
-                            : _nearbyEvents.where((e) => e.cityId == _selectedCityId).toList(),
+                            : _nearbyEvents
+                                .where((e) => e.cityId == _selectedCityId)
+                                .toList(),
                       ),
-                    ),
+                    )
+                  else
+                    const SizedBox.shrink(),
                   const SizedBox(height: 24),
                 ],
               ),

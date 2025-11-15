@@ -61,8 +61,10 @@ class UpcomingList extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Próximos eventos',
-          style: Theme.of(context).textTheme.titleMedium,
+          'Eventos cerca de ti',
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 12),
         ListView.builder(
