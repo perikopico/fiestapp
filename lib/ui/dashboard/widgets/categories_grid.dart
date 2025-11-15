@@ -61,11 +61,14 @@ class CategoriesGrid extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isAllSelected
-                        ? Colors.grey.withOpacity(0.3)
-                        : Colors.grey.withOpacity(0.1),
+                        ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+                        : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(16),
                     border: isAllSelected
-                        ? Border.all(color: Colors.grey, width: 2)
+                        ? Border.all(
+                            color: Theme.of(context).colorScheme.primary,
+                            width: 2,
+                          )
                         : null,
                   ),
                   child: Column(
@@ -75,7 +78,9 @@ class CategoriesGrid extends StatelessWidget {
                       Icon(
                         Icons.grid_view,
                         size: 28,
-                        color: isAllSelected ? Colors.grey[700] : Colors.black54,
+                        color: isAllSelected
+                            ? Theme.of(context).colorScheme.onPrimaryContainer
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                       const SizedBox(height: 6),
                       Flexible(
@@ -84,7 +89,9 @@ class CategoriesGrid extends StatelessWidget {
                           style: TextStyle(
                             fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w500,
                             fontSize: 12,
-                            color: isAllSelected ? Colors.grey[700] : null,
+                            color: isAllSelected
+                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                : Theme.of(context).colorScheme.onSurface,
                           ),
                           textAlign: TextAlign.center,
                           maxLines: 2,
@@ -126,7 +133,9 @@ class CategoriesGrid extends StatelessWidget {
                         Icon(
                           iconFromName(category.icon),
                           size: 28,
-                          color: isSelected ? categoryColor : Colors.black54,
+                          color: isSelected
+                              ? categoryColor
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                         const SizedBox(height: 6),
                         Flexible(
@@ -135,7 +144,9 @@ class CategoriesGrid extends StatelessWidget {
                             style: TextStyle(
                               fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
                               fontSize: 12,
-                              color: isSelected ? categoryColor : null,
+                              color: isSelected
+                                  ? categoryColor
+                                  : Theme.of(context).colorScheme.onSurface,
                             ),
                             textAlign: TextAlign.center,
                             maxLines: 2,

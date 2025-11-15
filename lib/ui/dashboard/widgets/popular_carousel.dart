@@ -86,12 +86,14 @@ class PopularCarousel extends StatelessWidget {
                 child: Container(
                   width: 180,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
                         blurRadius: 3,
-                        color: Colors.black12,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.black.withOpacity(0.4)
+                            : Colors.black12,
                       ),
                     ],
                   ),
@@ -105,7 +107,7 @@ class PopularCarousel extends StatelessWidget {
                         Container(
                           height: 115,
                           width: double.infinity,
-                          color: Colors.grey.shade200,
+                          color: Theme.of(context).colorScheme.surfaceVariant,
                           child: Hero(
                             tag: 'event-img-${event.id}',
                             child: event.imageUrl != null && event.imageUrl!.isNotEmpty
@@ -119,7 +121,7 @@ class PopularCarousel extends StatelessWidget {
                                         child: Icon(
                                           iconFromName(event.categoryIcon),
                                           size: 48,
-                                          color: Colors.grey.shade700,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                                         ),
                                       );
                                     },
@@ -128,7 +130,7 @@ class PopularCarousel extends StatelessWidget {
                                     child: Icon(
                                       iconFromName(event.categoryIcon),
                                       size: 48,
-                                      color: Colors.grey.shade700,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                           ),
@@ -142,9 +144,10 @@ class PopularCarousel extends StatelessWidget {
                             children: [
                               Text(
                                 event.title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
+                                  color: Theme.of(context).colorScheme.onSurface,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,

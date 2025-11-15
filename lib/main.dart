@@ -66,21 +66,36 @@ Future<void> testSupabase() async {
   }
 }
 
+final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
+
 class Fiestapp extends StatelessWidget {
   const Fiestapp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Fiestapp',
-      navigatorKey: navigatorKey,
-      debugShowCheckedModeBanner: false,
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: appThemeMode,
+      builder: (context, mode, _) {
+        return MaterialApp(
+          title: 'Fiestapp',
+          navigatorKey: navigatorKey,
+          debugShowCheckedModeBanner: false,
+          themeMode: mode, // 👈 aquí usamos el modo dinámico
+
+      // 🌞 Tema claro
       theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
         colorScheme: const ColorScheme.light(
           primary: Color(0xFFB0907B),
           secondary: Color(0xFFDCC4B5),
-          surface: Color(0xFFFCF8F5),
+          surface: Color(0xFFFFFFFF),
+          surfaceVariant: Color(0xFFFCF8F5),
+          background: Color(0xFFFCF8F5),
           onSurface: Color(0xFF3A2B22),
+          onSurfaceVariant: Color(0xFF6B5A4F),
+          outline: Color(0xFFD9C8BC),
+          outlineVariant: Color(0xFFE6D6CC),
         ),
         scaffoldBackgroundColor: const Color(0xFFFCF8F5),
         textTheme: const TextTheme(
@@ -96,45 +111,122 @@ class Fiestapp extends StatelessWidget {
         ),
         inputDecorationTheme: InputDecorationTheme(
           isDense: true,
-          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          hintStyle: TextStyle(color: Color(0xFF8A6D5A)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          filled: true,
+          fillColor: const Color(0xFFFFFFFF),
+          hintStyle: TextStyle(color: const Color(0xFF8A6D5A).withOpacity(0.7)),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFD9C8BC)),
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: const Color(0xFFD9C8BC)),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFD9C8BC)),
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: const Color(0xFFD9C8BC)),
           ),
           focusedBorder: OutlineInputBorder(
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            borderSide: const BorderSide(color: Color(0xFFB0907B), width: 1.6),
+          ),
+        ),
+        chipTheme: ChipThemeData(
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF3A2B22),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+          ),
+          backgroundColor: const Color(0xFFF3EAE4),
+          selectedColor: const Color(0xFFEAD7CC),
+          side: const BorderSide(color: Color(0xFFE6D6CC)),
+        ),
+        cardTheme: CardThemeData(
+          clipBehavior: Clip.antiAlias,
+          elevation: 0,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
+          color: const Color(0xFFFFFFFF),
+        ),
+      ),
+
+      // 🌙 Tema oscuro
+      darkTheme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        colorScheme: const ColorScheme.dark(
+          primary: Color(0xFFB0907B),
+          secondary: Color(0xFFDCC4B5),
+          surface: Color(0xFF181818),
+          surfaceVariant: Color(0xFF262626),
+          background: Color(0xFF0D0D0D),
+          onSurface: Color(0xFFF5F5F5),
+          onSurfaceVariant: Color(0xFFBCA79A),
+          outline: Color(0xFF4A3A31),
+          outlineVariant: Color(0xFF3A3A3A),
+        ),
+        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+        textTheme: const TextTheme(
+          titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
+          titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+          bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+          labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ).apply(
+          bodyColor: Color(0xFFF5F5F5),
+          displayColor: Color(0xFFF5F5F5),
+        ),
+        inputDecorationTheme: InputDecorationTheme(
+          isDense: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          filled: true,
+          fillColor: const Color(0xFF181818),
+          hintStyle: TextStyle(color: const Color(0xFFBCA79A).withOpacity(0.7)),
+          border: OutlineInputBorder(
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: const Color(0xFF4A3A31)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: const BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: const Color(0xFF4A3A31)),
+          ),
+          focusedBorder: const OutlineInputBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
             borderSide: BorderSide(color: Color(0xFFB0907B), width: 1.6),
           ),
         ),
         chipTheme: ChipThemeData(
-          labelStyle: TextStyle(
+          labelStyle: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: Color(0xFF3A2B22),
+            color: Color(0xFFF5F5F5),
           ),
-          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          shape: RoundedRectangleBorder(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(14)),
           ),
-          backgroundColor: Color(0xFFF3EAE4),
-          selectedColor: Color(0xFFEAD7CC),
-          side: BorderSide(color: Color(0xFFE6D6CC)),
+          backgroundColor: const Color(0xFF262626),
+          selectedColor: const Color(0xFF3A2B22).withOpacity(0.8),
+          side: const BorderSide(color: Color(0xFF4A3A31)),
         ),
-        cardTheme: const CardThemeData(
+        cardTheme: CardThemeData(
           clipBehavior: Clip.antiAlias,
-          elevation: 0,
-          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-          shape: RoundedRectangleBorder(
+          elevation: 1,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          shape: const RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
+          color: const Color(0xFF181818),
         ),
       ),
+
       home: const DashboardScreen(),
+        );
+      },
     );
   }
 }

@@ -30,13 +30,22 @@ class EventService {
     String? searchTerm, // término libre para título/descr
     int limit = 50,
   }) async {
+    print('fetchEvents(): '
+        'cityIds=$cityIds, '
+        'categoryId=$categoryId, '
+        'from=$from, '
+        'to=$to, '
+        'radiusKm=$radiusKm, '
+        'center=$center, '
+        'searchTerm=$searchTerm');
     // Usamos la vista/materializada "events_view" (ajústalo si usas otra)
     dynamic qb = supa.from('events_view').select(
       'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,is_free,category_icon,category_color',
     );
 
     // Filtros básicos
-    if (cityIds != null && cityIds.isNotEmpty) {
+    // Nota: si hay searchTerm, NO limitamos por ciudad para permitir buscar eventos en cualquier ciudad
+    if (cityIds != null && cityIds.isNotEmpty && (searchTerm == null || searchTerm.trim().isEmpty)) {
       // Para múltiples cityIds, usamos el operador 'in' de PostgREST
       if (cityIds.length == 1) {
         qb = qb.eq('city_id', cityIds.first);
@@ -80,6 +89,10 @@ class EventService {
           .map((m) => Event.fromMap(m))
           .toList();
       
+      print('fetchEvents() [RPC]: '
+          'radiusKm=$radiusKm, '
+          'searchTerm=$searchTerm -> ${events.length} eventos');
+      
       // Aplicar filtros adicionales en el cliente
       if (categoryId != null) {
         events = events.where((e) => e.categoryId == categoryId).toList();
@@ -103,7 +116,11 @@ class EventService {
     final res = await qb.order('starts_at', ascending: true).limit(limit);
     
     if (res is List) {
-      return res.map((m) => Event.fromMap(m as Map<String, dynamic>)).toList();
+      print('fetchEvents() [QUERY]: '
+          'searchTerm=$searchTerm -> ${res.length} eventos');
+      return res
+          .map((m) => Event.fromMap(m as Map<String, dynamic>))
+          .toList();
     }
     return [];
   }
@@ -125,9 +142,9 @@ class EventService {
         .from('events')
         .select('id, title, place, starts_at, image_url, city_id, category_id, is_free, is_featured');
 
-    if (cityId != null) {
-      qb = qb.eq('city_id', cityId);
-    }
+    // Autocompletado NO debe limitar por ciudad
+    // pero si quieres que busque por provincia podría hacerse aquí
+    // Por ahora: búsqueda global
 
     if (q.isNotEmpty) {
       qb = qb.ilike('title', '%$q%');

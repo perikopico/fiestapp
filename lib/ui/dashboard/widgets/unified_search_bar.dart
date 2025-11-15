@@ -8,13 +8,13 @@ import '../../event/event_detail_screen.dart';
 class UnifiedSearchBar extends StatefulWidget {
   final int? selectedCityId;
   final ValueChanged<City> onCitySelected;
-  final VoidCallback onSearchChanged;
+  final ValueChanged<String>? onSearchChanged;
 
   const UnifiedSearchBar({
     super.key,
     this.selectedCityId,
     required this.onCitySelected,
-    required this.onSearchChanged,
+    this.onSearchChanged,
   });
 
   @override
@@ -70,6 +70,10 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
         _eventResults = results[1] as List<Event>;
         _isSearching = false;
       });
+
+      // El UnifiedSearchBar gestiona sus resultados internos (ciudades/eventos).
+      // No disparamos onSearchChanged aquí para evitar refrescar toda la pantalla
+      // cada vez que el usuario teclea.
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -103,6 +107,8 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
       _cityResults.clear();
       _eventResults.clear();
     });
+    // Al limpiar la búsqueda, solo reseteamos los resultados locales.
+    // El dashboard decide si quiere resetear filtros por su cuenta.
   }
 
   void _selectCity(City city) {
@@ -170,7 +176,9 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
               ),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.black.withOpacity(0.05),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.black.withOpacity(0.3)
+                      : Colors.black.withOpacity(0.05),
                   blurRadius: 4,
                   offset: const Offset(0, 2),
                 ),
@@ -199,7 +207,11 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                   ..._cityResults.map((city) {
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.location_city, size: 20),
+                      leading: Icon(
+                        Icons.location_city,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       title: Text(city.name),
                       onTap: () => _selectCity(city),
                     );
@@ -240,7 +252,11 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                   ..._eventResults.map((event) {
                     return ListTile(
                       dense: true,
-                      leading: const Icon(Icons.event, size: 20),
+                      leading: Icon(
+                        Icons.event,
+                        size: 20,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
                       title: Text(event.title),
                       subtitle: event.cityName != null
                           ? Text(

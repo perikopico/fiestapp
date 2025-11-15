@@ -15,72 +15,72 @@ class UpcomingList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Estado vacío: mantenemos la tarjeta con "Borrar filtros"
     if (events.isEmpty) {
-      return Card(
-        margin: const EdgeInsets.all(16),
+      return Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(vertical: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.event_busy,
-                size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'No hay eventos para estos filtros',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                textAlign: TextAlign.center,
-              ),
+              const Icon(Icons.event_busy, size: 40),
               const SizedBox(height: 8),
               Text(
-                'Prueba cambiando de ciudad o categoría.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                textAlign: TextAlign.center,
+                'No hay eventos para estos filtros',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
-              if (onClearFilters != null) ...[
-                const SizedBox(height: 16),
+              const SizedBox(height: 4),
+              Text(
+                'Prueba cambiando de ciudad o categoría.',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              if (onClearFilters != null)
                 OutlinedButton(
                   onPressed: onClearFilters,
                   child: const Text('Borrar filtros'),
                 ),
-              ],
             ],
           ),
         ),
       );
     }
 
+    // Hay eventos: mostramos cabecera + botón "Borrar filtros" + lista
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Eventos cerca de ti',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Próximos eventos',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            if (onClearFilters != null)
+              TextButton(
+                onPressed: onClearFilters,
+                child: const Text('Borrar filtros'),
+              ),
+          ],
         ),
         const SizedBox(height: 12),
-        ListView.builder(
+        ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: EdgeInsets.zero,
           itemCount: events.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final event = events[index];
             final isMobile = MediaQuery.of(context).size.width < 600;
             final imageSize = isMobile ? 64.0 : 72.0;
             
             return Card(
-              margin: const EdgeInsets.symmetric(vertical: 6),
+              margin: EdgeInsets.zero,
               elevation: 0.3,
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.surface,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -146,8 +146,9 @@ class UpcomingList extends StatelessWidget {
                           children: [
                             Text(
                               event.title,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w700,
+                                color: Theme.of(context).colorScheme.onSurface,
                               ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,

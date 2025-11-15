@@ -29,7 +29,7 @@ class HeroBanner extends StatelessWidget {
               height: double.infinity,
               fit: BoxFit.cover,
               errorBuilder: (_, __, ___) => Container(
-                color: const Color(0xFFEDE7E3),
+                color: Theme.of(context).colorScheme.surfaceVariant,
               ),
             ),
           ),

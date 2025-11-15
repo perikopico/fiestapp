@@ -22,6 +22,7 @@ import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
 import '../../utils/dashboard_utils.dart';
+import '../../main.dart' show appThemeMode;
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -215,9 +216,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   void _clearFilters() {
     setState(() {
-      _selectedCategoryId = null;
+      // Ciudad
       _selectedCityId = null;
+      _selectedCityIds.clear();
+      _selectedCityName = null;
+
+      // Categoría
+      _selectedCategoryId = null;
+
+      // Fechas
+      _fromDate = null;
+      _toDate = null;
+      _isToday = false;
+      _isWeekend = false;
+      _isThisMonth = false;
+      _selectedDatePreset = null;
+
+      // Búsqueda de eventos
+      _searchEventTerm = null;
+      _searchCtrl.clear();
     });
+
+    // Recargar eventos con el estado limpio
+    _reloadEvents();
   }
 
   Future<void> _reloadWithDateRange({DateTime? from, DateTime? to}) async {
@@ -618,6 +639,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -634,16 +656,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
           children: [
             Text(
               'Buscar eventos',
-              style: Theme.of(context).textTheme.titleLarge,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: searchController,
               autofocus: true,
               textInputAction: TextInputAction.search,
-              decoration: const InputDecoration(
+              style: TextStyle(
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              decoration: InputDecoration(
                 hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
-                prefixIcon: Icon(Icons.search),
+                prefixIcon: Icon(
+                  Icons.search,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
               ),
               onSubmitted: (value) {
                 final query = value.trim();
@@ -718,10 +748,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _selectedCityIds = {city.id};
                         _selectedCityName = city.name;
                       });
-                      _reloadEvents();
+                      _reloadEvents(); // esto sí: al elegir ciudad, recargamos eventos
                     }
                   },
-                  onSearchChanged: _reloadEvents,
+                  // De momento no usamos onSearchChanged para refrescar la lista global,
+                  // la búsqueda de eventos globales la manejamos con el botón de lupa del AppBar.
+                  onSearchChanged: null,
                 )
               else
                 // Slider de radio + botón "Usar mi ubicación" (solo en modo Radio)
@@ -804,11 +836,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
               const SizedBox(height: 12),
               // 4. ExpansionTile "Filtros" (categorías + rango de fecha)
               ExpansionTile(
-                title: const Text('Filtros'),
+                title: Text(
+                  'Filtros',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                ),
                 subtitle: Text(
                   _buildFiltersSubtitle(),
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
-                leading: const Icon(Icons.filter_list),
+                leading: Icon(
+                  Icons.filter_list,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 children: [
                   // Categorías
                   Padding(
@@ -832,7 +875,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             children: [
                               // Chip "Todas"
                               FilterChip(
-                                avatar: const Icon(Icons.grid_view, size: 16),
+                                avatar: Icon(
+                                  Icons.grid_view,
+                                  size: 16,
+                                  color: _selectedCategoryId == null
+                                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
                                 label: const Text('Todas'),
                                 selected: _selectedCategoryId == null,
                                 onSelected: (_) {
@@ -847,7 +896,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 final isSelected = category.id == _selectedCategoryId;
                                 final icon = iconFromName(category.icon);
                                 return FilterChip(
-                                  avatar: Icon(icon, size: 16),
+                                  avatar: Icon(
+                                    icon,
+                                    size: 16,
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
                                   label: Text(category.name),
                                   selected: isSelected,
                                   onSelected: (_) {
@@ -984,7 +1039,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   textAlign: TextAlign.center,
                   style: Theme.of(
                     context,
-                  ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
+                  ).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1003,9 +1060,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Fiestapp'),
         elevation: 0,
         actions: [
+          // Botón claro/oscuro
           IconButton(
-            icon: const Icon(Icons.search),
-            onPressed: _openSearchBottomSheet,
+            icon: Icon(
+              Theme.of(context).brightness == Brightness.dark
+                  ? Icons.wb_sunny_outlined
+                  : Icons.nightlight_round,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+            onPressed: () {
+              // Alternar entre claro y oscuro
+              if (appThemeMode.value == ThemeMode.dark) {
+                appThemeMode.value = ThemeMode.light;
+              } else {
+                appThemeMode.value = ThemeMode.dark;
+              }
+            },
           ),
         ],
       ),
@@ -1046,7 +1116,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: ListView.separated(
@@ -1087,7 +1157,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
+                          color: Theme.of(context).colorScheme.surfaceVariant,
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: SizedBox(
@@ -1123,45 +1193,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         onClearFilters: _clearFilters,
                       ),
                     ),
-                  // Cerca de ti
+                  // Sección "Cerca de ti" (solo en modo Radio)
                   if (_isNearbyLoading)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          physics: const NeverScrollableScrollPhysics(),
-                          shrinkWrap: true,
-                          itemCount: 4,
-                          separatorBuilder: (BuildContext context, int index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (BuildContext context, int index) {
-                            return const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ShimmerBlock(height: 180),
-                                ShimmerBlock(height: 16, width: 180),
-                                ShimmerBlock(height: 14, width: 120),
-                              ],
-                            );
-                          },
-                        ),
+                      child: ShimmerBlock(
+                        height: 80,
                       ),
                     )
-                  else if (_mode == LocationMode.city)
+                  else if (_mode == LocationMode.radius)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                       child: NearbyEventsSection(
-                        events: _selectedCityId == null
-                            ? _nearbyEvents
-                            : _nearbyEvents
-                                .where((e) => e.cityId == _selectedCityId)
-                                .toList(),
+                        events: _nearbyEvents,
                       ),
                     )
                   else
@@ -1227,7 +1271,7 @@ class UpcomingEventsSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: UpcomingList(
@@ -1255,7 +1299,7 @@ class CategoriesSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: CategoriesGrid(
@@ -1282,7 +1326,7 @@ class PopularThisWeekSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: PopularCarousel(
@@ -1306,7 +1350,7 @@ class NearbyEventsSection extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.7),
+        color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: events.isEmpty
@@ -1387,13 +1431,25 @@ class _FilterHeaderWidget extends StatelessWidget {
     final isAllSelected = selectedCityId == null;
     chips.add(
       ChoiceChip(
-        label: const Text(
+        label: Text(
           'Todas',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isAllSelected
+                ? Theme.of(context).colorScheme.onPrimaryContainer
+                : Theme.of(context).colorScheme.onSurface,
+          ),
         ),
-        avatar: const Icon(Icons.place_outlined, size: 16),
+        avatar: Icon(
+          Icons.place_outlined,
+          size: 16,
+          color: isAllSelected
+              ? Theme.of(context).colorScheme.onPrimaryContainer
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         selected: isAllSelected,
-        selectedColor: const Color(0xFFFFE9DC),
+        selectedColor: Theme.of(context).colorScheme.primaryContainer,
         onSelected: (selected) {
           if (selected) {
             onCityTap(null);
@@ -1411,10 +1467,16 @@ class _FilterHeaderWidget extends StatelessWidget {
         ChoiceChip(
           label: Text(
             city.name,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           selected: isSelected,
-          selectedColor: const Color(0xFFFFE9DC),
+          selectedColor: Theme.of(context).colorScheme.primaryContainer,
           onSelected: (selected) {
             if (selected) {
               onCityTap(city.id);
@@ -1436,13 +1498,25 @@ class _FilterHeaderWidget extends StatelessWidget {
     final isAllSelected = selectedCategoryId == null;
     chips.add(
       ChoiceChip(
-        label: const Text(
+        label: Text(
           'Todas',
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: isAllSelected
+                ? Theme.of(context).colorScheme.onPrimaryContainer
+                : Theme.of(context).colorScheme.onSurface,
+          ),
         ),
         selected: isAllSelected,
-        selectedColor: const Color(0xFFFFE9DC),
-        avatar: const Icon(Icons.grid_view, size: 16),
+        selectedColor: Theme.of(context).colorScheme.primaryContainer,
+        avatar: Icon(
+          Icons.grid_view,
+          size: 16,
+          color: isAllSelected
+              ? Theme.of(context).colorScheme.onPrimaryContainer
+              : Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
         onSelected: (selected) {
           if (selected) {
             onCategoryTap(null);
@@ -1462,11 +1536,23 @@ class _FilterHeaderWidget extends StatelessWidget {
         ChoiceChip(
           label: Text(
             category.name,
-            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.onPrimaryContainer
+                  : Theme.of(context).colorScheme.onSurface,
+            ),
           ),
           selected: isSelected,
-          selectedColor: const Color(0xFFFFE9DC),
-          avatar: Icon(icon, size: 16),
+          selectedColor: Theme.of(context).colorScheme.primaryContainer,
+          avatar: Icon(
+            icon,
+            size: 16,
+            color: isSelected
+                ? Theme.of(context).colorScheme.onPrimaryContainer
+                : Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
           onSelected: (selected) {
             if (selected) {
               onCategoryTap(category.id);
