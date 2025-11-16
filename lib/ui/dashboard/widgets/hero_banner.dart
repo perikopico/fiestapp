@@ -59,8 +59,11 @@ class HeroBanner extends StatelessWidget {
               children: [
                 Text(
                   subtitle,
-                  style: const TextStyle(
-                    color: Colors.white70,
+                  style: TextStyle(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.85),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -70,12 +73,12 @@ class HeroBanner extends StatelessWidget {
                   title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
                     height: 1.2,
-                    shadows: [
+                    shadows: const [
                       Shadow(blurRadius: 6, color: Colors.black26),
                     ],
                   ),

@@ -153,22 +153,23 @@ class Fiestapp extends StatelessWidget {
         ),
       ),
 
-      // 🌙 Tema oscuro
+      // 🌙 Tema oscuro (paleta fría / neutral)
       darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: const ColorScheme.dark(
-          primary: Color(0xFFB0907B),
-          secondary: Color(0xFFDCC4B5),
-          surface: Color(0xFF181818),
-          surfaceVariant: Color(0xFF262626),
-          background: Color(0xFF0D0D0D),
-          onSurface: Color(0xFFF5F5F5),
-          onSurfaceVariant: Color(0xFFBCA79A),
-          outline: Color(0xFF4A3A31),
-          outlineVariant: Color(0xFF3A3A3A),
+          primary: Color(0xFF5ED1B7), // acento verdoso/azulado
+          secondary: Color(0xFF3FA38A),
+          surface: Color(0xFF191C20), // tarjetas / bloques
+          background: Color(0xFF101215), // fondo general
+          onSurface: Color(0xFFECEFF4), // texto principal
         ),
-        scaffoldBackgroundColor: const Color(0xFF0D0D0D),
+        scaffoldBackgroundColor: const Color(0xFF101215),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFF101215),
+          foregroundColor: Color(0xFFECEFF4),
+          elevation: 0,
+        ),
         textTheme: const TextTheme(
           titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w700),
           titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
@@ -177,50 +178,50 @@ class Fiestapp extends StatelessWidget {
           labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
           labelMedium: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
         ).apply(
-          bodyColor: Color(0xFFF5F5F5),
-          displayColor: Color(0xFFF5F5F5),
+          bodyColor: const Color(0xFFECEFF4),
+          displayColor: const Color(0xFFECEFF4),
         ),
-        inputDecorationTheme: InputDecorationTheme(
-          isDense: true,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          filled: true,
-          fillColor: const Color(0xFF181818),
-          hintStyle: TextStyle(color: const Color(0xFFBCA79A).withOpacity(0.7)),
-          border: OutlineInputBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: const Color(0xFF4A3A31)),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: const Color(0xFF4A3A31)),
-          ),
-          focusedBorder: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-            borderSide: BorderSide(color: Color(0xFFB0907B), width: 1.6),
-          ),
-        ),
-        chipTheme: ChipThemeData(
-          labelStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: Color(0xFFF5F5F5),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-          shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(14)),
-          ),
-          backgroundColor: const Color(0xFF262626),
-          selectedColor: const Color(0xFF3A2B22).withOpacity(0.8),
-          side: const BorderSide(color: Color(0xFF4A3A31)),
-        ),
-        cardTheme: CardThemeData(
+        cardTheme: const CardThemeData(
+          color: Color(0xFF191C20),
           clipBehavior: Clip.antiAlias,
-          elevation: 1,
-          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
-          shape: const RoundedRectangleBorder(
+          elevation: 0,
+          margin: EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+          shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.all(Radius.circular(16)),
           ),
-          color: const Color(0xFF181818),
+        ),
+        chipTheme: const ChipThemeData(
+          labelStyle: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFFECEFF4),
+          ),
+          padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+          ),
+          backgroundColor: Color(0xFF23272F),
+          selectedColor: Color(0xFF2C323B),
+          side: BorderSide(color: Color(0xFF39414D)),
+        ),
+        inputDecorationTheme: const InputDecorationTheme(
+          isDense: true,
+          filled: true,
+          fillColor: Color(0xFF191C20),
+          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          hintStyle: TextStyle(color: Color(0xFF9CA3AF)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFF39414D)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFF39414D)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.all(Radius.circular(14)),
+            borderSide: BorderSide(color: Color(0xFF5ED1B7), width: 1.6),
+          ),
         ),
       ),
 

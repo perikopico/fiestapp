@@ -108,32 +108,29 @@ class PopularCarousel extends StatelessWidget {
                           height: 115,
                           width: double.infinity,
                           color: Theme.of(context).colorScheme.surfaceVariant,
-                          child: Hero(
-                            tag: 'event-img-${event.id}',
-                            child: event.imageUrl != null && event.imageUrl!.isNotEmpty
-                                ? Image.network(
-                                    event.imageUrl!,
-                                    width: double.infinity,
-                                    height: 115,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Center(
-                                        child: Icon(
-                                          iconFromName(event.categoryIcon),
-                                          size: 48,
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                        ),
-                                      );
-                                    },
-                                  )
-                                : Center(
-                                    child: Icon(
-                                      iconFromName(event.categoryIcon),
-                                      size: 48,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                    ),
+                          child: event.imageUrl != null && event.imageUrl!.isNotEmpty
+                              ? Image.network(
+                                  event.imageUrl!,
+                                  width: double.infinity,
+                                  height: 115,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Center(
+                                      child: Icon(
+                                        iconFromName(event.categoryIcon),
+                                        size: 48,
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ),
+                                    );
+                                  },
+                                )
+                              : Center(
+                                  child: Icon(
+                                    iconFromName(event.categoryIcon),
+                                    size: 48,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                                   ),
-                          ),
+                                ),
                         ),
                         // Title and date below
                         Padding(

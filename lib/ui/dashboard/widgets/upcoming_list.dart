@@ -48,6 +48,7 @@ class UpcomingList extends StatelessWidget {
 
     // Hay eventos: mostramos cabecera + botón "Borrar filtros" + lista
     return Column(
+      mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
@@ -99,44 +100,41 @@ class UpcomingList extends StatelessWidget {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: Hero(
-                          tag: 'event-img-${event.id}',
-                          child: event.imageUrl != null && event.imageUrl!.isNotEmpty
-                              ? Image.network(
-                                  event.imageUrl!,
-                                  width: imageSize,
-                                  height: imageSize,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      width: imageSize,
-                                      height: imageSize,
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.surfaceVariant,
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                      child: Icon(
-                                        iconFromName(event.categoryIcon),
-                                        size: imageSize * 0.7,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  width: imageSize,
-                                  height: imageSize,
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context).colorScheme.surfaceVariant,
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                  child: Icon(
-                                    iconFromName(event.categoryIcon),
-                                    size: imageSize * 0.7,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
+                        child: event.imageUrl != null && event.imageUrl!.isNotEmpty
+                            ? Image.network(
+                                event.imageUrl!,
+                                width: imageSize,
+                                height: imageSize,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    width: imageSize,
+                                    height: imageSize,
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).colorScheme.surfaceVariant,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      iconFromName(event.categoryIcon),
+                                      size: imageSize * 0.7,
+                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                width: imageSize,
+                                height: imageSize,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
-                        ),
+                                child: Icon(
+                                  iconFromName(event.categoryIcon),
+                                  size: imageSize * 0.7,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                              ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

@@ -18,14 +18,17 @@ class ShimmerBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: Colors.black.withOpacity(0.04),
-      highlightColor: Colors.white.withOpacity(0.6),
+      baseColor:
+          Theme.of(context).colorScheme.onSurface.withOpacity(0.04),
+      highlightColor:
+          Theme.of(context).colorScheme.onSurface.withOpacity(0.12),
       child: Container(
         height: height,
         width: width,
         margin: margin,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.04),
+          color:
+              Theme.of(context).colorScheme.onSurface.withOpacity(0.04),
           borderRadius: borderRadius,
         ),
       ),

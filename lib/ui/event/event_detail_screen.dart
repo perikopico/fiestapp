@@ -6,6 +6,7 @@ import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
 
 import '../../models/event.dart';
 import '../icons/icon_mapper.dart';
+import '../common/theme_mode_toggle.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final Event event;
@@ -15,13 +16,24 @@ class EventDetailScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasMapsUrl = event.mapsUrl != null && event.mapsUrl!.isNotEmpty;
+    final shareText = [
+      '${event.title} - ${event.cityName ?? ''}'.trim(),
+      (event.place ?? '').trim(),
+      '${event.formattedDate} ${event.formattedTime}'.trim(),
+      (event.mapsUrl ?? '').trim(),
+    ].where((s) => s.isNotEmpty).join('\n');
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFBF5EF),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Detalle del evento'),
         centerTitle: true,
         elevation: 0,
-        backgroundColor: const Color(0xFFF2E6DB),
+        backgroundColor: theme.colorScheme.surface,
+        actions: const [
+          ThemeModeToggleAction(),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -34,7 +46,7 @@ class EventDetailScreen extends StatelessWidget {
                 borderRadius: BorderRadius.circular(18),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
+                    color: theme.colorScheme.shadow.withOpacity(0.3),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   ),
@@ -45,13 +57,22 @@ class EventDetailScreen extends StatelessWidget {
                 child: Hero(
                   tag: 'event-img-${event.id}',
                   child: event.imageUrl != null && event.imageUrl!.isNotEmpty
-                      ? Image.network(event.imageUrl!, height: 240, width: double.infinity, fit: BoxFit.cover)
+                      ? Image.network(
+                          event.imageUrl!,
+                          height: 240,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
                       : Container(
                           height: 240,
                           width: double.infinity,
-                          color: Colors.black12,
+                          color: theme.colorScheme.surfaceVariant,
                           alignment: Alignment.center,
-                          child: const Icon(Icons.event, size: 56),
+                          child: Icon(
+                            Icons.event,
+                            size: 56,
+                            color: theme.colorScheme.onSurfaceVariant,
+                          ),
                         ),
                 ),
               ),
@@ -98,9 +119,21 @@ class EventDetailScreen extends StatelessWidget {
                 ),
                 if (event.isFree == true)
                   Chip(
-                    label: const Text('Gratis', style: TextStyle(fontSize: 12)),
-                    avatar: const Icon(Icons.check_circle, size: 18),
-                    backgroundColor: const Color(0xFFDFF5DD),
+                    label: Text(
+                      'Gratis',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    avatar: Icon(
+                      Icons.check_circle,
+                      size: 18,
+                      color: theme.colorScheme.primary,
+                    ),
+                    backgroundColor:
+                        theme.colorScheme.primary.withOpacity(0.12),
                     visualDensity: VisualDensity.compact,
                   ),
               ],
@@ -135,14 +168,17 @@ class EventDetailScreen extends StatelessWidget {
                   child: SizedBox(
                     height: 44,
                     child: FilledButton.icon(
-                      onPressed: () async {
-                        final url = event.mapsUrl ?? '';
-                        if (url.isEmpty) return;
-                        final uri = Uri.parse(url);
-                        if (await canLaunchUrl(uri)) {
-                          await launchUrl(uri, mode: LaunchMode.externalApplication);
-                        }
-                      },
+                      onPressed: hasMapsUrl
+                          ? () async {
+                              final uri = Uri.parse(event.mapsUrl!);
+                              if (await canLaunchUrl(uri)) {
+                                await launchUrl(
+                                  uri,
+                                  mode: LaunchMode.externalApplication,
+                                );
+                              }
+                            }
+                          : null,
                       icon: const Icon(Icons.map),
                       label: const Text('Ver en mapa'),
                       style: FilledButton.styleFrom(
@@ -159,14 +195,9 @@ class EventDetailScreen extends StatelessWidget {
                     height: 44,
                     child: OutlinedButton.icon(
                       onPressed: () {
-                        final parts = <String>[
-                          event.title,
-                          if (event.place != null && event.place!.isNotEmpty) 'Lugar: ${event.place!}',
-                          if (event.cityName != null) 'Ciudad: ${event.cityName!}',
-                          '${event.formattedDate} ${event.formattedTime}',
-                          if (event.mapsUrl != null && event.mapsUrl!.isNotEmpty) 'Mapa: ${event.mapsUrl}',
-                        ];
-                        Share.share(parts.where((s) => s.trim().isNotEmpty).join('\n'));
+                        if (shareText.isNotEmpty) {
+                          Share.share(shareText);
+                        }
                       },
                       icon: const Icon(Icons.ios_share),
                       label: const Text('Compartir'),

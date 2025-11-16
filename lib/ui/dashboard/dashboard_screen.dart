@@ -18,6 +18,7 @@ import 'widgets/unified_search_bar.dart';
 import 'widgets/city_radio_toggle.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
+import 'package:fiestapp/ui/common/theme_mode_toggle.dart';
 import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
@@ -1059,24 +1060,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Fiestapp'),
         elevation: 0,
-        actions: [
-          // Botón claro/oscuro
-          IconButton(
-            icon: Icon(
-              Theme.of(context).brightness == Brightness.dark
-                  ? Icons.wb_sunny_outlined
-                  : Icons.nightlight_round,
-              color: Theme.of(context).colorScheme.onSurface,
-            ),
-            onPressed: () {
-              // Alternar entre claro y oscuro
-              if (appThemeMode.value == ThemeMode.dark) {
-                appThemeMode.value = ThemeMode.light;
-              } else {
-                appThemeMode.value = ThemeMode.dark;
-              }
-            },
-          ),
+        actions: const [
+          ThemeModeToggleAction(),
         ],
       ),
       body: SafeArea(
@@ -1086,6 +1071,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             slivers: [
             SliverToBoxAdapter(
               child: Column(
+                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Padding(
@@ -1161,7 +1147,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           borderRadius: BorderRadius.circular(16),
                         ),
                         child: SizedBox(
-                          height: 210,
+                          height: 230,
                           child: ListView.separated(
                             padding: const EdgeInsets.symmetric(horizontal: 16),
                             scrollDirection: Axis.horizontal,
@@ -1172,6 +1158,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               return const SizedBox(
                                 width: 280,
                                 child: Column(
+                                  mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     ShimmerBlock(height: 150),
@@ -1367,6 +1354,7 @@ class NearbyEventsSection extends StatelessWidget {
               ),
             )
           : Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Padding(
@@ -1685,10 +1673,22 @@ class _NearbyControlWidget extends StatelessWidget {
                       const SizedBox(height: 4),
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
-                          trackHeight: 4,
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 8,
-                          ),
+                          trackHeight: 6,
+                          thumbShape:
+                              const RoundSliderThumbShape(enabledThumbRadius: 9),
+                          overlayShape:
+                              const RoundSliderOverlayShape(overlayRadius: 18),
+                          activeTrackColor:
+                              Theme.of(context).colorScheme.primary,
+                          inactiveTrackColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.25),
+                          thumbColor: Theme.of(context).colorScheme.primary,
+                          overlayColor: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.16),
                         ),
                         child: Slider(
                           value: radiusKm,
