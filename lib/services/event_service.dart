@@ -212,4 +212,44 @@ class EventService {
 
     return events;
   }
+
+  Future<void> submitEvent({
+    required String title,
+    required String town,
+    required String place,
+    required DateTime startsAt,
+    required int cityId,
+    required int categoryId,
+    String? description,
+    String? mapsUrl,
+    String? imageUrl,
+    double? lat,
+    double? lng,
+    bool isFree = true,
+    String? submittedByName,
+    String? submittedByEmail,
+  }) async {
+    final payload = <String, dynamic>{
+      'title': title.trim(),
+      'town': town.trim(),
+      'place': place.trim(),
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'city_id': cityId,
+      'category_id': categoryId,
+      // dejamos que "category" (texto) use el default 'Todo' o lo rellenamos más adelante
+      'description': description?.trim(),
+      'maps_url': mapsUrl?.trim(),
+      'image_url': imageUrl?.trim(),
+      'lat': lat,
+      'lng': lng,
+      'is_free': isFree,
+      'submitted_by_name': submittedByName?.trim(),
+      'submitted_by_email': submittedByEmail?.trim(),
+    };
+
+    // Eliminar claves con null para no pisar defaults
+    payload.removeWhere((key, value) => value == null);
+
+    await supa.from('events').insert(payload);
+  }
 }

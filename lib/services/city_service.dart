@@ -5,14 +5,25 @@ class City {
   final String name;
   final String slug;
   final int? provinceId;
+  final double? lat;
+  final double? lng;
 
-  City({required this.id, required this.name, required this.slug, this.provinceId});
+  City({
+    required this.id,
+    required this.name,
+    required this.slug,
+    this.provinceId,
+    this.lat,
+    this.lng,
+  });
 
   factory City.fromMap(Map<String, dynamic> m) => City(
     id: m['id'] as int,
     name: m['name'] as String,
     slug: m['slug'] as String,
     provinceId: m['province_id'] as int?,
+    lat: (m['lat'] as num?)?.toDouble(),
+    lng: (m['lng'] as num?)?.toDouble(),
   );
 }
 
@@ -29,13 +40,13 @@ class CityService {
     if (provinceId != null) {
       res = await supa
           .from('cities')
-          .select('id, name, slug, province_id')
+          .select('id, name, slug, province_id, lat, lng')
           .eq('province_id', provinceId)
           .order('name');
     } else {
       res = await supa
           .from('cities')
-          .select('id, name, slug, province_id')
+          .select('id, name, slug, province_id, lat, lng')
           .order('name');
     }
 
@@ -77,7 +88,7 @@ class CityService {
 
     final dynamic res = await supa
         .from('cities')
-        .select('id, name, slug, province_id')
+        .select('id, name, slug, province_id, lat, lng')
         .ilike('name', '%$q%')
         .order('name');
 

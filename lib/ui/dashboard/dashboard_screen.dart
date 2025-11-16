@@ -24,6 +24,7 @@ import 'package:intl/intl.dart';
 
 import '../../utils/dashboard_utils.dart';
 import '../../main.dart' show appThemeMode;
+import '../events/event_submit_screen.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -1204,6 +1205,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const EventSubmitScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.add),
+        label: const Text('Publicar evento'),
       ),
     );
   }
