@@ -57,10 +57,7 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
       // Buscar ciudades y eventos en paralelo
       final results = await Future.wait([
         _cityService.searchCities(query),
-        _eventService.searchEvents(
-          query: query,
-          cityId: widget.selectedCityId,
-        ),
+        _eventService.searchEvents(query: query, cityId: widget.selectedCityId),
       ]);
 
       if (!mounted) return;
@@ -117,11 +114,9 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
   }
 
   void _selectEvent(Event event, BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => EventDetailScreen(event: event),
-      ),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => EventDetailScreen(event: event)));
     _clearSearch();
   }
 
@@ -199,9 +194,9 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                     child: Text(
                       'Ciudades',
                       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                   ..._cityResults.map((city) {
@@ -216,8 +211,7 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                       onTap: () => _selectCity(city),
                     );
                   }),
-                  if (_eventResults.isNotEmpty)
-                    const Divider(height: 1),
+                  if (_eventResults.isNotEmpty) const Divider(height: 1),
                 ],
                 // Resultados de eventos
                 if (_eventResults.isNotEmpty) ...[
@@ -230,9 +224,9 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                       child: Text(
                         'Eventos',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     )
                   else
@@ -244,9 +238,9 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                       child: Text(
                         'Eventos',
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ..._eventResults.map((event) {
@@ -275,4 +269,3 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
     );
   }
 }
-

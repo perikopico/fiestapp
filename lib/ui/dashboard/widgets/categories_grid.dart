@@ -35,9 +35,9 @@ class CategoriesGrid extends StatelessWidget {
       children: [
         Text(
           'Categorías',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         LayoutBuilder(
@@ -48,7 +48,7 @@ class CategoriesGrid extends StatelessWidget {
 
             // Crear lista de widgets para el grid, empezando con "Todas"
             final List<Widget> categoryWidgets = [];
-            
+
             // Chip "Todas"
             final isAllSelected = selectedCategoryId == null;
             categoryWidgets.add(
@@ -61,8 +61,12 @@ class CategoriesGrid extends StatelessWidget {
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
                     color: isAllSelected
-                        ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
-                        : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                        ? Theme.of(
+                            context,
+                          ).colorScheme.primaryContainer.withOpacity(0.5)
+                        : Theme.of(
+                            context,
+                          ).colorScheme.surfaceVariant.withOpacity(0.5),
                     borderRadius: BorderRadius.circular(16),
                     border: isAllSelected
                         ? Border.all(
@@ -87,10 +91,14 @@ class CategoriesGrid extends StatelessWidget {
                         child: Text(
                           'Todas',
                           style: TextStyle(
-                            fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w500,
+                            fontWeight: isAllSelected
+                                ? FontWeight.bold
+                                : FontWeight.w500,
                             fontSize: 12,
                             color: isAllSelected
-                                ? Theme.of(context).colorScheme.onPrimaryContainer
+                                ? Theme.of(
+                                    context,
+                                  ).colorScheme.onPrimaryContainer
                                 : Theme.of(context).colorScheme.onSurface,
                           ),
                           textAlign: TextAlign.center,
@@ -108,8 +116,9 @@ class CategoriesGrid extends StatelessWidget {
             categoryWidgets.addAll(
               categories.map((category) {
                 final categoryColor = _getColorForCategory(category.name);
-                final isSelected = category.id != null && category.id == selectedCategoryId;
-                
+                final isSelected =
+                    category.id != null && category.id == selectedCategoryId;
+
                 return InkWell(
                   onTap: () {
                     onCategoryTap(category.id);
@@ -142,7 +151,9 @@ class CategoriesGrid extends StatelessWidget {
                           child: Text(
                             category.name,
                             style: TextStyle(
-                              fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                              fontWeight: isSelected
+                                  ? FontWeight.bold
+                                  : FontWeight.w500,
                               fontSize: 12,
                               color: isSelected
                                   ? categoryColor
@@ -176,4 +187,3 @@ class CategoriesGrid extends StatelessWidget {
     );
   }
 }
-

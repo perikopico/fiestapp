@@ -31,9 +31,7 @@ class EventDetailScreen extends StatelessWidget {
         centerTitle: true,
         elevation: 0,
         backgroundColor: theme.colorScheme.surface,
-        actions: const [
-          ThemeModeToggleAction(),
-        ],
+        actions: const [ThemeModeToggleAction()],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
@@ -80,7 +78,12 @@ class EventDetailScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             // Título
-            Text(event.title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            Text(
+              event.title,
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
             const SizedBox(height: 8),
 
             // Chips de meta
@@ -90,29 +93,42 @@ class EventDetailScreen extends StatelessWidget {
               children: [
                 if (event.cityName != null)
                   Chip(
-                    label: Text(event.cityName!, style: theme.textTheme.bodySmall),
+                    label: Text(
+                      event.cityName!,
+                      style: theme.textTheme.bodySmall,
+                    ),
                     avatar: const Icon(Icons.place, size: 18),
-                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant,
                     visualDensity: VisualDensity.compact,
                   ),
                 if (event.categoryName != null)
                   Chip(
-                    label: Text(event.categoryName!, style: theme.textTheme.bodySmall),
-                    avatar: Icon(
-                      iconFromName(event.categoryIcon),
-                      size: 18,
+                    label: Text(
+                      event.categoryName!,
+                      style: theme.textTheme.bodySmall,
                     ),
-                    backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
+                    avatar: Icon(iconFromName(event.categoryIcon), size: 18),
+                    backgroundColor: Theme.of(
+                      context,
+                    ).colorScheme.surfaceVariant,
                     visualDensity: VisualDensity.compact,
                   ),
                 Chip(
-                  label: Text(event.formattedDate, style: theme.textTheme.bodySmall),
+                  label: Text(
+                    event.formattedDate,
+                    style: theme.textTheme.bodySmall,
+                  ),
                   avatar: const Icon(Icons.event, size: 18),
                   backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
                   visualDensity: VisualDensity.compact,
                 ),
                 Chip(
-                  label: Text(event.formattedTime, style: theme.textTheme.bodySmall),
+                  label: Text(
+                    event.formattedTime,
+                    style: theme.textTheme.bodySmall,
+                  ),
                   avatar: const Icon(Icons.schedule, size: 18),
                   backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
                   visualDensity: VisualDensity.compact,
@@ -132,30 +148,26 @@ class EventDetailScreen extends StatelessWidget {
                       size: 18,
                       color: theme.colorScheme.primary,
                     ),
-                    backgroundColor:
-                        theme.colorScheme.primary.withOpacity(0.12),
+                    backgroundColor: theme.colorScheme.primary.withOpacity(
+                      0.12,
+                    ),
                     visualDensity: VisualDensity.compact,
                   ),
               ],
             ),
             const SizedBox(height: 16),
 
-            // Descripción
-            if (event.description != null && event.description!.isNotEmpty) ...[
-              Text('Descripción', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-              const SizedBox(height: 6),
-              Text(
-                event.description!,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
+            // Descripción y programación diaria
+            _buildDescriptionSection(context, event),
 
             // Lugar
             if (event.place != null && event.place!.isNotEmpty) ...[
-              Text('Lugar', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              Text(
+                'Lugar',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 6),
               Text(event.place!, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 16),
@@ -221,7 +233,7 @@ class EventDetailScreen extends StatelessWidget {
                     event.place,
                     event.cityName,
                   ].where((s) => s != null && s!.isNotEmpty).join(' · ');
-                  
+
                   final calEvent = add2cal.Event(
                     title: event.title,
                     description: event.description ?? '',
@@ -229,7 +241,7 @@ class EventDetailScreen extends StatelessWidget {
                     startDate: event.startsAt,
                     endDate: event.startsAt.add(const Duration(hours: 2)),
                   );
-                  
+
                   await add2cal.Add2Calendar.addEvent2Cal(calEvent);
                 },
                 icon: const Icon(Icons.calendar_today),
@@ -241,5 +253,64 @@ class EventDetailScreen extends StatelessWidget {
       ),
     );
   }
-}
 
+  Widget _buildDescriptionSection(BuildContext context, Event event) {
+    final theme = Theme.of(context);
+    final desc = event.description ?? '';
+
+    if (desc.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Separar descripción base de programación diaria
+    String? mainDesc;
+    String? programBlock;
+
+    const marker = '\n\nProgramación:\n';
+    if (desc.contains(marker)) {
+      final parts = desc.split(marker);
+      mainDesc = parts.first.trim();
+      programBlock = parts.sublist(1).join(marker).trim();
+    } else {
+      mainDesc = desc.trim().isEmpty ? null : desc.trim();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (mainDesc != null) ...[
+          Text(
+            'Descripción',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            mainDesc,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+            softWrap: true,
+            textAlign: TextAlign.start,
+          ),
+          const SizedBox(height: 16),
+        ],
+        if (programBlock != null) ...[
+          Text(
+            'Programación',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            programBlock,
+            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+            softWrap: true,
+            textAlign: TextAlign.start,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ],
+    );
+  }
+}

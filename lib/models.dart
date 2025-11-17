@@ -29,11 +29,7 @@ class Event {
   final String title;
   final Location location;
 
-  Event({
-    required this.id,
-    required this.title,
-    required this.location,
-  });
+  Event({required this.id, required this.title, required this.location});
 
   factory Event.fromJson(Map<String, dynamic> json) {
     return Event(
@@ -48,10 +44,7 @@ class Location {
   final String city;
   final String? venue;
 
-  Location({
-    required this.city,
-    this.venue,
-  });
+  Location({required this.city, this.venue});
 
   factory Location.fromJson(Map<String, dynamic> json) {
     return Location(
@@ -70,8 +63,8 @@ const cities = <City>[
 
 // Categorías iniciales (id = lo que usaremos en BD)
 const kCategories = <Map<String, String>>[
-  {'id': 'all',        'name': 'Todo'},
-  {'id': 'tradicion',  'name': 'Tradición'},
-  {'id': 'motor',      'name': 'Motor'},
-  {'id': 'mercados',   'name': 'Mercados'},
+  {'id': 'all', 'name': 'Todo'},
+  {'id': 'tradicion', 'name': 'Tradición'},
+  {'id': 'motor', 'name': 'Motor'},
+  {'id': 'mercados', 'name': 'Mercados'},
 ];

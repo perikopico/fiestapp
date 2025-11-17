@@ -4,12 +4,7 @@ class Category {
   final String? icon;
   final String? description;
 
-  Category({
-    this.id,
-    required this.name,
-    this.icon,
-    this.description,
-  });
+  Category({this.id, required this.name, this.icon, this.description});
 
   factory Category.fromMap(Map<String, dynamic> map) {
     return Category(
@@ -21,12 +16,6 @@ class Category {
   }
 
   Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'icon': icon,
-      'description': description,
-    };
+    return {'id': id, 'name': name, 'icon': icon, 'description': description};
   }
 }
-

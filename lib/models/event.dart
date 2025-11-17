@@ -55,6 +55,6 @@ class Event {
 
 extension EventFormatting on Event {
   String get formattedDate => DateFormat('dd/MM HH:mm').format(startsAt);
-  String get formattedDay  => DateFormat('dd/MM').format(startsAt);
+  String get formattedDay => DateFormat('dd/MM').format(startsAt);
   String get formattedTime => DateFormat('HH:mm').format(startsAt);
 }

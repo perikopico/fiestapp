@@ -7,11 +7,7 @@ class PopularCarousel extends StatelessWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
 
-  const PopularCarousel({
-    super.key,
-    required this.events,
-    this.onClearFilters,
-  });
+  const PopularCarousel({super.key, required this.events, this.onClearFilters});
 
   @override
   Widget build(BuildContext context) {
@@ -26,22 +22,24 @@ class PopularCarousel extends StatelessWidget {
               Icon(
                 Icons.event_busy,
                 size: 64,
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+                color: Theme.of(
+                  context,
+                ).colorScheme.onSurfaceVariant.withOpacity(0.5),
               ),
               const SizedBox(height: 16),
               Text(
                 'No hay eventos para estos filtros',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 'Prueba cambiando de ciudad o categoría.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
                 textAlign: TextAlign.center,
               ),
               if (onClearFilters != null) ...[
@@ -108,7 +106,9 @@ class PopularCarousel extends StatelessWidget {
                           height: 115,
                           width: double.infinity,
                           color: Theme.of(context).colorScheme.surfaceVariant,
-                          child: event.imageUrl != null && event.imageUrl!.isNotEmpty
+                          child:
+                              event.imageUrl != null &&
+                                  event.imageUrl!.isNotEmpty
                               ? Image.network(
                                   event.imageUrl!,
                                   width: double.infinity,
@@ -119,7 +119,9 @@ class PopularCarousel extends StatelessWidget {
                                       child: Icon(
                                         iconFromName(event.categoryIcon),
                                         size: 48,
-                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                       ),
                                     );
                                   },
@@ -128,7 +130,9 @@ class PopularCarousel extends StatelessWidget {
                                   child: Icon(
                                     iconFromName(event.categoryIcon),
                                     size: 48,
-                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onSurfaceVariant,
                                   ),
                                 ),
                         ),
@@ -144,7 +148,9 @@ class PopularCarousel extends StatelessWidget {
                                 style: TextStyle(
                                   fontWeight: FontWeight.w600,
                                   fontSize: 13,
-                                  color: Theme.of(context).colorScheme.onSurface,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurface,
                                 ),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -152,9 +158,9 @@ class PopularCarousel extends StatelessWidget {
                               const SizedBox(height: 3),
                               Text(
                                 event.formattedDate,
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      fontSize: 11,
-                                    ),
+                                style: Theme.of(
+                                  context,
+                                ).textTheme.bodySmall?.copyWith(fontSize: 11),
                               ),
                             ],
                           ),
@@ -171,4 +177,3 @@ class PopularCarousel extends StatelessWidget {
     );
   }
 }
-

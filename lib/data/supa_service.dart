@@ -21,7 +21,11 @@ class SupaService {
     DateTime nextWeekendDay(DateTime base, int weekday) {
       int diff = (weekday - base.weekday) % 7;
       if (diff <= 0) diff += 7;
-      return DateTime(base.year, base.month, base.day).add(Duration(days: diff));
+      return DateTime(
+        base.year,
+        base.month,
+        base.day,
+      ).add(Duration(days: diff));
     }
 
     return [
@@ -35,7 +39,8 @@ class SupaService {
         start: DateTime(now.year, now.month, now.day, 21, 30),
         end: DateTime(now.year, now.month, now.day, 23, 30),
         isFree: true,
-        imageUrl: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop',
+        imageUrl:
+            'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop',
       ),
       EventItem(
         id: '2',
@@ -44,10 +49,17 @@ class SupaService {
         categoryId: 'motor',
         categoryName: 'Motor',
         place: 'Plaza de España, Medina/Vejer',
-        start: nextWeekendDay(now, DateTime.saturday).add(const Duration(hours: 10)),
-        end: nextWeekendDay(now, DateTime.saturday).add(const Duration(hours: 18)),
+        start: nextWeekendDay(
+          now,
+          DateTime.saturday,
+        ).add(const Duration(hours: 10)),
+        end: nextWeekendDay(
+          now,
+          DateTime.saturday,
+        ).add(const Duration(hours: 18)),
         isFree: true,
-        imageUrl: 'https://images.unsplash.com/photo-1483721310020-03333e577078?q=80&w=1200&auto=format&fit=crop',
+        imageUrl:
+            'https://images.unsplash.com/photo-1483721310020-03333e577078?q=80&w=1200&auto=format&fit=crop',
       ),
       EventItem(
         id: '3',
@@ -56,10 +68,17 @@ class SupaService {
         categoryId: 'mercados',
         categoryName: 'Mercados',
         place: 'Paseo marítimo, Zahara',
-        start: nextWeekendDay(now, DateTime.sunday).add(const Duration(hours: 11)),
-        end: nextWeekendDay(now, DateTime.sunday).add(const Duration(hours: 15)),
+        start: nextWeekendDay(
+          now,
+          DateTime.sunday,
+        ).add(const Duration(hours: 11)),
+        end: nextWeekendDay(
+          now,
+          DateTime.sunday,
+        ).add(const Duration(hours: 15)),
         isFree: true,
-        imageUrl: 'https://images.unsplash.com/photo-1565011691358-7f4e6c2b0b59?q=80&w=1200&auto=format&fit=crop',
+        imageUrl:
+            'https://images.unsplash.com/photo-1565011691358-7f4e6c2b0b59?q=80&w=1200&auto=format&fit=crop',
       ),
     ];
   }
@@ -108,8 +127,7 @@ class SupaService {
         if (e.cityId != cityId) return false;
         if (categoryId == null || categoryId == 'all') return true;
         return e.categoryId == categoryId;
-      }).toList()
-        ..sort((a, b) => a.start.compareTo(b.start));
+      }).toList()..sort((a, b) => a.start.compareTo(b.start));
       return data;
     }
 
@@ -125,16 +143,16 @@ class SupaService {
     // Encadenamos TODO en una sola expresión para evitar choques de tipos
     final rows = (catName != null)
         ? await Supabase.instance.client
-        .from('events')
-        .select(columns)
-        .filter('town', 'eq', town)
-        .filter('category', 'eq', catName)
-        .order('starts_at')
+              .from('events')
+              .select(columns)
+              .filter('town', 'eq', town)
+              .filter('category', 'eq', catName)
+              .order('starts_at')
         : await Supabase.instance.client
-        .from('events')
-        .select(columns)
-        .filter('town', 'eq', town)
-        .order('starts_at');
+              .from('events')
+              .select(columns)
+              .filter('town', 'eq', town)
+              .order('starts_at');
 
     return (rows as List<dynamic>).map((raw) {
       final map = raw as Map<String, dynamic>;
@@ -149,7 +167,9 @@ class SupaService {
         categoryName: cat,
         place: (map['place'] ?? '').toString(),
         start: DateTime.parse(map['starts_at'].toString()),
-        end: DateTime.parse(map['starts_at'].toString()).add(const Duration(hours: 2)),
+        end: DateTime.parse(
+          map['starts_at'].toString(),
+        ).add(const Duration(hours: 2)),
         isFree: true,
         imageUrl: map['image_url'] as String?,
       );
@@ -162,7 +182,11 @@ class EventBuckets {
   final List<EventItem> today;
   final List<EventItem> weekend;
   final List<EventItem> nextDays;
-  EventBuckets({required this.today, required this.weekend, required this.nextDays});
+  EventBuckets({
+    required this.today,
+    required this.weekend,
+    required this.nextDays,
+  });
 }
 
 EventBuckets splitByDate(List<EventItem> all) {
@@ -179,10 +203,19 @@ EventBuckets splitByDate(List<EventItem> all) {
   final weekendStart = nextWeekendDay(now, DateTime.saturday);
   final weekendEnd = nextWeekendDay(now, DateTime.monday);
 
-  final today = all.where((e) => e.start.isAfter(today0) && e.start.isBefore(today1)).toList()
-    ..sort((a, b) => a.start.compareTo(b.start));
-  final weekend = all.where((e) => e.start.isAfter(weekendStart) && e.start.isBefore(weekendEnd)).toList()
-    ..sort((a, b) => a.start.compareTo(b.start));
+  final today =
+      all
+          .where((e) => e.start.isAfter(today0) && e.start.isBefore(today1))
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
+  final weekend =
+      all
+          .where(
+            (e) =>
+                e.start.isAfter(weekendStart) && e.start.isBefore(weekendEnd),
+          )
+          .toList()
+        ..sort((a, b) => a.start.compareTo(b.start));
   final nextDays = all.where((e) => e.start.isAfter(today1)).toList()
     ..sort((a, b) => a.start.compareTo(b.start));
 

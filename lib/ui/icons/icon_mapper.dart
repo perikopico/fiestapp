@@ -27,4 +27,3 @@ IconData iconFromName(String? name) {
       return Icons.event; // fallback
   }
 }
-

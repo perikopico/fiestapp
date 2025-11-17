@@ -11,11 +11,10 @@ class EventsRepository {
   }) async {
     print('fetchNearby(): lat=$lat, lng=$lng, radiusKm=$radiusKm');
 
-    final res = await _client.rpc('events_within_radius', params: {
-      'p_lat': lat,
-      'p_lng': lng,
-      'p_radius_km': radiusKm,
-    });
+    final res = await _client.rpc(
+      'events_within_radius',
+      params: {'p_lat': lat, 'p_lng': lng, 'p_radius_km': radiusKm},
+    );
 
     if (res is! List) {
       print('fetchNearby(): respuesta no es List -> $res');
@@ -28,4 +27,3 @@ class EventsRepository {
     return data.map((m) => Event.fromMap(m)).toList();
   }
 }
-

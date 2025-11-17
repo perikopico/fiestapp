@@ -7,11 +7,7 @@ class UpcomingList extends StatelessWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
 
-  const UpcomingList({
-    super.key,
-    required this.events,
-    this.onClearFilters,
-  });
+  const UpcomingList({super.key, required this.events, this.onClearFilters});
 
   @override
   Widget build(BuildContext context) {
@@ -56,9 +52,9 @@ class UpcomingList extends StatelessWidget {
           children: [
             Text(
               'Próximos eventos',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
             if (onClearFilters != null)
               TextButton(
@@ -77,7 +73,7 @@ class UpcomingList extends StatelessWidget {
             final event = events[index];
             final isMobile = MediaQuery.of(context).size.width < 600;
             final imageSize = isMobile ? 64.0 : 72.0;
-            
+
             return Card(
               margin: EdgeInsets.zero,
               elevation: 0.3,
@@ -100,7 +96,8 @@ class UpcomingList extends StatelessWidget {
                     children: [
                       ClipRRect(
                         borderRadius: BorderRadius.circular(12),
-                        child: event.imageUrl != null && event.imageUrl!.isNotEmpty
+                        child:
+                            event.imageUrl != null && event.imageUrl!.isNotEmpty
                             ? Image.network(
                                 event.imageUrl!,
                                 width: imageSize,
@@ -111,13 +108,17 @@ class UpcomingList extends StatelessWidget {
                                     width: imageSize,
                                     height: imageSize,
                                     decoration: BoxDecoration(
-                                      color: Theme.of(context).colorScheme.surfaceVariant,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.surfaceVariant,
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                     child: Icon(
                                       iconFromName(event.categoryIcon),
                                       size: imageSize * 0.7,
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                                   );
                                 },
@@ -126,13 +127,17 @@ class UpcomingList extends StatelessWidget {
                                 width: imageSize,
                                 height: imageSize,
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.surfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceVariant,
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Icon(
                                   iconFromName(event.categoryIcon),
                                   size: imageSize * 0.7,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                               ),
                       ),
@@ -151,12 +156,17 @@ class UpcomingList extends StatelessWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
-                            if (event.cityName != null || event.place != null) ...[
+                            if (event.cityName != null ||
+                                event.place != null) ...[
                               const SizedBox(height: 4),
                               Text(
                                 '${event.cityName ?? ''}${event.cityName != null && event.place != null ? ' · ' : ''}${event.place ?? ''}',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                style: Theme.of(context).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withOpacity(0.7),
                                     ),
                               ),
                             ],
@@ -164,11 +174,30 @@ class UpcomingList extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Text(
-                        event.formattedTime,
-                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
-                            ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            event.formattedDay,
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant
+                                      .withOpacity(0.8),
+                                ),
+                          ),
+                          Text(
+                            event.formattedTime,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant
+                                      .withOpacity(0.8),
+                                ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
@@ -181,4 +210,3 @@ class UpcomingList extends StatelessWidget {
     );
   }
 }
-

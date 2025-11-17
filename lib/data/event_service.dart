@@ -14,10 +14,7 @@ class EventService {
           .map((e) => Event.fromMap(e as Map<String, dynamic>))
           .toList();
     } catch (e) {
-      throw Exception(
-        'Error al obtener eventos: ${e.toString()}',
-      );
+      throw Exception('Error al obtener eventos: ${e.toString()}');
     }
   }
 }
-

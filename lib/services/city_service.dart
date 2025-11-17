@@ -71,11 +71,10 @@ class CityService {
     required double lng,
     double radiusKm = 25,
   }) async {
-    final dynamic res = await supa.rpc('cities_within_radius', params: {
-      'center_lat': lat,
-      'center_lng': lng,
-      'radius_km': radiusKm,
-    });
+    final dynamic res = await supa.rpc(
+      'cities_within_radius',
+      params: {'center_lat': lat, 'center_lng': lng, 'radius_km': radiusKm},
+    );
 
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((m) => City.fromMap(m)).toList();
@@ -112,4 +111,3 @@ class CityService {
     return null;
   }
 }
-

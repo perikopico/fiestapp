@@ -38,7 +38,10 @@ class CityRadioToggle extends StatelessWidget {
                 bottomLeft: Radius.circular(12),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   color: isRadius
                       ? Theme.of(context).colorScheme.primaryContainer
@@ -68,7 +71,9 @@ class CityRadioToggle extends StatelessWidget {
                     Text(
                       'Radio',
                       style: TextStyle(
-                        fontWeight: isRadius ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight: isRadius
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                         color: isRadius
                             ? Theme.of(context).colorScheme.onPrimaryContainer
                             : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -94,7 +99,10 @@ class CityRadioToggle extends StatelessWidget {
                 bottomRight: Radius.circular(12),
               ),
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                padding: const EdgeInsets.symmetric(
+                  vertical: 12,
+                  horizontal: 16,
+                ),
                 decoration: BoxDecoration(
                   color: isCity
                       ? Theme.of(context).colorScheme.primaryContainer
@@ -124,7 +132,9 @@ class CityRadioToggle extends StatelessWidget {
                     Text(
                       'Ciudad',
                       style: TextStyle(
-                        fontWeight: isCity ? FontWeight.w600 : FontWeight.normal,
+                        fontWeight: isCity
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                         color: isCity
                             ? Theme.of(context).colorScheme.onPrimaryContainer
                             : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -140,4 +150,3 @@ class CityRadioToggle extends StatelessWidget {
     );
   }
 }
-

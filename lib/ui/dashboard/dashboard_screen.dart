@@ -25,6 +25,8 @@ import 'package:intl/intl.dart';
 import '../../utils/dashboard_utils.dart';
 import '../../main.dart' show appThemeMode;
 import '../events/event_submit_screen.dart';
+import '../admin/pending_events_screen.dart';
+import '../../config/admin_config.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -66,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isToday = false;
   bool _isWeekend = false;
   bool _isThisMonth = false;
-  
+
   // Nearby events state
   double _radiusKm = 5;
   double? _userLat = 36.1927; // Barbate (temporal)
@@ -74,13 +76,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isNearbyLoading = false;
   List<model.Event> _nearbyEvents = [];
   List<City> _nearbyCities = [];
-  
+
   // Legacy search state (mantener por compatibilidad)
   String _searchQuery = '';
   Timer? _searchDebouncer;
   bool _isSearching = false;
   List<Event> _searchResults = [];
-  
+
   // Legacy city search state (mantener por compatibilidad)
   final _citySearchCtrl = TextEditingController();
   String _citySearchQuery = '';
@@ -124,7 +126,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _reloadEvents();
   }
 
-
   Future<void> _reloadEvents() async {
     setState(() {
       _isLoading = true;
@@ -132,15 +133,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      final List<int>? cityIds =
-          _mode == LocationMode.city
-              ? (_selectedCityIds.isNotEmpty
-                    ? _selectedCityIds.toList()
-                    : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
-              : null;
+      final List<int>? cityIds = _mode == LocationMode.city
+          ? (_selectedCityIds.isNotEmpty
+                ? _selectedCityIds.toList()
+                : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
+          : null;
 
-      final double? radius =
-          _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
+      final double? radius = _mode == LocationMode.radius && _radiusKm > 0
+          ? _radiusKm
+          : null;
 
       // Crear objeto center para el modo radio
       // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
@@ -182,7 +183,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _error = e.toString();
         _isLoading = false;
       });
-      
+
       // Mostrar SnackBar con error y botón de reintentar
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -209,7 +210,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // si no hay selección, seleccionar la primera o mantener null (tu criterio)
       _selectedCityId ??= _cities.isNotEmpty ? _cities.first.id : null;
       if (_selectedCityId != null) {
-        final city = _cities.firstWhere((c) => c.id == _selectedCityId, orElse: () => _cities.first);
+        final city = _cities.firstWhere(
+          (c) => c.id == _selectedCityId,
+          orElse: () => _cities.first,
+        );
         _selectedCityName = city.name;
         _selectedCityIds = {city.id};
       }
@@ -250,15 +254,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _isLoading = true;
     });
     try {
-      final List<int>? cityIds =
-          _mode == LocationMode.city
-              ? (_selectedCityIds.isNotEmpty
-                    ? _selectedCityIds.toList()
-                    : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
-              : null;
+      final List<int>? cityIds = _mode == LocationMode.city
+          ? (_selectedCityIds.isNotEmpty
+                ? _selectedCityIds.toList()
+                : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
+          : null;
 
-      final double? radius =
-          _mode == LocationMode.radius && _radiusKm > 0 ? _radiusKm : null;
+      final double? radius = _mode == LocationMode.radius && _radiusKm > 0
+          ? _radiusKm
+          : null;
 
       // Crear objeto center para el modo radio
       // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
@@ -288,7 +292,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudieron cargar eventos del rango seleccionado')),
+        const SnackBar(
+          content: Text('No se pudieron cargar eventos del rango seleccionado'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -362,20 +368,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
-      children: _cities.map((city) => ChoiceChip(
-        label: Text(city.name, style: Theme.of(context).textTheme.labelLarge),
-        selected: _selectedCityId == city.id,
-        onSelected: (_) {
-          setState(() {
-            _selectedCityId = city.id;
-            _selectedCityName = city.name;
-            _selectedCityIds = {city.id};
-          });
-          _reloadEvents();
-        },
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-        visualDensity: VisualDensity.compact,
-      )).toList(),
+      children: _cities
+          .map(
+            (city) => ChoiceChip(
+              label: Text(
+                city.name,
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              selected: _selectedCityId == city.id,
+              onSelected: (_) {
+                setState(() {
+                  _selectedCityId = city.id;
+                  _selectedCityName = city.name;
+                  _selectedCityIds = {city.id};
+                });
+                _reloadEvents();
+              },
+              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              visualDensity: VisualDensity.compact,
+            ),
+          )
+          .toList(),
     );
   }
 
@@ -400,20 +413,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),
-        ..._nearbyCities.map((city) => ChoiceChip(
-          label: Text(city.name, style: Theme.of(context).textTheme.labelLarge),
-          selected: _selectedCityId == city.id,
-          onSelected: (_) {
-            setState(() {
-              _selectedCityId = city.id;
-              _selectedCityName = city.name;
-              _selectedCityIds = {city.id};
-            });
-            _reloadEvents();
-          },
-          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          visualDensity: VisualDensity.compact,
-        )),
+        ..._nearbyCities.map(
+          (city) => ChoiceChip(
+            label: Text(
+              city.name,
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            selected: _selectedCityId == city.id,
+            onSelected: (_) {
+              setState(() {
+                _selectedCityId = city.id;
+                _selectedCityName = city.name;
+                _selectedCityIds = {city.id};
+              });
+              _reloadEvents();
+            },
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            visualDensity: VisualDensity.compact,
+          ),
+        ),
       ],
     );
   }
@@ -422,8 +440,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // En modo Ciudad, siempre mostramos las ciudades de la provincia, no las del radio
     return _buildProvinceCityChips();
   }
-
-
 
   String _getSelectedCategoryName() {
     if (_selectedCategoryId == null) return 'Todas las categorías';
@@ -436,21 +452,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _getSelectedDateLabel() {
     if (_fromDate == null && _toDate == null) return '';
-    
+
     // Si hay un rango personalizado, mostrar formato corto
     if (_fromDate != null && _toDate != null) {
       final fromTxt = _df.format(_fromDate!);
       final toTxt = _df.format(_toDate!);
       return '$fromTxt → $toTxt';
     }
-    
+
     return '';
   }
 
   String _getFiltersSubtitle() {
-    final categoryName = _selectedCategoryId != null ? _getSelectedCategoryName() : null;
+    final categoryName = _selectedCategoryId != null
+        ? _getSelectedCategoryName()
+        : null;
     final hasDateFilter = _fromDate != null || _toDate != null;
-    
+
     // Detectar el preset de fecha usando los estados existentes o comparando fechas
     String? dateLabel;
     if (hasDateFilter) {
@@ -465,7 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         dateLabel = _getSelectedDateLabel();
       }
     }
-    
+
     // Construir el subtítulo
     if (categoryName == null && dateLabel == null) {
       return 'Categoría y fecha';
@@ -480,7 +498,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCategoryChipsContent() {
     if (_categories.isEmpty) return const SizedBox.shrink();
-    
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Wrap(
@@ -519,7 +537,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
     );
   }
-
 
   Widget _buildRadiusAndLocationContent() {
     return _NearbyControlWidget(
@@ -564,8 +581,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-
-
   Future<void> _runSearch(String q) async {
     setState(() {
       _isSearching = true;
@@ -574,7 +589,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     final events = await EventService.instance.searchEvents(
       query: q,
-      cityId: _selectedCityId,       // respeta filtro si hay
+      cityId: _selectedCityId, // respeta filtro si hay
       // provinceId: ... (si lo tienes en estado)
       // lat/lng/radius si quieres mezclar con "cerca de ti" más adelante
     );
@@ -627,7 +642,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    final pos = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
     setState(() {
       _userLat = pos.latitude;
       _userLng = pos.longitude;
@@ -636,8 +653,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _loadNearbyCities();
   }
 
+  Future<void> _openAdminPanel() async {
+    final pinController = TextEditingController();
+    final ctx = context;
+
+    final result = await showDialog<bool>(
+      context: ctx,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return AlertDialog(
+          title: const Text('Acceso administrador'),
+          content: TextField(
+            controller: pinController,
+            keyboardType: TextInputType.number,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Introduce el PIN'),
+            autofocus: true,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogCtx).pop(false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final entered = pinController.text.trim();
+                if (entered == kAdminPin) {
+                  Navigator.of(dialogCtx).pop(true);
+                } else {
+                  ScaffoldMessenger.of(ctx).showSnackBar(
+                    const SnackBar(
+                      content: Text('PIN incorrecto'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              },
+              child: const Text('Entrar'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == true) {
+      if (!mounted) return;
+      Navigator.of(
+        ctx,
+      ).push(MaterialPageRoute(builder: (_) => const PendingEventsScreen()));
+    }
+  }
+
   void _openSearchBottomSheet() {
-    final searchController = TextEditingController(text: _searchEventTerm ?? '');
+    final searchController = TextEditingController(
+      text: _searchEventTerm ?? '',
+    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -659,17 +731,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
             Text(
               'Buscar eventos',
               style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: searchController,
               autofocus: true,
               textInputAction: TextInputAction.search,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
                 prefixIcon: Icon(
@@ -817,7 +887,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           context: context,
                           firstDate: first,
                           lastDate: last,
-                          initialDateRange: (_fromDate != null && _toDate != null)
+                          initialDateRange:
+                              (_fromDate != null && _toDate != null)
                               ? DateTimeRange(start: _fromDate!, end: _toDate!)
                               : null,
                         );
@@ -828,7 +899,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             _isWeekend = false;
                             _isThisMonth = false;
                           });
-                          _reloadWithDateRange(from: picked.start, to: picked.end);
+                          _reloadWithDateRange(
+                            from: picked.start,
+                            to: picked.end,
+                          );
                         }
                       },
                     ),
@@ -857,15 +931,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   // Categorías
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Categoría',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         if (_categories.isEmpty)
@@ -881,8 +957,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                   Icons.grid_view,
                                   size: 16,
                                   color: _selectedCategoryId == null
-                                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.onPrimaryContainer
+                                      : Theme.of(
+                                          context,
+                                        ).colorScheme.onSurfaceVariant,
                                 ),
                                 label: const Text('Todas'),
                                 selected: _selectedCategoryId == null,
@@ -894,27 +974,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                 },
                               ),
                               // Chips de categorías
-                              ..._categories.where((Category c) => c.id != null).map((category) {
-                                final isSelected = category.id == _selectedCategoryId;
-                                final icon = iconFromName(category.icon);
-                                return FilterChip(
-                                  avatar: Icon(
-                                    icon,
-                                    size: 16,
-                                    color: isSelected
-                                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                                  ),
-                                  label: Text(category.name),
-                                  selected: isSelected,
-                                  onSelected: (_) {
-                                    setState(() {
-                                      _selectedCategoryId = isSelected ? null : category.id;
-                                    });
-                                    _reloadEvents();
-                                  },
-                                );
-                              }),
+                              ..._categories
+                                  .where((Category c) => c.id != null)
+                                  .map((category) {
+                                    final isSelected =
+                                        category.id == _selectedCategoryId;
+                                    final icon = iconFromName(category.icon);
+                                    return FilterChip(
+                                      avatar: Icon(
+                                        icon,
+                                        size: 16,
+                                        color: isSelected
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimaryContainer
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
+                                      ),
+                                      label: Text(category.name),
+                                      selected: isSelected,
+                                      onSelected: (_) {
+                                        setState(() {
+                                          _selectedCategoryId = isSelected
+                                              ? null
+                                              : category.id;
+                                        });
+                                        _reloadEvents();
+                                      },
+                                    );
+                                  }),
                             ],
                           ),
                       ],
@@ -923,15 +1012,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 12),
                   // Rango de fecha
                   Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           'Rango de fecha',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         const SizedBox(height: 8),
                         Row(
@@ -953,8 +1044,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                     context: context,
                                     firstDate: first,
                                     lastDate: last,
-                                    initialDateRange: (_fromDate != null && _toDate != null)
-                                        ? DateTimeRange(start: _fromDate!, end: _toDate!)
+                                    initialDateRange:
+                                        (_fromDate != null && _toDate != null)
+                                        ? DateTimeRange(
+                                            start: _fromDate!,
+                                            end: _toDate!,
+                                          )
                                         : null,
                                   );
                                   if (picked != null) {
@@ -964,7 +1059,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                                       _isWeekend = false;
                                       _isThisMonth = false;
                                     });
-                                    _reloadWithDateRange(from: picked.start, to: picked.end);
+                                    _reloadWithDateRange(
+                                      from: picked.start,
+                                      to: picked.end,
+                                    );
                                   }
                                 },
                               ),
@@ -1000,11 +1098,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _buildFiltersSubtitle() {
     final parts = <String>[];
-    
+
     if (_selectedCategoryId != null) {
       parts.add(_getSelectedCategoryName());
     }
-    
+
     if (_fromDate != null && _toDate != null) {
       parts.add('${_df.format(_fromDate!)} → ${_df.format(_toDate!)}');
     } else if (_isToday) {
@@ -1014,7 +1112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     } else if (_isThisMonth) {
       parts.add('Este mes');
     }
-    
+
     return parts.isEmpty ? 'Todos los filtros' : parts.join(' · ');
   }
 
@@ -1039,11 +1137,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Text(
                   _error!,
                   textAlign: TextAlign.center,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1061,8 +1157,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       appBar: AppBar(
         title: const Text('Fiestapp'),
         elevation: 0,
-        actions: const [
-          ThemeModeToggleAction(),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.admin_panel_settings),
+            tooltip: 'Moderación',
+            onPressed: _openAdminPanel,
+          ),
+          const ThemeModeToggleAction(),
         ],
       ),
       body: SafeArea(
@@ -1070,149 +1171,155 @@ class _DashboardScreenState extends State<DashboardScreen> {
           onRefresh: _reloadEvents,
           child: CustomScrollView(
             slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                    child: DashboardHero(featured: _featuredEvent),
-                  ),
-                  if (!_isLoading) ...[
-                    _buildFilterPanel(),
-                  ],
-                  // Resultados de búsqueda
-                  if (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ...[
-                    const SizedBox(height: 8),
+              SliverToBoxAdapter(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Resultados para "$_searchEventTerm"', style: Theme.of(context).textTheme.titleMedium),
-                        ],
-                      ),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                      child: DashboardHero(featured: _featuredEvent),
                     ),
-                    const SizedBox(height: 8),
-                  ],
-                  // Próximos eventos
-                  if (_isLoading)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: ListView.separated(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          physics: const NeverScrollableScrollPhysics(),
-                          shrinkWrap: true,
-                          itemCount: 4,
-                          separatorBuilder: (BuildContext context, int index) =>
-                              const SizedBox(height: 12),
-                          itemBuilder: (BuildContext context, int index) {
-                            return const Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                ShimmerBlock(height: 180),
-                                ShimmerBlock(height: 16, width: 180),
-                                ShimmerBlock(height: 14, width: 120),
-                              ],
-                            );
-                          },
+                    if (!_isLoading) ...[_buildFilterPanel()],
+                    // Resultados de búsqueda
+                    if (_searchEventTerm != null &&
+                        _searchEventTerm!.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Resultados para "$_searchEventTerm"',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ],
                         ),
                       ),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-                      child: UpcomingEventsSection(
-                        events: _upcomingEvents,
-                        selectedCategoryId: _selectedCategoryId,
-                        // En modo Radio no aplicamos filtro por ciudad
-                        selectedCityId: _mode == LocationMode.city ? _selectedCityId : null,
-                        onClearFilters: _clearFilters,
-                      ),
-                    ),
-                  // Popular esta semana
-                  if (_isLoading)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: SizedBox(
-                          height: 230,
+                      const SizedBox(height: 8),
+                    ],
+                    // Próximos eventos
+                    if (_isLoading)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                           child: ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            scrollDirection: Axis.horizontal,
-                            itemCount: 5,
-                            separatorBuilder: (BuildContext context, int index) =>
-                                const SizedBox(width: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                            physics: const NeverScrollableScrollPhysics(),
+                            shrinkWrap: true,
+                            itemCount: 4,
+                            separatorBuilder:
+                                (BuildContext context, int index) =>
+                                    const SizedBox(height: 12),
                             itemBuilder: (BuildContext context, int index) {
-                              return const SizedBox(
-                                width: 280,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    ShimmerBlock(height: 150),
-                                    ShimmerBlock(height: 16, width: 160),
-                                    ShimmerBlock(height: 14, width: 120),
-                                  ],
-                                ),
+                              return const Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  ShimmerBlock(height: 180),
+                                  ShimmerBlock(height: 16, width: 180),
+                                  ShimmerBlock(height: 14, width: 120),
+                                ],
                               );
                             },
                           ),
                         ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                        child: UpcomingEventsSection(
+                          events: _upcomingEvents,
+                          selectedCategoryId: _selectedCategoryId,
+                          // En modo Radio no aplicamos filtro por ciudad
+                          selectedCityId: _mode == LocationMode.city
+                              ? _selectedCityId
+                              : null,
+                          onClearFilters: _clearFilters,
+                        ),
                       ),
-                    )
-                  else
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                      child: PopularThisWeekSection(
-                        events: _featuredEvents,
-                        onClearFilters: _clearFilters,
+                    // Popular esta semana
+                    if (_isLoading)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceVariant,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: SizedBox(
+                            height: 230,
+                            child: ListView.separated(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              scrollDirection: Axis.horizontal,
+                              itemCount: 5,
+                              separatorBuilder:
+                                  (BuildContext context, int index) =>
+                                      const SizedBox(width: 12),
+                              itemBuilder: (BuildContext context, int index) {
+                                return const SizedBox(
+                                  width: 280,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      ShimmerBlock(height: 150),
+                                      ShimmerBlock(height: 16, width: 160),
+                                      ShimmerBlock(height: 14, width: 120),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                        child: PopularThisWeekSection(
+                          events: _featuredEvents,
+                          onClearFilters: _clearFilters,
+                        ),
                       ),
-                    ),
-                  // Sección "Cerca de ti" (solo en modo Radio)
-                  if (_isNearbyLoading)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                      child: ShimmerBlock(
-                        height: 80,
-                      ),
-                    )
-                  else if (_mode == LocationMode.radius)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
-                      child: NearbyEventsSection(
-                        events: _nearbyEvents,
-                      ),
-                    )
-                  else
-                    const SizedBox.shrink(),
-                  const SizedBox(height: 24),
-                ],
+                    // Sección "Cerca de ti" (solo en modo Radio)
+                    if (_isNearbyLoading)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                        child: ShimmerBlock(height: 80),
+                      )
+                    else if (_mode == LocationMode.radius)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                        child: NearbyEventsSection(events: _nearbyEvents),
+                      )
+                    else
+                      const SizedBox.shrink(),
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const EventSubmitScreen(),
-            ),
-          );
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const EventSubmitScreen()));
         },
         icon: const Icon(Icons.add),
         label: const Text('Publicar evento'),
@@ -1262,10 +1369,14 @@ class UpcomingEventsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Aplicar filtros combinados: ciudad y categoría (null-safe)
-    final filtered = events.where((e) =>
-      (selectedCityId == null || e.cityId == selectedCityId) &&
-      (selectedCategoryId == null || e.categoryId == selectedCategoryId)
-    ).toList();
+    final filtered = events
+        .where(
+          (e) =>
+              (selectedCityId == null || e.cityId == selectedCityId) &&
+              (selectedCategoryId == null ||
+                  e.categoryId == selectedCategoryId),
+        )
+        .toList();
 
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1273,10 +1384,7 @@ class UpcomingEventsSection extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: UpcomingList(
-        events: filtered,
-        onClearFilters: onClearFilters,
-      ),
+      child: UpcomingList(events: filtered, onClearFilters: onClearFilters),
     );
   }
 }
@@ -1328,10 +1436,7 @@ class PopularThisWeekSection extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: PopularCarousel(
-        events: events,
-        onClearFilters: onClearFilters,
-      ),
+      child: PopularCarousel(events: events, onClearFilters: onClearFilters),
     );
   }
 }
@@ -1339,10 +1444,7 @@ class PopularThisWeekSection extends StatelessWidget {
 class NearbyEventsSection extends StatelessWidget {
   final List<model.Event> events;
 
-  const NearbyEventsSection({
-    super.key,
-    required this.events,
-  });
+  const NearbyEventsSection({super.key, required this.events});
 
   @override
   Widget build(BuildContext context) {
@@ -1359,8 +1461,8 @@ class NearbyEventsSection extends StatelessWidget {
                 child: Text(
                   'No hay eventos en este radio.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),
@@ -1380,22 +1482,26 @@ class NearbyEventsSection extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: UpcomingList(
-                    events: events.map((e) => Event(
-                      id: e.id,
-                      title: e.title,
-                      startsAt: e.startsAt,
-                      cityName: e.cityName,
-                      categoryName: e.categoryName,
-                      categoryIcon: e.categoryIcon,
-                      categoryColor: e.categoryColor,
-                      place: e.place,
-                      imageUrl: e.imageUrl,
-                      categoryId: e.categoryId,
-                      cityId: e.cityId,
-                      isFree: e.isFree,
-                      mapsUrl: e.mapsUrl,
-                      description: e.description,
-                    )).toList(),
+                    events: events
+                        .map(
+                          (e) => Event(
+                            id: e.id,
+                            title: e.title,
+                            startsAt: e.startsAt,
+                            cityName: e.cityName,
+                            categoryName: e.categoryName,
+                            categoryIcon: e.categoryIcon,
+                            categoryColor: e.categoryColor,
+                            place: e.place,
+                            imageUrl: e.imageUrl,
+                            categoryId: e.categoryId,
+                            cityId: e.cityId,
+                            isFree: e.isFree,
+                            mapsUrl: e.mapsUrl,
+                            description: e.description,
+                          ),
+                        )
+                        .toList(),
                   ),
                 ),
               ],
@@ -1588,12 +1694,11 @@ class _FilterHeaderWidget extends StatelessWidget {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
-                    children: [
-                      ...buildCityChips(context),
-                    ]
-                        .expand((w) => [w, const SizedBox(width: 8)])
-                        .toList()
-                      ..removeLast(),
+                    children:
+                        [...buildCityChips(context)]
+                            .expand((w) => [w, const SizedBox(width: 8)])
+                            .toList()
+                          ..removeLast(),
                   ),
                 ),
               ),
@@ -1617,7 +1722,9 @@ class _FilterHeaderWidget extends StatelessWidget {
                     );
                   }
                   // Chips de categorías
-                  final category = categories.where((Category c) => c.id != null).toList()[i - 1];
+                  final category = categories
+                      .where((Category c) => c.id != null)
+                      .toList()[i - 1];
                   final selected = selectedCategoryId == category.id;
                   final icon = iconFromName(category.icon);
                   return FilterChip(
@@ -1628,7 +1735,8 @@ class _FilterHeaderWidget extends StatelessWidget {
                   );
                 },
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemCount: categories.where((Category c) => c.id != null).length + 1,
+                itemCount:
+                    categories.where((Category c) => c.id != null).length + 1,
               ),
             ),
           ],
@@ -1670,15 +1778,13 @@ class _NearbyControlWidget extends StatelessWidget {
                         children: [
                           Text(
                             'Radio',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w500,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w500),
                           ),
                           Text(
                             '${radiusKm.toInt()} km',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -1686,21 +1792,22 @@ class _NearbyControlWidget extends StatelessWidget {
                       SliderTheme(
                         data: SliderTheme.of(context).copyWith(
                           trackHeight: 6,
-                          thumbShape:
-                              const RoundSliderThumbShape(enabledThumbRadius: 9),
-                          overlayShape:
-                              const RoundSliderOverlayShape(overlayRadius: 18),
-                          activeTrackColor:
-                              Theme.of(context).colorScheme.primary,
-                          inactiveTrackColor: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.25),
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 9,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 18,
+                          ),
+                          activeTrackColor: Theme.of(
+                            context,
+                          ).colorScheme.primary,
+                          inactiveTrackColor: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.25),
                           thumbColor: Theme.of(context).colorScheme.primary,
-                          overlayColor: Theme.of(context)
-                              .colorScheme
-                              .primary
-                              .withOpacity(0.16),
+                          overlayColor: Theme.of(
+                            context,
+                          ).colorScheme.primary.withOpacity(0.16),
                         ),
                         child: Slider(
                           value: radiusKm,
@@ -1721,7 +1828,10 @@ class _NearbyControlWidget extends StatelessWidget {
                   icon: const Icon(Icons.location_on, size: 18),
                   label: const Text('Usar mi ubicación'),
                   style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 12,
+                    ),
                   ),
                 ),
               ],
@@ -1788,9 +1898,9 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
     };
 
     // Filtrar ciudades para mostrar solo nombres oficiales completos
-    final filteredCities = cities.where((city) => 
-      officialCityNames.contains(city.name)
-    ).toList();
+    final filteredCities = cities
+        .where((city) => officialCityNames.contains(city.name))
+        .toList();
 
     // Ordenar según el orden deseado
     filteredCities.sort((a, b) {
@@ -1871,7 +1981,11 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
   }
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: SizedBox.expand(
@@ -1888,12 +2002,11 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
-                    children: [
-                      ...buildCityChips(context),
-                    ]
-                        .expand((w) => [w, const SizedBox(width: 8)])
-                        .toList()
-                      ..removeLast(),
+                    children:
+                        [...buildCityChips(context)]
+                            .expand((w) => [w, const SizedBox(width: 8)])
+                            .toList()
+                          ..removeLast(),
                   ),
                 ),
               ),
@@ -1905,12 +2018,11 @@ class _FilterHeaderDelegate extends SliverPersistentHeaderDelegate {
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   child: Row(
-                    children: [
-                      ...buildCategoryChips(context),
-                    ]
-                        .expand((w) => [w, const SizedBox(width: 8)])
-                        .toList()
-                      ..removeLast(),
+                    children:
+                        [...buildCategoryChips(context)]
+                            .expand((w) => [w, const SizedBox(width: 8)])
+                            .toList()
+                          ..removeLast(),
                   ),
                 ),
               ),
@@ -1953,7 +2065,11 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
   double get maxExtent => max;
 
   @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
     return Material(
       color: Theme.of(context).scaffoldBackgroundColor,
       child: SizedBox.expand(
@@ -1970,9 +2086,8 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
                       children: [
                         Text(
                           'A ${radiusKm.round()} km',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                fontWeight: FontWeight.w600,
-                              ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                         Slider(
                           value: radiusKm,
@@ -1992,7 +2107,10 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
                     icon: const Icon(Icons.location_on, size: 18),
                     label: const Text('Usar mi ubicación'),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 ],

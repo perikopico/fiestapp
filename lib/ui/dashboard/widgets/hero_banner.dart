@@ -41,10 +41,7 @@ class HeroBanner extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.35),
-                    Colors.transparent,
-                  ],
+                  colors: [Colors.black.withOpacity(0.35), Colors.transparent],
                 ),
               ),
             ),
@@ -60,10 +57,9 @@ class HeroBanner extends StatelessWidget {
                 Text(
                   subtitle,
                   style: TextStyle(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withOpacity(0.85),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withOpacity(0.85),
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -89,13 +85,13 @@ class HeroBanner extends StatelessWidget {
                   icon: const Icon(Icons.chevron_right, size: 18),
                   label: const Text('Ver eventos destacados'),
                   style: ElevatedButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     foregroundColor: const Color(0xFF5b351f),
                     backgroundColor: const Color(0xFFFFE9DC),
-                    textStyle: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
+                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
                     shape: const StadiumBorder(),
                     elevation: 0,
                   ),

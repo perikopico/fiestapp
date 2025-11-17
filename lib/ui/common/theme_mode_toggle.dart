@@ -26,5 +26,3 @@ class ThemeModeToggleAction extends StatelessWidget {
     );
   }
 }
-
-
