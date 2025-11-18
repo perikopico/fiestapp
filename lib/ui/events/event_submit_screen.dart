@@ -1,12 +1,19 @@
+import 'dart:io' show File;
+import 'dart:math';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../services/event_service.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/category.dart';
 import '../common/city_search_field.dart';
+import 'image_crop_screen.dart';
 
 class EventSubmitScreen extends StatelessWidget {
   const EventSubmitScreen({super.key});
@@ -51,6 +58,19 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   double? _lat;
   double? _lng;
 
+  // Imagen del evento
+  PlatformFile? _selectedImage;
+  File? _croppedImageFile; // Imagen recortada lista para subir
+  String? _uploadedImageUrl;
+  bool _isUploadingImage = false;
+  String _imageAlignment = 'center'; // valores posibles: 'top', 'center', 'bottom'
+
+  // Captcha
+  int _captchaA = 0;
+  int _captchaB = 0;
+  String _captchaUserAnswer = '';
+  String? _captchaError;
+
   // Programación diaria
   List<DateTime> _eventDays = [];
   final Map<DateTime, TextEditingController> _dailyProgramControllers = {};
@@ -59,6 +79,29 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   void initState() {
     super.initState();
     _loadData();
+    _generateCaptcha();
+  }
+
+  void _generateCaptcha() {
+    final rnd = Random();
+    setState(() {
+      _captchaA = rnd.nextInt(8) + 1; // 1..9
+      _captchaB = rnd.nextInt(8) + 1;
+      _captchaUserAnswer = '';
+      _captchaError = null;
+    });
+  }
+
+  bool _validateCaptcha() {
+    final expected = _captchaA + _captchaB;
+    final parsed = int.tryParse(_captchaUserAnswer.trim());
+    if (parsed == null || parsed != expected) {
+      setState(() {
+        _captchaError = 'Respuesta incorrecta';
+      });
+      return false;
+    }
+    return true;
   }
 
   @override
@@ -162,6 +205,247 @@ $dayProgram''';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error al cargar datos: ${e.toString()}')),
         );
+      }
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+    );
+    if (result != null && result.files.isNotEmpty) {
+      final pickedFile = result.files.first;
+      
+      // En web, usar bytes directamente
+      if (kIsWeb) {
+        if (pickedFile.bytes != null) {
+          // Para web, necesitamos convertir bytes a File temporal
+          // Por ahora, guardamos la referencia y procesaremos en el crop
+          setState(() {
+            _selectedImage = pickedFile;
+          });
+          // Abrir pantalla de recorte (para web necesitamos manejar bytes)
+          await _openCropScreenForWeb(pickedFile.bytes!);
+        }
+      } else {
+        // Para móvil/escritorio, usar path
+        if (pickedFile.path != null) {
+          final file = File(pickedFile.path!);
+          setState(() {
+            _selectedImage = pickedFile;
+          });
+          // Abrir pantalla de recorte
+          await _openCropScreen(file);
+        }
+      }
+    }
+  }
+
+  Future<void> _openCropScreen(File imageFile) async {
+    final croppedBytes = await Navigator.of(context).push<Uint8List>(
+      MaterialPageRoute(
+        builder: (_) => ImageCropScreen(
+          imageFile: imageFile,
+          aspectRatio: 16 / 9,
+        ),
+      ),
+    );
+
+    if (croppedBytes != null) {
+      try {
+        // Guardar imagen recortada en un archivo temporal
+        final tempDir = await getTemporaryDirectory();
+        final croppedFile = File('${tempDir.path}/cropped_event_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await croppedFile.writeAsBytes(croppedBytes);
+        
+        setState(() {
+          _croppedImageFile = croppedFile;
+          // Actualizar _selectedImage para mostrar el preview
+          _selectedImage = PlatformFile(
+            name: 'cropped_${_selectedImage?.name ?? 'image.jpg'}',
+            size: croppedBytes.length,
+            path: croppedFile.path,
+            bytes: null,
+          );
+        });
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('No se pudo procesar la imagen. Inténtalo de nuevo.'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _openCropScreenForWeb(Uint8List imageBytes) async {
+    // Para web, usar directamente los bytes sin crear archivos temporales
+    try {
+      // Crear un archivo temporal solo para pasar a ImageCropScreen
+      // En web, path_provider puede no funcionar, así que usamos un enfoque diferente
+      File? tempFile;
+      if (!kIsWeb) {
+        final tempDir = await getTemporaryDirectory();
+        tempFile = File('${tempDir.path}/temp_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await tempFile.writeAsBytes(imageBytes);
+      } else {
+        // En web, necesitamos crear un File desde bytes de otra manera
+        // Usaremos un enfoque que funcione en web: pasar los bytes directamente al crop screen
+        // Pero ImageCropScreen espera un File, así que creamos uno temporal en memoria
+        // Nota: En web, File puede no funcionar igual, así que ajustamos el enfoque
+        final tempDir = await getTemporaryDirectory();
+        tempFile = File('${tempDir.path}/temp_image_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await tempFile.writeAsBytes(imageBytes);
+      }
+      
+      final croppedBytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(
+          builder: (_) => ImageCropScreen(
+            imageFile: tempFile!,
+            aspectRatio: 16 / 9,
+          ),
+        ),
+      );
+
+      if (croppedBytes != null) {
+        // Guardar imagen recortada
+        if (!kIsWeb) {
+          final tempDir = await getTemporaryDirectory();
+          final croppedFile = File('${tempDir.path}/cropped_event_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await croppedFile.writeAsBytes(croppedBytes);
+          setState(() {
+            _croppedImageFile = croppedFile;
+            _selectedImage = PlatformFile(
+              name: 'cropped_${_selectedImage?.name ?? 'image.jpg'}',
+              size: croppedBytes.length,
+              path: croppedFile.path,
+              bytes: null,
+            );
+          });
+        } else {
+          // En web, guardar los bytes directamente sin crear archivo
+          final tempDir = await getTemporaryDirectory();
+          final croppedFile = File('${tempDir.path}/cropped_event_${DateTime.now().millisecondsSinceEpoch}.jpg');
+          await croppedFile.writeAsBytes(croppedBytes);
+          setState(() {
+            _croppedImageFile = croppedFile;
+            _selectedImage = PlatformFile(
+              name: 'cropped_${_selectedImage?.name ?? 'image.jpg'}',
+              size: croppedBytes.length,
+              path: null,
+              bytes: croppedBytes,
+            );
+          });
+        }
+      }
+      
+      // Limpiar archivo temporal
+      if (tempFile != null) {
+        try {
+          await tempFile.delete();
+        } catch (_) {}
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('No se pudo procesar la imagen. Inténtalo de nuevo.'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<String?> _uploadImageIfNeeded() async {
+    // Si hay imagen recortada, usar esa; si no, usar la original
+    if (_croppedImageFile == null && _selectedImage == null) {
+      return _uploadedImageUrl; // nada que subir
+    }
+
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      final supa = Supabase.instance.client;
+      final fileName =
+          'event_${DateTime.now().millisecondsSinceEpoch}_${_selectedImage?.name ?? 'image.jpg'}';
+
+      // Priorizar imagen recortada si existe
+      if (_croppedImageFile != null) {
+        // Usar la imagen recortada
+        if (kIsWeb) {
+          // Para web, leer bytes del archivo recortado
+          final bytes = await _croppedImageFile!.readAsBytes();
+          await supa.storage.from('event-images').uploadBinary(
+                fileName,
+                bytes,
+                fileOptions:
+                    const FileOptions(cacheControl: '3600', upsert: false),
+              );
+        } else {
+          // Para móvil/escritorio, usar el archivo directamente
+          await supa.storage.from('event-images').upload(
+                fileName,
+                _croppedImageFile!,
+                fileOptions:
+                    const FileOptions(cacheControl: '3600', upsert: false),
+              );
+        }
+      } else if (_selectedImage != null) {
+        // Fallback a imagen original si no hay recortada
+        final file = _selectedImage!;
+        if (kIsWeb) {
+          if (file.bytes == null) return null;
+          await supa.storage.from('event-images').uploadBinary(
+                fileName,
+                file.bytes!,
+                fileOptions:
+                    const FileOptions(cacheControl: '3600', upsert: false),
+              );
+        } else {
+          final path = file.path;
+          if (path == null) return null;
+          final ioFile = File(path);
+          await supa.storage.from('event-images').upload(
+                fileName,
+                ioFile,
+                fileOptions:
+                    const FileOptions(cacheControl: '3600', upsert: false),
+              );
+        }
+      }
+
+      final publicUrl =
+          supa.storage.from('event-images').getPublicUrl(fileName);
+
+      setState(() {
+        _uploadedImageUrl = publicUrl;
+      });
+
+      return publicUrl;
+    } catch (e) {
+      // Puedes mostrar un SnackBar o similar
+      debugPrint('Error subiendo imagen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al subir la imagen: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+      return null;
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
       }
     }
   }
@@ -314,6 +598,90 @@ $dayProgram''';
                   ),
               ],
               const SizedBox(height: 16),
+
+              // Imagen del evento (opcional)
+              Text(
+                'Imagen del evento (opcional)',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed:
+                        _isSubmitting || _isUploadingImage ? null : _pickImage,
+                    icon: const Icon(Icons.photo),
+                    label: const Text('Seleccionar imagen'),
+                  ),
+                  const SizedBox(width: 12),
+                  if (_isUploadingImage)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else if (_selectedImage != null)
+                    Expanded(
+                      child: Text(
+                        _selectedImage!.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+              // Preview simple (mostrar imagen recortada si existe, sino la original)
+              if (_selectedImage != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _croppedImageFile != null
+                      ? Image.file(
+                          _croppedImageFile!,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : (!kIsWeb && _selectedImage!.path != null)
+                          ? Image.file(
+                              File(_selectedImage!.path!),
+                              height: 150,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : (_selectedImage!.bytes != null)
+                              ? Image.memory(
+                                  _selectedImage!.bytes!,
+                                  height: 150,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                )
+                              : const SizedBox.shrink(),
+                ),
+              ],
+              const SizedBox(height: 16),
+
+              // Enfoque de la imagen (solo si hay imagen seleccionada)
+              if (_selectedImage != null || _uploadedImageUrl != null) ...[
+                Text(
+                  'Enfoque de la imagen',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'top', label: Text('Arriba')),
+                    ButtonSegment(value: 'center', label: Text('Centro')),
+                    ButtonSegment(value: 'bottom', label: Text('Abajo')),
+                  ],
+                  selected: <String>{_imageAlignment},
+                  onSelectionChanged: (values) {
+                    setState(() {
+                      _imageAlignment = values.first;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+              ],
 
               // Lugar
               TextFormField(
@@ -534,6 +902,41 @@ $dayProgram''';
                       : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
+              const SizedBox(height: 16),
+
+              // Captcha
+              Text(
+                'Verificación anti-bot',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text('¿Cuánto es $_captchaA + $_captchaB?'),
+                  const SizedBox(width: 12),
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        hintText: 'Resultado',
+                        errorText: _captchaError,
+                      ),
+                      onChanged: (value) {
+                        setState(() {
+                          _captchaUserAnswer = value;
+                          _captchaError = null;
+                        });
+                      },
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Otra pregunta',
+                    onPressed: _generateCaptcha,
+                  ),
+                ],
+              ),
               const SizedBox(height: 32),
 
               // Botón de enviar
@@ -543,6 +946,10 @@ $dayProgram''';
                     : () async {
                         if (!_formKey.currentState!.validate()) {
                           return;
+                        }
+
+                        if (!_validateCaptcha()) {
+                          return; // no seguimos si el captcha falla
                         }
 
                         if (_startDate == null) {
@@ -582,6 +989,9 @@ $dayProgram''';
                             _isSubmitting = true;
                           });
 
+                          // Subir imagen si hay una seleccionada
+                          final imageUrl = await _uploadImageIfNeeded();
+
                           // Determinar el rango de fechas
                           final startDate = _startDate!;
                           final endDate = _endDate;
@@ -612,24 +1022,35 @@ $dayProgram''';
                               startDate,
                             );
 
-                            await _eventService.submitEvent(
-                              title: _titleController.text,
-                              town: _selectedCity!.name,
-                              place: _placeController.text.trim().isEmpty
-                                  ? _selectedCity!.name
-                                  : _placeController.text,
-                              startsAt: startsAt,
-                              cityId: _selectedCityId!,
-                              categoryId: _selectedCategory!.id!,
-                              description: description,
-                              mapsUrl: (_lat != null && _lng != null)
-                                  ? 'https://www.google.com/maps/search/?api=1&query=$_lat,$_lng'
-                                  : null,
-                              lat: _lat,
-                              lng: _lng,
-                              isFree: _isFree,
-                            );
-                            eventsCreated = 1;
+                            // Calcular coordenadas finales: usar las del mapa si están disponibles, sino las de la ciudad
+                            final double? latToSave = _lat ?? _selectedCity?.lat;
+                            final double? lngToSave = _lng ?? _selectedCity?.lng;
+
+                            try {
+                              await _eventService.submitEvent(
+                                title: _titleController.text,
+                                town: _selectedCity!.name,
+                                place: _placeController.text.trim().isEmpty
+                                    ? _selectedCity!.name
+                                    : _placeController.text,
+                                startsAt: startsAt,
+                                cityId: _selectedCityId!,
+                                categoryId: _selectedCategory!.id!,
+                                description: description,
+                                mapsUrl: (latToSave != null && lngToSave != null)
+                                    ? 'https://www.google.com/maps/search/?api=1&query=$latToSave,$lngToSave'
+                                    : null,
+                                lat: latToSave,
+                                lng: lngToSave,
+                                isFree: _isFree,
+                                imageUrl: imageUrl,
+                                imageAlignment: _imageAlignment,
+                              );
+                              eventsCreated = 1;
+                            } catch (e) {
+                              debugPrint('Error al crear evento: $e');
+                              errorMessage = 'Error al crear el evento: ${e.toString()}';
+                            }
                           } else {
                             // Crear un evento por cada día del rango
                             final hour = _selectedTime?.hour ?? 0;
@@ -667,6 +1088,10 @@ $dayProgram''';
                                   dayKey,
                                 );
 
+                                // Calcular coordenadas finales: usar las del mapa si están disponibles, sino las de la ciudad
+                                final double? latToSave = _lat ?? _selectedCity?.lat;
+                                final double? lngToSave = _lng ?? _selectedCity?.lng;
+
                                 await _eventService.submitEvent(
                                   title: _titleController.text,
                                   town: _selectedCity!.name,
@@ -677,12 +1102,14 @@ $dayProgram''';
                                   cityId: _selectedCityId!,
                                   categoryId: _selectedCategory!.id!,
                                   description: description,
-                                  mapsUrl: (_lat != null && _lng != null)
-                                      ? 'https://www.google.com/maps/search/?api=1&query=$_lat,$_lng'
+                                  mapsUrl: (latToSave != null && lngToSave != null)
+                                      ? 'https://www.google.com/maps/search/?api=1&query=$latToSave,$lngToSave'
                                       : null,
-                                  lat: _lat,
-                                  lng: _lng,
+                                  lat: latToSave,
+                                  lng: lngToSave,
                                   isFree: _isFree,
+                                  imageUrl: imageUrl,
+                                  imageAlignment: _imageAlignment,
                                 );
                                 eventsCreated++;
                               } catch (e) {

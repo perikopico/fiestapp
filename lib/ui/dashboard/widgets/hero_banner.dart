@@ -22,7 +22,7 @@ class HeroBanner extends StatelessWidget {
         children: [
           // Imagen de fondo
           ClipRRect(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(0),
             child: Image.network(
               imageUrl,
               width: double.infinity,
@@ -37,7 +37,7 @@ class HeroBanner extends StatelessWidget {
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(0),
                 gradient: LinearGradient(
                   begin: Alignment.bottomCenter,
                   end: Alignment.topCenter,

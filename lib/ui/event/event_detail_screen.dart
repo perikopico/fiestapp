@@ -7,11 +7,24 @@ import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
 import '../../models/event.dart';
 import '../icons/icon_mapper.dart';
 import '../common/theme_mode_toggle.dart';
+import 'fullscreen_image_screen.dart';
 
 class EventDetailScreen extends StatelessWidget {
   final Event event;
 
   const EventDetailScreen({super.key, required this.event});
+
+  Alignment _alignmentFromString(String? value) {
+    switch (value) {
+      case 'top':
+        return Alignment.topCenter;
+      case 'bottom':
+        return Alignment.bottomCenter;
+      case 'center':
+      default:
+        return Alignment.center;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,43 +52,102 @@ class EventDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Imagen principal (con fallback)
-            Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: [
-                  BoxShadow(
-                    color: theme.colorScheme.shadow.withOpacity(0.3),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(18),
-                child: Hero(
-                  tag: 'event-img-${event.id}',
-                  child: event.imageUrl != null && event.imageUrl!.isNotEmpty
-                      ? Image.network(
-                          event.imageUrl!,
-                          height: 240,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Container(
-                          height: 240,
-                          width: double.infinity,
-                          color: theme.colorScheme.surfaceVariant,
-                          alignment: Alignment.center,
-                          child: Icon(
-                            Icons.event,
-                            size: 56,
-                            color: theme.colorScheme.onSurfaceVariant,
+            if (event.imageUrl != null && event.imageUrl!.isNotEmpty) ...[
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FullscreenImageScreen(imageUrl: event.imageUrl!),
+                    ),
+                  );
+                },
+                child: SizedBox(
+                  height: 220,
+                  width: double.infinity,
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(0),
+                        child: Hero(
+                          tag: 'event-img-${event.id}',
+                          child: Image.network(
+                            event.imageUrl!,
+                            width: double.infinity,
+                            height: double.infinity,
+                            fit: BoxFit.cover,
+                            alignment: _alignmentFromString(event.imageAlignment),
+                            errorBuilder: (context, error, stackTrace) {
+                              return Container(
+                                color: theme.colorScheme.surfaceVariant,
+                                alignment: Alignment.center,
+                                child: Icon(
+                                  Icons.event,
+                                  size: 56,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              );
+                            },
                           ),
                         ),
+                      ),
+                      // Banner "Ampliar" encima de la imagen
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.6),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.fullscreen,
+                                color: Colors.white,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Ampliar',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 16),
+            ] else ...[
+              SizedBox(
+                height: 220,
+                width: double.infinity,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(0),
+                  child: Container(
+                    color: theme.colorScheme.surfaceVariant,
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.event,
+                      size: 56,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Título
             Text(
@@ -278,39 +350,89 @@ class EventDetailScreen extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (mainDesc != null) ...[
+        if (mainDesc != null && mainDesc.isNotEmpty) ...[
+          const SizedBox(height: 8),
           Text(
             'Descripción',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            mainDesc,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
-            softWrap: true,
-            textAlign: TextAlign.start,
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              mainDesc,
+              style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+              softWrap: true,
+              textAlign: TextAlign.start,
+            ),
           ),
           const SizedBox(height: 16),
         ],
-        if (programBlock != null) ...[
+        if (programBlock != null && programBlock.isNotEmpty) ...[
           Text(
             'Programación',
             style: theme.textTheme.titleMedium?.copyWith(
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            programBlock,
-            style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
-            softWrap: true,
-            textAlign: TextAlign.start,
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: _buildProgrammingItems(theme, programBlock),
           ),
           const SizedBox(height: 16),
         ],
       ],
+    );
+  }
+
+  Widget _buildProgrammingItems(ThemeData theme, String programBlock) {
+    final items = programBlock.split('\n').where((item) => item.trim().isNotEmpty).toList();
+    
+    if (items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: items.asMap().entries.map((entry) {
+        final index = entry.key;
+        final item = entry.value.trim();
+        return Padding(
+          padding: EdgeInsets.only(bottom: index < items.length - 1 ? 8 : 0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2, right: 8),
+                child: Icon(
+                  Icons.schedule,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  item,
+                  style: theme.textTheme.bodyMedium?.copyWith(height: 1.4),
+                  softWrap: true,
+                  textAlign: TextAlign.start,
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
     );
   }
 }

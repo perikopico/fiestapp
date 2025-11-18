@@ -15,6 +15,7 @@ class Event {
   final bool? isFree;
   final String? mapsUrl;
   final String? description;
+  final String? imageAlignment;
 
   Event({
     required this.id,
@@ -31,6 +32,7 @@ class Event {
     this.isFree,
     this.mapsUrl,
     this.description,
+    this.imageAlignment,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -49,6 +51,7 @@ class Event {
       isFree: m['is_free'] as bool?,
       mapsUrl: m['maps_url'] as String?,
       description: m['description'] as String?,
+      imageAlignment: m['image_alignment'] as String? ?? 'center',
     );
   }
 }

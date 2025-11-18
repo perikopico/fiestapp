@@ -186,7 +186,7 @@ class EventService {
     dynamic qb = supa
         .from('events')
         .select(
-          'id, title, place, starts_at, image_url, city_id, category_id, is_free, is_featured, description',
+          'id, title, place, starts_at, image_url, image_alignment, city_id, category_id, is_free, is_featured, description',
         );
 
     // Autocompletado NO debe limitar por ciudad
@@ -329,6 +329,7 @@ class EventService {
             'is_free': event.isFree,
             'maps_url': event.mapsUrl,
             'description': desc,
+            'image_alignment': event.imageAlignment,
           };
           // Reemplazar el evento en la lista
           events[i] = Event.fromMap(updatedMap);
@@ -355,6 +356,7 @@ class EventService {
     bool isFree = true,
     String? submittedByName,
     String? submittedByEmail,
+    String? imageAlignment,
   }) async {
     final payload = <String, dynamic>{
       'title': title.trim(),
@@ -373,6 +375,7 @@ class EventService {
       'is_free': isFree,
       'submitted_by_name': submittedByName?.trim(),
       'submitted_by_email': submittedByEmail?.trim(),
+      'image_alignment': imageAlignment ?? 'center',
     };
 
     // Eliminar claves con null para no pisar defaults

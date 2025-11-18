@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
@@ -157,7 +158,11 @@ class PopularCarousel extends StatelessWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                event.formattedDate,
+                                () {
+                                  final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                  final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                  return "$fullDate · $fullHour";
+                                }(),
                                 style: Theme.of(
                                   context,
                                 ).textTheme.bodySmall?.copyWith(fontSize: 11),

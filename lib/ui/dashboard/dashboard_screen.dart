@@ -114,6 +114,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (_mode == LocationMode.city) {
         // Al volver a Ciudad, el radio no se aplica (pero mantenemos el valor para cuando vuelvas a Radio)
         // No hacemos nada con _radiusKm
+        // Cargar eventos cercanos si hay ubicación del usuario
+        if (_userLat != null && _userLng != null) {
+          _loadNearby();
+        }
       } else {
         // Al ir a Radio, descartamos selección de ciudad para evitar conflicto visual/lógico
         _selectedCityId = null;
@@ -121,6 +125,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedCityName = null;
         // Inicializar radio a un valor válido si está en 0
         if (_radiusKm == 0 || _radiusKm < 5) _radiusKm = 25;
+        // Limpiar eventos cercanos porque no se muestran en modo Radio
+        _nearbyEvents = [];
       }
     });
     _reloadEvents();
@@ -325,15 +331,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadNearby() async {
-    if (_userLat == null || _userLng == null) return;
+    // Solo cargar eventos cercanos en modo Ciudad (para mostrar eventos cerca de tu ubicación real)
+    // En modo Radio, "Próximos eventos" ya muestra los eventos del radio, así que no es necesario
+    if (_userLat == null || _userLng == null || _mode != LocationMode.city) {
+      setState(() => _nearbyEvents = []);
+      return;
+    }
 
     setState(() => _isNearbyLoading = true);
 
     try {
+      // Usar un radio fijo razonable (25km) para "Cerca de ti" en modo Ciudad
+      // Esto muestra eventos cercanos a tu ubicación real, independientemente de la ciudad seleccionada
       final list = await _repoNearby.fetchNearby(
         lat: _userLat!,
         lng: _userLng!,
-        radiusKm: _radiusKm,
+        radiusKm: 25, // Radio fijo para "Cerca de ti"
       );
       setState(() => _nearbyEvents = list);
     } finally {
@@ -649,7 +662,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _userLat = pos.latitude;
       _userLng = pos.longitude;
     });
-    await _loadNearby();
+    // Solo cargar eventos cercanos si estamos en modo Ciudad
+    if (_mode == LocationMode.city) {
+      await _loadNearby();
+    }
     await _loadNearbyCities();
   }
 
@@ -1294,13 +1310,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onClearFilters: _clearFilters,
                         ),
                       ),
-                    // Sección "Cerca de ti" (solo en modo Radio)
+                    // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
+                    // En modo Radio no se muestra porque "Próximos eventos" ya muestra los eventos del radio
                     if (_isNearbyLoading)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                         child: ShimmerBlock(height: 80),
                       )
-                    else if (_mode == LocationMode.radius)
+                    else if (_mode == LocationMode.city && _userLat != null && _userLng != null)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                         child: NearbyEventsSection(events: _nearbyEvents),

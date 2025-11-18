@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
@@ -8,6 +9,18 @@ class UpcomingList extends StatelessWidget {
   final VoidCallback? onClearFilters;
 
   const UpcomingList({super.key, required this.events, this.onClearFilters});
+
+  Alignment _alignmentFromString(String? value) {
+    switch (value) {
+      case 'top':
+        return Alignment.topCenter;
+      case 'bottom':
+        return Alignment.bottomCenter;
+      case 'center':
+      default:
+        return Alignment.center;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +116,7 @@ class UpcomingList extends StatelessWidget {
                                 width: imageSize,
                                 height: imageSize,
                                 fit: BoxFit.cover,
+                                alignment: _alignmentFromString(event.imageAlignment),
                                 errorBuilder: (context, error, stackTrace) {
                                   return Container(
                                     width: imageSize,
@@ -178,17 +192,11 @@ class UpcomingList extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
                           Text(
-                            event.formattedDay,
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant
-                                      .withOpacity(0.8),
-                                ),
-                          ),
-                          Text(
-                            event.formattedTime,
+                            () {
+                              final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                              final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                              return "$fullDate · $fullHour";
+                            }(),
                             style: Theme.of(context).textTheme.labelLarge
                                 ?.copyWith(
                                   color: Theme.of(context)
