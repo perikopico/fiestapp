@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'dart:convert';
-import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'ui/dashboard/dashboard_screen.dart';
+import 'services/favorites_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es');
+  
+  // Inicializar servicio de favoritos
+  await FavoritesService.instance.init();
 
   // Cargar .env
   bool dotenvLoaded = false;
@@ -39,31 +41,6 @@ Future<void> main() async {
   }
 
   runApp(const Fiestapp());
-
-  // Prueba de conexión a Supabase después de montar la app
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    testSupabase();
-  });
-}
-
-Future<void> testSupabase() async {
-  try {
-    final client = Supabase.instance.client;
-    final data = await client.from('events').select().limit(3);
-    debugPrint('SUPABASE TEST: ' + jsonEncode(data));
-
-    final ctx = navigatorKey.currentContext;
-    if (ctx != null) {
-      final int count = (data is List) ? data.length : 0;
-      ScaffoldMessenger.of(ctx).showSnackBar(
-        SnackBar(content: Text('Eventos cargados: ' + count.toString())),
-      );
-    } else {
-      debugPrint('SUPABASE TEST: Contexto no disponible para SnackBar');
-    }
-  } catch (e) {
-    debugPrint('SUPABASE TEST ERROR: ' + e.toString());
-  }
 }
 
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
@@ -86,17 +63,17 @@ class Fiestapp extends StatelessWidget {
             useMaterial3: true,
             brightness: Brightness.light,
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFFB0907B),
-              secondary: Color(0xFFDCC4B5),
+              primary: Color(0xFF2196F3), // Azul vibrante y moderno
+              secondary: Color(0xFF03A9F4), // Cyan complementario
               surface: Color(0xFFFFFFFF),
-              surfaceVariant: Color(0xFFFCF8F5),
-              background: Color(0xFFFCF8F5),
-              onSurface: Color(0xFF3A2B22),
-              onSurfaceVariant: Color(0xFF6B5A4F),
-              outline: Color(0xFFD9C8BC),
-              outlineVariant: Color(0xFFE6D6CC),
+              surfaceVariant: Color(0xFFF5F9FF), // Azul muy claro
+              background: Color(0xFFF8FBFF), // Fondo azul muy suave
+              onSurface: Color(0xFF1A1A1A), // Casi negro para mejor contraste
+              onSurfaceVariant: Color(0xFF5A6C7D), // Gris azulado
+              outline: Color(0xFFB0C4DE), // Azul claro para bordes
+              outlineVariant: Color(0xFFD6E4F0), // Azul muy claro
             ),
-            scaffoldBackgroundColor: const Color(0xFFFCF8F5),
+            scaffoldBackgroundColor: const Color(0xFFF8FBFF),
             textTheme:
                 const TextTheme(
                   titleLarge: TextStyle(
@@ -124,8 +101,8 @@ class Fiestapp extends StatelessWidget {
                     fontWeight: FontWeight.w600,
                   ),
                 ).apply(
-                  bodyColor: Color(0xFF3A2B22),
-                  displayColor: Color(0xFF3A2B22),
+                  bodyColor: Color(0xFF1A1A1A),
+                  displayColor: Color(0xFF1A1A1A),
                 ),
             inputDecorationTheme: InputDecorationTheme(
               isDense: true,
@@ -136,20 +113,20 @@ class Fiestapp extends StatelessWidget {
               filled: true,
               fillColor: const Color(0xFFFFFFFF),
               hintStyle: TextStyle(
-                color: const Color(0xFF8A6D5A).withOpacity(0.7),
+                color: const Color(0xFF7A8A9A).withOpacity(0.7),
               ),
               border: OutlineInputBorder(
                 borderRadius: const BorderRadius.all(Radius.circular(14)),
-                borderSide: BorderSide(color: const Color(0xFFD9C8BC)),
+                borderSide: BorderSide(color: const Color(0xFFB0C4DE)),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: const BorderRadius.all(Radius.circular(14)),
-                borderSide: BorderSide(color: const Color(0xFFD9C8BC)),
+                borderSide: BorderSide(color: const Color(0xFFB0C4DE)),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: const BorderRadius.all(Radius.circular(14)),
                 borderSide: const BorderSide(
-                  color: Color(0xFFB0907B),
+                  color: Color(0xFF2196F3),
                   width: 1.6,
                 ),
               ),
@@ -158,15 +135,15 @@ class Fiestapp extends StatelessWidget {
               labelStyle: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Color(0xFF3A2B22),
+                color: Color(0xFF1A1A1A),
               ),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               shape: const RoundedRectangleBorder(
                 borderRadius: BorderRadius.all(Radius.circular(14)),
               ),
-              backgroundColor: const Color(0xFFF3EAE4),
-              selectedColor: const Color(0xFFEAD7CC),
-              side: const BorderSide(color: Color(0xFFE6D6CC)),
+              backgroundColor: const Color(0xFFE3F2FD), // Azul muy claro
+              selectedColor: const Color(0xFFBBDEFB), // Azul claro
+              side: const BorderSide(color: Color(0xFFD6E4F0)),
             ),
             cardTheme: CardThemeData(
               clipBehavior: Clip.antiAlias,

@@ -6,6 +6,7 @@ class CityRadioToggle extends StatelessWidget {
   final ValueChanged<LocationMode> onModeChanged;
   final String? selectedCityName;
   final double radiusKm;
+  final bool hasLocationPermission;
 
   const CityRadioToggle({
     super.key,
@@ -13,6 +14,7 @@ class CityRadioToggle extends StatelessWidget {
     required this.onModeChanged,
     this.selectedCityName,
     required this.radiusKm,
+    this.hasLocationPermission = true,
   });
 
   @override
@@ -32,54 +34,59 @@ class CityRadioToggle extends StatelessWidget {
           // Botón Radio
           Expanded(
             child: InkWell(
-              onTap: () => onModeChanged(LocationMode.radius),
+              onTap: hasLocationPermission
+                  ? () => onModeChanged(LocationMode.radius)
+                  : null,
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(12),
                 bottomLeft: Radius.circular(12),
               ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 16,
-                ),
-                decoration: BoxDecoration(
-                  color: isRadius
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Colors.transparent,
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    bottomLeft: Radius.circular(12),
+              child: Opacity(
+                opacity: hasLocationPermission ? 1.0 : 0.5,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 12,
+                    horizontal: 16,
                   ),
-                  border: isRadius
-                      ? Border.all(
-                          color: Theme.of(context).colorScheme.primary,
-                          width: 2,
-                        )
-                      : null,
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.radar,
-                      size: 18,
-                      color: isRadius
-                          ? Theme.of(context).colorScheme.onPrimaryContainer
-                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                  decoration: BoxDecoration(
+                    color: isRadius
+                        ? Theme.of(context).colorScheme.primaryContainer
+                        : Colors.transparent,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      bottomLeft: Radius.circular(12),
                     ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Radio',
-                      style: TextStyle(
-                        fontWeight: isRadius
-                            ? FontWeight.w600
-                            : FontWeight.normal,
+                    border: isRadius
+                        ? Border.all(
+                            color: Theme.of(context).colorScheme.primary,
+                            width: 2,
+                          )
+                        : null,
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.radar,
+                        size: 18,
                         color: isRadius
                             ? Theme.of(context).colorScheme.onPrimaryContainer
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 8),
+                      Text(
+                        'Radio',
+                        style: TextStyle(
+                          fontWeight: isRadius
+                              ? FontWeight.w600
+                              : FontWeight.normal,
+                          color: isRadius
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

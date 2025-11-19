@@ -1,19 +1,23 @@
 import 'dart:io' show File;
 import 'dart:math';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
+import 'dart:io' show Platform;
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../services/event_service.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/category.dart';
 import '../common/city_search_field.dart';
 import 'image_crop_screen.dart';
+import '../dashboard/widgets/bottom_nav_bar.dart';
 
 class EventSubmitScreen extends StatelessWidget {
   const EventSubmitScreen({super.key});
@@ -210,34 +214,54 @@ $dayProgram''';
   }
 
   Future<void> _pickImage() async {
+    // En Android 10+ (API 29+), file_picker usa el selector del sistema
+    // que no requiere permisos explícitos. Dejamos que file_picker
+    // maneje los permisos automáticamente.
+    // Solo solicitamos permisos explícitos en iOS.
+    if (!kIsWeb && Platform.isIOS) {
+      final photosStatus = await Permission.photos.status;
+      if (!photosStatus.isGranted) {
+        final result = await Permission.photos.request();
+        if (result.isDenied || result.isPermanentlyDenied) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No se puede seleccionar imagen sin permiso de galería'),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+    // En Android, no solicitamos permisos explícitos ya que file_picker
+    // usa el selector del sistema que no los requiere
+
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: false,
+      withData: true, // Obtener datos directamente para evitar crear archivos temporales
+      allowCompression: false, // Evitar compresión que requiere archivos temporales
     );
     if (result != null && result.files.isNotEmpty) {
       final pickedFile = result.files.first;
       
-      // En web, usar bytes directamente
-      if (kIsWeb) {
-        if (pickedFile.bytes != null) {
-          // Para web, necesitamos convertir bytes a File temporal
-          // Por ahora, guardamos la referencia y procesaremos en el crop
-          setState(() {
-            _selectedImage = pickedFile;
-          });
-          // Abrir pantalla de recorte (para web necesitamos manejar bytes)
-          await _openCropScreenForWeb(pickedFile.bytes!);
-        }
-      } else {
-        // Para móvil/escritorio, usar path
-        if (pickedFile.path != null) {
-          final file = File(pickedFile.path!);
-          setState(() {
-            _selectedImage = pickedFile;
-          });
-          // Abrir pantalla de recorte
-          await _openCropScreen(file);
-        }
+      // Si tenemos bytes (con withData: true), usarlos directamente
+      // Esto evita problemas de permisos con archivos temporales
+      if (pickedFile.bytes != null) {
+        setState(() {
+          _selectedImage = pickedFile;
+        });
+        // Abrir pantalla de recorte usando bytes
+        await _openCropScreenForWeb(pickedFile.bytes!);
+      } else if (pickedFile.path != null) {
+        // Fallback: usar path si bytes no están disponibles
+        final file = File(pickedFile.path!);
+        setState(() {
+          _selectedImage = pickedFile;
+        });
+        // Abrir pantalla de recorte
+        await _openCropScreen(file);
       }
     }
   }
@@ -460,6 +484,7 @@ $dayProgram''';
     }
     return Scaffold(
       appBar: AppBar(title: const Text('Publicar evento')),
+      bottomNavigationBar: const BottomNavBar(activeRoute: 'submit'),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -1297,27 +1322,15 @@ $dayProgram''';
                           ),
                         ),
                       )
-                    : GoogleMap(
-                        initialCameraPosition: CameraPosition(
-                          target: initialCenter,
-                          zoom: 14.0,
-                        ),
-                        onTap: (LatLng position) {
-                          // Al hacer tap, actualizar la posición del marcador
+                    : _MapWidget(
+                        initialCenter: initialCenter,
+                        initialMarkerPosition: initialMarkerPosition,
+                        onMarkerUpdated: (LatLng position) {
                           setModalState(() {
                             pickedLatLng = position;
                           });
                         },
-                        markers: pickedLatLng != null
-                            ? {
-                                Marker(
-                                  markerId: const MarkerId('picked'),
-                                  position: pickedLatLng!,
-                                ),
-                              }
-                            : {},
-                        myLocationButtonEnabled: false,
-                        zoomControlsEnabled: true,
+                        pickedLatLng: pickedLatLng,
                       ),
               ),
               // Botón de confirmar
@@ -1345,6 +1358,133 @@ $dayProgram''';
             ],
           ),
         );
+      },
+    );
+  }
+}
+
+/// Widget que maneja el mapa con manejo de errores
+class _MapWidget extends StatefulWidget {
+  final LatLng initialCenter;
+  final LatLng? initialMarkerPosition;
+  final Function(LatLng) onMarkerUpdated;
+  final LatLng? pickedLatLng;
+
+  const _MapWidget({
+    required this.initialCenter,
+    this.initialMarkerPosition,
+    required this.onMarkerUpdated,
+    this.pickedLatLng,
+  });
+
+  @override
+  State<_MapWidget> createState() => _MapWidgetState();
+}
+
+class _MapWidgetState extends State<_MapWidget> {
+  bool _mapCreated = false;
+  bool _showError = false;
+  Timer? _errorCheckTimer;
+  GoogleMapController? _mapController;
+
+  @override
+  void initState() {
+    super.initState();
+    // Verificar si hay error después de 4 segundos
+    // (dar tiempo para que el mapa intente cargar)
+    _errorCheckTimer = Timer(const Duration(seconds: 4), () {
+      if (mounted) {
+        // Si el mapa se creó pero sigue habiendo problemas de renderizado,
+        // o si no se creó, mostrar error
+        setState(() {
+          _showError = true;
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _errorCheckTimer?.cancel();
+    _mapController?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Mostrar error si se detecta
+    if (_showError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error al cargar el mapa',
+                  style: Theme.of(context).textTheme.titleLarge,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'El mapa requiere una API key válida de Google Maps.\n\nPasos para solucionarlo:\n\n1. Ve a Google Cloud Console\n2. Crea o selecciona un proyecto\n3. Habilita "Maps SDK for Android"\n4. Crea una API key\n5. Añade restricción Android:\n   - Package: com.perikopico.fiestapp\n   - SHA-1: 12:FE:47:5B:A4:14:D7:44:D0:C4:F8:C2:C3:68:F2:6A:63:8A:AD:7A\n6. Reemplaza la API key en AndroidManifest.xml',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cerrar'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    // Mostrar el mapa
+    return GoogleMap(
+      initialCameraPosition: CameraPosition(
+        target: widget.initialCenter,
+        zoom: 14.0,
+      ),
+      onTap: (LatLng position) {
+        widget.onMarkerUpdated(position);
+      },
+      markers: widget.pickedLatLng != null
+          ? {
+              Marker(
+                markerId: const MarkerId('picked'),
+                position: widget.pickedLatLng!,
+              ),
+            }
+          : {},
+      myLocationButtonEnabled: false,
+      zoomControlsEnabled: true,
+      onMapCreated: (GoogleMapController controller) {
+        debugPrint('✅ Mapa creado correctamente');
+        _mapController = controller;
+        // Cancelar el timer de error si el mapa se crea
+        _errorCheckTimer?.cancel();
+        // Verificar después de 2 segundos más si el mapa se renderiza correctamente
+        // Si hay error de autorización, el mapa no se renderizará
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted && !_showError) {
+            // Si después de 2 segundos de crear el mapa no hay renderizado visible,
+            // probablemente hay un error de autorización
+            setState(() {
+              _showError = true;
+            });
+          }
+        });
       },
     );
   }

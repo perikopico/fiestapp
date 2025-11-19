@@ -3,16 +3,23 @@ import 'package:intl/intl.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
+import '../../../services/favorites_service.dart';
 
-class PopularCarousel extends StatelessWidget {
+class PopularCarousel extends StatefulWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
 
   const PopularCarousel({super.key, required this.events, this.onClearFilters});
 
   @override
+  State<PopularCarousel> createState() => _PopularCarouselState();
+}
+
+class _PopularCarouselState extends State<PopularCarousel> {
+
+  @override
   Widget build(BuildContext context) {
-    if (events.isEmpty) {
+    if (widget.events.isEmpty) {
       return Card(
         margin: const EdgeInsets.all(16),
         child: Padding(
@@ -43,10 +50,10 @@ class PopularCarousel extends StatelessWidget {
                 ),
                 textAlign: TextAlign.center,
               ),
-              if (onClearFilters != null) ...[
+              if (widget.onClearFilters != null) ...[
                 const SizedBox(height: 16),
                 OutlinedButton(
-                  onPressed: onClearFilters,
+                  onPressed: widget.onClearFilters,
                   child: const Text('Borrar filtros'),
                 ),
               ],
@@ -64,59 +71,76 @@ class PopularCarousel extends StatelessWidget {
           style: Theme.of(context).textTheme.titleMedium,
         ),
         const SizedBox(height: 12),
-        SizedBox(
-          height: 200,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: EdgeInsets.zero,
-            itemCount: events.length,
-            separatorBuilder: (context, index) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final event = events[index];
-              return InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(event: event),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Container(
-                  width: 180,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.surface,
+        ValueListenableBuilder<Set<String>>(
+          valueListenable: FavoritesService.instance.favoritesNotifier,
+          builder: (context, favorites, _) {
+            return SizedBox(
+              height: 200,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.zero,
+                itemCount: widget.events.length,
+                separatorBuilder: (context, index) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final event = widget.events[index];
+                  final isFavorite = FavoritesService.instance.isFavorite(event.id);
+                  return InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EventDetailScreen(event: event),
+                        ),
+                      );
+                    },
                     borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        blurRadius: 3,
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.black.withOpacity(0.4)
-                            : Colors.black12,
+                    child: Container(
+                      width: 180,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.surface,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            blurRadius: 3,
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black.withOpacity(0.4)
+                                : Colors.black12,
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
-                  child: ClipRRect(
+                      child: ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+                    child: Stack(
                       children: [
-                        // Image on top with fixed height
-                        Container(
-                          height: 115,
-                          width: double.infinity,
-                          color: Theme.of(context).colorScheme.surfaceVariant,
-                          child:
-                              event.imageUrl != null &&
-                                  event.imageUrl!.isNotEmpty
-                              ? Image.network(
-                                  event.imageUrl!,
-                                  width: double.infinity,
-                                  height: 115,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Center(
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            // Image on top with fixed height
+                            Container(
+                              height: 115,
+                              width: double.infinity,
+                              color: Theme.of(context).colorScheme.surfaceVariant,
+                              child:
+                                  event.imageUrl != null &&
+                                      event.imageUrl!.isNotEmpty
+                                  ? Image.network(
+                                      event.imageUrl!,
+                                      width: double.infinity,
+                                      height: 115,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Center(
+                                          child: Icon(
+                                            iconFromName(event.categoryIcon),
+                                            size: 48,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                          ),
+                                        );
+                                      },
+                                    )
+                                  : Center(
                                       child: Icon(
                                         iconFromName(event.categoryIcon),
                                         size: 48,
@@ -124,59 +148,83 @@ class PopularCarousel extends StatelessWidget {
                                           context,
                                         ).colorScheme.onSurfaceVariant,
                                       ),
-                                    );
-                                  },
-                                )
-                              : Center(
-                                  child: Icon(
-                                    iconFromName(event.categoryIcon),
-                                    size: 48,
-                                    color: Theme.of(
-                                      context,
-                                    ).colorScheme.onSurfaceVariant,
+                                    ),
+                            ),
+                            // Title and date below
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    event.title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurface,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    () {
+                                      final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                      final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                      return "$fullDate · $fullHour";
+                                    }(),
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall?.copyWith(fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
-                        // Title and date below
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                event.title,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 13,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurface,
+                        // Icono de favorito en la esquina superior derecha
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              onTap: () async {
+                                await FavoritesService.instance.toggleFavorite(event.id);
+                                if (mounted) {
+                                  setState(() {});
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(20),
+                              child: Container(
+                                padding: const EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.5),
+                                  shape: BoxShape.circle,
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
+                                child: Icon(
+                                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  color: isFavorite
+                                      ? Colors.red
+                                      : Colors.white,
+                                  size: 18,
+                                ),
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                () {
-                                  final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                  final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                  return "$fullDate · $fullHour";
-                                }(),
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(fontSize: 11),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              );
-            },
-          ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
         ),
       ],
     );

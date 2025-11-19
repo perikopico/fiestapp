@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:fiestapp/services/admin_moderation_service.dart';
+import '../../models/event.dart';
+import '../event/event_detail_screen.dart';
 
 class PendingEventsScreen extends StatefulWidget {
   const PendingEventsScreen({super.key});
@@ -30,9 +32,12 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
 
     try {
       final supa = Supabase.instance.client;
+      // Usar events_view para obtener todos los campos necesarios para Event
       final res = await supa
-          .from('events')
-          .select('id, title, starts_at, city_id, status, cities(name)')
+          .from('events_view')
+          .select(
+            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+          )
           .eq('status', 'pending')
           .order('created_at', ascending: false);
 
@@ -54,6 +59,11 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
 
   String? _getCityName(Map<String, dynamic> event) {
     try {
+      // Primero intentar obtener city_name directamente (desde events_view)
+      if (event['city_name'] != null) {
+        return event['city_name'] as String?;
+      }
+      // Fallback: intentar obtener desde la relación cities (por compatibilidad)
       final cities = event['cities'] as Map<String, dynamic>?;
       return cities?['name'] as String?;
     } catch (e) {
@@ -145,6 +155,15 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
                     }
                   }
 
+                  // Convertir el Map a Event para poder navegar al detalle
+                  Event? eventObj;
+                  try {
+                    eventObj = Event.fromMap(event);
+                  } catch (e) {
+                    // Si falla la conversión, continuar sin navegación al detalle
+                    debugPrint('Error al convertir evento a Event: $e');
+                  }
+
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 0,
@@ -156,77 +175,71 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
                         ).colorScheme.outline.withOpacity(0.2),
                       ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      title,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .titleMedium
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    if (startsAt != null)
-                                      Row(
-                                        children: [
-                                          Icon(
-                                            Icons.calendar_today,
-                                            size: 16,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            _dateFormat.format(startsAt),
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .bodyMedium
-                                                ?.copyWith(
-                                                  color: Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
-                                                ),
-                                          ),
-                                        ],
-                                      )
-                                    else
+                    child: InkWell(
+                      onTap: eventObj != null
+                          ? () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => EventDetailScreen(event: eventObj!),
+                                ),
+                              );
+                            }
+                          : null,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
                                       Text(
-                                        'Fecha no disponible',
+                                        title,
                                         style: Theme.of(context)
                                             .textTheme
-                                            .bodyMedium
+                                            .titleMedium
                                             ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 8),
+                                      if (startsAt != null)
+                                        Row(
+                                          children: [
+                                            Icon(
+                                              Icons.calendar_today,
+                                              size: 16,
                                               color: Theme.of(
                                                 context,
                                               ).colorScheme.onSurfaceVariant,
                                             ),
-                                      ),
-                                    const SizedBox(height: 4),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.location_on,
-                                          size: 16,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
-                                        const SizedBox(width: 4),
+                                            const SizedBox(width: 4),
+                                            Flexible(
+                                              child: Text(
+                                                _dateFormat.format(startsAt),
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(
+                                                      color: Theme.of(context)
+                                                          .colorScheme
+                                                          .onSurfaceVariant,
+                                                    ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      else
                                         Text(
-                                          cityDisplay,
+                                          'Fecha no disponible',
                                           style: Theme.of(context)
                                               .textTheme
                                               .bodyMedium
@@ -236,19 +249,52 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
                                                 ).colorScheme.onSurfaceVariant,
                                               ),
                                         ),
-                                      ],
-                                    ),
-                                  ],
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          Icon(
+                                            Icons.location_on,
+                                            size: 16,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
+                                          ),
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              cityDisplay,
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.onSurfaceVariant,
+                                                  ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.check, size: 18),
-                                    label: const Text('Aprobar'),
-                                    onPressed: () async {
+                                const SizedBox(width: 8),
+                                Flexible(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      ElevatedButton.icon(
+                                        icon: const Icon(Icons.check, size: 18),
+                                        label: const Text('Aprobar'),
+                                        style: ElevatedButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 8,
+                                          ),
+                                        ),
+                                        onPressed: () async {
                                       final eventId = event['id'] as String?;
                                       if (eventId == null) {
                                         ScaffoldMessenger.of(
@@ -296,21 +342,25 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
                                           ),
                                         );
                                       }
-                                    },
-                                  ),
-                                  const SizedBox(width: 4),
-                                  ElevatedButton.icon(
-                                    icon: const Icon(Icons.close, size: 18),
-                                    label: const Text('Rechazar'),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.error,
-                                      foregroundColor: Theme.of(
-                                        context,
-                                      ).colorScheme.onError,
+                                      },
                                     ),
-                                    onPressed: () async {
+                                    const SizedBox(height: 4),
+                                    ElevatedButton.icon(
+                                      icon: const Icon(Icons.close, size: 18),
+                                      label: const Text('Rechazar'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        foregroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.onError,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 8,
+                                        ),
+                                      ),
+                                      onPressed: () async {
                                       final eventId = event['id'] as String?;
                                       if (eventId == null) {
                                         ScaffoldMessenger.of(
@@ -358,12 +408,14 @@ class _PendingEventsScreenState extends State<PendingEventsScreen> {
                                         );
                                       }
                                     },
-                                  ),
-                                ],
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ],
-                          ),
-                        ],
+                              ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );

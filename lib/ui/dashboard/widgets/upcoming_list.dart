@@ -3,12 +3,19 @@ import 'package:intl/intl.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
+import '../../../services/favorites_service.dart';
 
-class UpcomingList extends StatelessWidget {
+class UpcomingList extends StatefulWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
 
   const UpcomingList({super.key, required this.events, this.onClearFilters});
+
+  @override
+  State<UpcomingList> createState() => _UpcomingListState();
+}
+
+class _UpcomingListState extends State<UpcomingList> {
 
   Alignment _alignmentFromString(String? value) {
     switch (value) {
@@ -25,7 +32,7 @@ class UpcomingList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Estado vacío: mantenemos la tarjeta con "Borrar filtros"
-    if (events.isEmpty) {
+    if (widget.events.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
@@ -44,9 +51,9 @@ class UpcomingList extends StatelessWidget {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              if (onClearFilters != null)
+              if (widget.onClearFilters != null)
                 OutlinedButton(
-                  onPressed: onClearFilters,
+                  onPressed: widget.onClearFilters,
                   child: const Text('Borrar filtros'),
                 ),
             ],
@@ -69,56 +76,79 @@ class UpcomingList extends StatelessWidget {
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
             ),
-            if (onClearFilters != null)
+            if (widget.onClearFilters != null)
               TextButton(
-                onPressed: onClearFilters,
+                onPressed: widget.onClearFilters,
                 child: const Text('Borrar filtros'),
               ),
           ],
         ),
         const SizedBox(height: 12),
-        ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: events.length,
-          separatorBuilder: (_, __) => const SizedBox(height: 12),
-          itemBuilder: (context, index) {
-            final event = events[index];
-            final isMobile = MediaQuery.of(context).size.width < 600;
-            final imageSize = isMobile ? 64.0 : 72.0;
+        ValueListenableBuilder<Set<String>>(
+          valueListenable: FavoritesService.instance.favoritesNotifier,
+          builder: (context, favorites, _) {
+            return ListView.separated(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: widget.events.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final event = widget.events[index];
+                final isFavorite = FavoritesService.instance.isFavorite(event.id);
+                final isMobile = MediaQuery.of(context).size.width < 600;
+                final imageSize = isMobile ? 64.0 : 72.0;
 
-            return Card(
-              margin: EdgeInsets.zero,
-              elevation: 0.3,
-              color: Theme.of(context).colorScheme.surface,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: InkWell(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => EventDetailScreen(event: event),
-                    ),
-                  );
-                },
-                borderRadius: BorderRadius.circular(16),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child:
-                            event.imageUrl != null && event.imageUrl!.isNotEmpty
-                            ? Image.network(
-                                event.imageUrl!,
-                                width: imageSize,
-                                height: imageSize,
-                                fit: BoxFit.cover,
-                                alignment: _alignmentFromString(event.imageAlignment),
-                                errorBuilder: (context, error, stackTrace) {
-                                  return Container(
+                return Card(
+                  margin: EdgeInsets.zero,
+                  elevation: 0.3,
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EventDetailScreen(event: event),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child:
+                                event.imageUrl != null && event.imageUrl!.isNotEmpty
+                                ? Image.network(
+                                    event.imageUrl!,
+                                    width: imageSize,
+                                    height: imageSize,
+                                    fit: BoxFit.cover,
+                                    alignment: _alignmentFromString(event.imageAlignment),
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        width: imageSize,
+                                        height: imageSize,
+                                        decoration: BoxDecoration(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.surfaceVariant,
+                                          borderRadius: BorderRadius.circular(10),
+                                        ),
+                                        child: Icon(
+                                          iconFromName(event.categoryIcon),
+                                          size: imageSize * 0.7,
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.onSurfaceVariant,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                : Container(
                                     width: imageSize,
                                     height: imageSize,
                                     decoration: BoxDecoration(
@@ -134,83 +164,84 @@ class UpcomingList extends StatelessWidget {
                                         context,
                                       ).colorScheme.onSurfaceVariant,
                                     ),
-                                  );
-                                },
-                              )
-                            : Container(
-                                width: imageSize,
-                                height: imageSize,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.surfaceVariant,
-                                  borderRadius: BorderRadius.circular(10),
+                                  ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  event.title,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    color: Theme.of(context).colorScheme.onSurface,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                child: Icon(
-                                  iconFromName(event.categoryIcon),
-                                  size: imageSize * 0.7,
-                                  color: Theme.of(
-                                    context,
-                                  ).colorScheme.onSurfaceVariant,
-                                ),
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              event.title,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                color: Theme.of(context).colorScheme.onSurface,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                                if (event.cityName != null ||
+                                    event.place != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${event.cityName ?? ''}${event.cityName != null && event.place != null ? ' · ' : ''}${event.place ?? ''}',
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant
+                                              .withOpacity(0.7),
+                                        ),
+                                  ),
+                                ],
+                              ],
                             ),
-                            if (event.cityName != null ||
-                                event.place != null) ...[
+                          ),
+                          const SizedBox(width: 8),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              IconButton(
+                                icon: Icon(
+                                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  color: isFavorite
+                                      ? Theme.of(context).colorScheme.error
+                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                onPressed: () async {
+                                  await FavoritesService.instance.toggleFavorite(event.id);
+                                  if (mounted) {
+                                    setState(() {});
+                                  }
+                                },
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                iconSize: 20,
+                              ),
                               const SizedBox(height: 4),
                               Text(
-                                '${event.cityName ?? ''}${event.cityName != null && event.place != null ? ' · ' : ''}${event.place ?? ''}',
-                                style: Theme.of(context).textTheme.bodySmall
+                                () {
+                                  final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                  final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                  return "$fullDate · $fullHour";
+                                }(),
+                                style: Theme.of(context).textTheme.labelLarge
                                     ?.copyWith(
                                       color: Theme.of(context)
                                           .colorScheme
                                           .onSurfaceVariant
-                                          .withOpacity(0.7),
+                                          .withOpacity(0.8),
                                     ),
                               ),
                             ],
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            () {
-                              final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                              final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                              return "$fullDate · $fullHour";
-                            }(),
-                            style: Theme.of(context).textTheme.labelLarge
-                                ?.copyWith(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant
-                                      .withOpacity(0.8),
-                                ),
                           ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         ),

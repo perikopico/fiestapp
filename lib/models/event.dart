@@ -1,4 +1,5 @@
 import 'package:intl/intl.dart';
+import '../services/favorites_service.dart';
 
 class Event {
   final String id;
@@ -16,6 +17,9 @@ class Event {
   final String? mapsUrl;
   final String? description;
   final String? imageAlignment;
+  
+  /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
+  bool get isFavorite => FavoritesService.instance.isFavorite(id);
 
   Event({
     required this.id,

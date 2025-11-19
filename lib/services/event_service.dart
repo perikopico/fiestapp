@@ -341,6 +341,46 @@ class EventService {
     }
   }
 
+  /// Obtiene eventos por sus IDs
+  Future<List<Event>> fetchEventsByIds(List<String> ids) async {
+    if (ids.isEmpty) {
+      return [];
+    }
+
+    try {
+      // Construir condición OR para múltiples IDs: (id.eq.value1,id.eq.value2,...)
+      // Si hay muchos IDs, hacer consultas en lotes para evitar URLs muy largas
+      final batchSize = 50;
+      List<Event> allEvents = [];
+
+      for (int i = 0; i < ids.length; i += batchSize) {
+        final batch = ids.skip(i).take(batchSize).toList();
+        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
+
+        final r = await supa
+            .from('events_view')
+            .select(
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, image_alignment',
+            )
+            .or(orCondition);
+
+        final events = (r as List)
+            .map((e) => Event.fromMap(e as Map<String, dynamic>))
+            .toList();
+
+        allEvents.addAll(events);
+      }
+
+      // Obtener description desde la tabla base para cada evento
+      await _enrichEventsWithDescription(allEvents);
+
+      return allEvents;
+    } catch (e) {
+      debugPrint('Error al obtener eventos por IDs: $e');
+      return [];
+    }
+  }
+
   Future<void> submitEvent({
     required String title,
     required String town,

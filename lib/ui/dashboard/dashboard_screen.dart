@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:fiestapp/services/event_service.dart';
 import 'package:fiestapp/data/events_repository.dart';
@@ -18,15 +17,14 @@ import 'widgets/unified_search_bar.dart';
 import 'widgets/city_radio_toggle.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
-import 'package:fiestapp/ui/common/theme_mode_toggle.dart';
 import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
 import '../../utils/dashboard_utils.dart';
-import '../../main.dart' show appThemeMode;
-import '../events/event_submit_screen.dart';
 import '../admin/pending_events_screen.dart';
 import '../../config/admin_config.dart';
+import '../../services/favorites_service.dart';
+import 'widgets/bottom_nav_bar.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -75,6 +73,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   double? _userLng = -5.9219; // Barbate (temporal)
   bool _isNearbyLoading = false;
   List<model.Event> _nearbyEvents = [];
+  bool _hasLocationPermission = false; // Estado de permisos de ubicación
   List<City> _nearbyCities = [];
 
   // Legacy search state (mantener por compatibilidad)
@@ -90,9 +89,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isCitySearching = false;
   List<City> _citySearchResults = [];
 
+  // Contador de toques para acceso admin
+  int _adminTapCount = 0;
+  DateTime? _lastAdminTap;
+
   @override
   void initState() {
     super.initState();
+    _checkLocationPermission();
     _reloadEvents().then((_) => _loadNearby());
     _loadCities();
     _loadNearbyCities();
@@ -590,7 +594,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Recargar eventos principales con el nuevo radio
         _reloadEvents();
       },
-      onUseLocation: _getUserLocation,
+    );
+  }
+
+  Widget _buildDisabledRadiusContent() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            Icons.location_off,
+            size: 20,
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Permisos de ubicación requeridos para usar el selector de radio',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -631,6 +665,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  Future<void> _checkLocationPermission() async {
+    final permission = await Geolocator.checkPermission();
+    final hasPermission = permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
+    setState(() {
+      _hasLocationPermission = hasPermission;
+    });
+    // Si no hay permisos y estamos en modo Radio, cambiar a modo Ciudad
+    if (!hasPermission && _mode == LocationMode.radius) {
+      _switchMode(LocationMode.city);
+    }
+  }
+
   Future<void> _getUserLocation() async {
     bool serviceEnabled;
     LocationPermission permission;
@@ -638,6 +685,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
       debugPrint('Servicios de ubicación desactivados.');
+      setState(() {
+        _hasLocationPermission = false;
+      });
       return;
     }
 
@@ -646,14 +696,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         debugPrint('Permiso de ubicación denegado.');
+        setState(() {
+          _hasLocationPermission = false;
+        });
+        // Si estamos en modo Radio, cambiar a modo Ciudad
+        if (_mode == LocationMode.radius) {
+          _switchMode(LocationMode.city);
+        }
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
       debugPrint('Permiso de ubicación denegado permanentemente.');
+      setState(() {
+        _hasLocationPermission = false;
+      });
+      // Si estamos en modo Radio, cambiar a modo Ciudad
+      if (_mode == LocationMode.radius) {
+        _switchMode(LocationMode.city);
+      }
       return;
     }
+
+    setState(() {
+      _hasLocationPermission = true;
+    });
 
     final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
@@ -803,10 +871,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFilterPanel() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
+        margin: EdgeInsets.zero,
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -822,6 +891,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 },
                 selectedCityName: _selectedCityName,
                 radiusKm: _radiusKm,
+                hasLocationPermission: _hasLocationPermission,
               ),
               const SizedBox(height: 12),
               // 2. Contenido dependiente del modo
@@ -844,14 +914,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onSearchChanged: null,
                 )
               else
-                // Slider de radio + botón "Usar mi ubicación" (solo en modo Radio)
-                _buildRadiusAndLocationContent(),
+                // Slider de radio + botón "Usar mi ubicación" (solo en modo Radio y si hay permisos)
+                _hasLocationPermission
+                    ? _buildRadiusAndLocationContent()
+                    : _buildDisabledRadiusContent(),
               const SizedBox(height: 12),
               // 3. Chips rápidos de fecha
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
                     ActionChip(
                       label: const Text('Hoy'),
                       onPressed: () {
@@ -864,7 +938,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _reloadWithDateRange(from: r.from, to: r.to);
                       },
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     ActionChip(
                       label: const Text('Fin de semana'),
                       onPressed: () {
@@ -877,7 +951,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _reloadWithDateRange(from: r.from, to: r.to);
                       },
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     ActionChip(
                       label: const Text('Este mes'),
                       onPressed: () {
@@ -890,10 +964,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _reloadWithDateRange(from: r.from, to: r.to);
                       },
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 4),
                     OutlinedButton.icon(
-                      icon: const Icon(Icons.date_range, size: 18),
+                      icon: const Icon(Icons.date_range, size: 16),
                       label: const Text('Rango...'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        minimumSize: const Size(0, 32),
+                      ),
                       onPressed: () async {
                         final now = DateTime.now();
                         final first = DateTime(now.year - 1, 1, 1);
@@ -922,185 +1000,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         }
                       },
                     ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
-              // 4. ExpansionTile "Filtros" (categorías + rango de fecha)
+              // 4. ExpansionTile "Categorías"
               ExpansionTile(
                 title: Text(
-                  'Filtros',
+                  'Categorías',
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 subtitle: Text(
-                  _buildFiltersSubtitle(),
+                  _selectedCategoryId == null
+                      ? 'Todas'
+                      : _getSelectedCategoryName(),
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
                 leading: Icon(
-                  Icons.filter_list,
+                  Icons.category,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 children: [
-                  // Categorías
+                  // Grid de categorías
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 16,
                       vertical: 8,
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Categoría',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        if (_categories.isEmpty)
-                          const Text('No hay categorías disponibles')
-                        else
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              // Chip "Todas"
-                              FilterChip(
-                                avatar: Icon(
-                                  Icons.grid_view,
-                                  size: 16,
-                                  color: _selectedCategoryId == null
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.onPrimaryContainer
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                ),
-                                label: const Text('Todas'),
-                                selected: _selectedCategoryId == null,
-                                onSelected: (_) {
-                                  setState(() {
-                                    _selectedCategoryId = null;
-                                  });
-                                  _reloadEvents();
-                                },
-                              ),
-                              // Chips de categorías
-                              ..._categories
-                                  .where((Category c) => c.id != null)
-                                  .map((category) {
-                                    final isSelected =
-                                        category.id == _selectedCategoryId;
-                                    final icon = iconFromName(category.icon);
-                                    return FilterChip(
-                                      avatar: Icon(
-                                        icon,
-                                        size: 16,
-                                        color: isSelected
-                                            ? Theme.of(
-                                                context,
-                                              ).colorScheme.onPrimaryContainer
-                                            : Theme.of(
-                                                context,
-                                              ).colorScheme.onSurfaceVariant,
-                                      ),
-                                      label: Text(category.name),
-                                      selected: isSelected,
-                                      onSelected: (_) {
-                                        setState(() {
-                                          _selectedCategoryId = isSelected
-                                              ? null
-                                              : category.id;
-                                        });
-                                        _reloadEvents();
-                                      },
-                                    );
-                                  }),
-                            ],
-                          ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Rango de fecha
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Rango de fecha',
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon: const Icon(Icons.date_range, size: 18),
-                                label: Text(
-                                  _fromDate != null && _toDate != null
-                                      ? '${_df.format(_fromDate!)} → ${_df.format(_toDate!)}'
-                                      : 'Seleccionar rango',
-                                ),
-                                onPressed: () async {
-                                  final now = DateTime.now();
-                                  final first = DateTime(now.year - 1, 1, 1);
-                                  final last = DateTime(now.year + 2, 12, 31);
-
-                                  final picked = await showDateRangePicker(
-                                    context: context,
-                                    firstDate: first,
-                                    lastDate: last,
-                                    initialDateRange:
-                                        (_fromDate != null && _toDate != null)
-                                        ? DateTimeRange(
-                                            start: _fromDate!,
-                                            end: _toDate!,
-                                          )
-                                        : null,
-                                  );
-                                  if (picked != null) {
-                                    setState(() {
-                                      _selectedDatePreset = null;
-                                      _isToday = false;
-                                      _isWeekend = false;
-                                      _isThisMonth = false;
-                                    });
-                                    _reloadWithDateRange(
-                                      from: picked.start,
-                                      to: picked.end,
-                                    );
-                                  }
-                                },
-                              ),
-                            ),
-                            if (_fromDate != null || _toDate != null) ...[
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.clear),
-                                onPressed: () {
-                                  setState(() {
-                                    _isToday = false;
-                                    _isWeekend = false;
-                                    _isThisMonth = false;
-                                  });
-                                  _reloadWithDateRange(from: null, to: null);
-                                },
-                              ),
-                            ],
-                          ],
-                        ),
-                      ],
-                    ),
+                    child: _buildCategoriesGrid(),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -1112,24 +1044,170 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  String _buildFiltersSubtitle() {
-    final parts = <String>[];
+  Color _getColorForCategory(String categoryName) {
+    final name = categoryName.toLowerCase();
+    if (name.contains('música') || name.contains('music')) {
+      return Colors.purple;
+    } else if (name.contains('mercados') || name.contains('market')) {
+      return Colors.orange;
+    } else if (name.contains('deporte') || name.contains('sport')) {
+      return Colors.green;
+    } else if (name.contains('tradición') || name.contains('tradition')) {
+      return Colors.redAccent;
+    } else if (name.contains('gastronomía') || name.contains('gastronomy') || name.contains('comida')) {
+      return Colors.amber;
+    } else if (name.contains('cultura') || name.contains('culture')) {
+      return Colors.blue;
+    } else if (name.contains('arte') || name.contains('art')) {
+      return Colors.pink;
+    } else if (name.contains('naturaleza') || name.contains('nature')) {
+      return Colors.teal;
+    }
+    return Colors.grey;
+  }
 
-    if (_selectedCategoryId != null) {
-      parts.add(_getSelectedCategoryName());
+  Widget _buildCategoriesGrid() {
+    if (_categories.isEmpty) {
+      return const Text('No hay categorías disponibles');
     }
 
-    if (_fromDate != null && _toDate != null) {
-      parts.add('${_df.format(_fromDate!)} → ${_df.format(_toDate!)}');
-    } else if (_isToday) {
-      parts.add('Hoy');
-    } else if (_isWeekend) {
-      parts.add('Fin de semana');
-    } else if (_isThisMonth) {
-      parts.add('Este mes');
-    }
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isNarrow = screenWidth < 600;
+    final crossAxisCount = isNarrow ? 3 : 4;
 
-    return parts.isEmpty ? 'Todos los filtros' : parts.join(' · ');
+    final List<Widget> categoryWidgets = [];
+
+    // Cuadro "Todas"
+    final isAllSelected = _selectedCategoryId == null;
+    categoryWidgets.add(
+      InkWell(
+        onTap: () {
+          setState(() {
+            _selectedCategoryId = null;
+          });
+          _reloadEvents();
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: isAllSelected
+                ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+                : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(16),
+            border: isAllSelected
+                ? Border.all(
+                    color: Theme.of(context).colorScheme.primary,
+                    width: 2,
+                  )
+                : null,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.grid_view,
+                size: 40,
+                color: isAllSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Todas',
+                style: TextStyle(
+                  fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 13,
+                  color: isAllSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    // Cuadros de categorías
+    categoryWidgets.addAll(
+      _categories
+          .where((Category c) => c.id != null)
+          .map((category) {
+            final categoryColor = _getColorForCategory(category.name);
+            final isSelected = category.id == _selectedCategoryId;
+            final icon = iconFromName(category.icon);
+
+            return InkWell(
+              onTap: () {
+                setState(() {
+                  _selectedCategoryId = isSelected ? null : category.id;
+                });
+                _reloadEvents();
+              },
+              borderRadius: BorderRadius.circular(16),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? categoryColor.withOpacity(0.2)
+                      : categoryColor.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: isSelected
+                      ? Border.all(color: categoryColor, width: 2.5)
+                      : Border.all(
+                          color: categoryColor.withOpacity(0.3),
+                          width: 1,
+                        ),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      icon,
+                      size: 40,
+                      color: isSelected
+                          ? categoryColor
+                          : categoryColor.withOpacity(0.8),
+                    ),
+                    const SizedBox(height: 8),
+                    Flexible(
+                      child: Text(
+                        category.name,
+                        style: TextStyle(
+                          fontWeight: isSelected
+                              ? FontWeight.bold
+                              : FontWeight.w600,
+                          fontSize: 13,
+                          color: isSelected
+                              ? categoryColor
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+    );
+
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: crossAxisCount,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      padding: EdgeInsets.zero,
+      childAspectRatio: 0.85,
+      children: categoryWidgets,
+    );
   }
 
   @override
@@ -1174,12 +1252,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
         title: const Text('Fiestapp'),
         elevation: 0,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.admin_panel_settings),
-            tooltip: 'Moderación',
-            onPressed: _openAdminPanel,
+          // Botón de admin invisible (requiere 3 toques)
+          Opacity(
+            opacity: 0.0,
+            child: IconButton(
+              icon: const Icon(Icons.admin_panel_settings),
+              tooltip: 'Panel de administración',
+              onPressed: () {
+                final now = DateTime.now();
+                // Resetear contador si pasan más de 2 segundos entre toques
+                if (_lastAdminTap != null &&
+                    now.difference(_lastAdminTap!).inSeconds > 2) {
+                  _adminTapCount = 0;
+                }
+                
+                _adminTapCount++;
+                _lastAdminTap = now;
+                
+                if (_adminTapCount >= 3) {
+                  _adminTapCount = 0;
+                  _openAdminPanel();
+                } else {
+                  // Feedback visual para indicar que se está contando
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Toca ${3 - _adminTapCount} vez${3 - _adminTapCount > 1 ? 'es' : ''} más para acceder'),
+                      duration: const Duration(milliseconds: 800),
+                    ),
+                  );
+                }
+              },
+            ),
           ),
-          const ThemeModeToggleAction(),
         ],
       ),
       body: SafeArea(
@@ -1192,9 +1296,45 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                      child: DashboardHero(featured: _featuredEvent),
+                    // Área invisible para acceso admin (3 toques)
+                    Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          child: DashboardHero(featured: _featuredEvent),
+                        ),
+                        // Detector invisible centrado arriba del banner
+                        Positioned(
+                          top: 8,
+                          left: 0,
+                          right: 0,
+                          child: Center(
+                            child: GestureDetector(
+                              onTap: () {
+                                final now = DateTime.now();
+                                // Resetear contador si pasan más de 2 segundos entre toques
+                                if (_lastAdminTap != null &&
+                                    now.difference(_lastAdminTap!).inSeconds > 2) {
+                                  _adminTapCount = 0;
+                                }
+                                
+                                _adminTapCount++;
+                                _lastAdminTap = now;
+                                
+                                if (_adminTapCount >= 3) {
+                                  _adminTapCount = 0;
+                                  _openAdminPanel();
+                                }
+                              },
+                              child: Container(
+                                width: double.infinity,
+                                height: 60,
+                                color: Colors.transparent,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     if (!_isLoading) ...[_buildFilterPanel()],
                     // Resultados de búsqueda
@@ -1310,6 +1450,36 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           onClearFilters: _clearFilters,
                         ),
                       ),
+                    // Sección "Tus favoritos"
+                    ValueListenableBuilder<Set<String>>(
+                      valueListenable: FavoritesService.instance.favoritesNotifier,
+                      builder: (context, favorites, _) {
+                        if (favorites.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        
+                        // Combinar todas las listas de eventos para buscar favoritos
+                        final allEvents = [
+                          ..._upcomingEvents,
+                          ..._featuredEvents,
+                        ];
+                        
+                        // Filtrar eventos favoritos
+                        final favoriteEvents = allEvents
+                            .where((e) => favorites.contains(e.id))
+                            .toSet()
+                            .toList();
+                        
+                        if (favoriteEvents.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+                        
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                          child: FavoritesSection(events: favoriteEvents),
+                        );
+                      },
+                    ),
                     // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
                     // En modo Radio no se muestra porque "Próximos eventos" ya muestra los eventos del radio
                     if (_isNearbyLoading)
@@ -1332,15 +1502,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          Navigator.of(
-            context,
-          ).push(MaterialPageRoute(builder: (_) => const EventSubmitScreen()));
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Publicar evento'),
-      ),
+      bottomNavigationBar: const BottomNavBar(),
     );
   }
 }
@@ -1454,6 +1616,42 @@ class PopularThisWeekSection extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
       ),
       child: PopularCarousel(events: events, onClearFilters: onClearFilters),
+    );
+  }
+}
+
+class FavoritesSection extends StatelessWidget {
+  final List<Event> events;
+
+  const FavoritesSection({super.key, required this.events});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              'Tus favoritos',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: UpcomingList(events: events),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -1768,12 +1966,10 @@ class _NearbyControlWidget extends StatelessWidget {
   const _NearbyControlWidget({
     required this.radiusKm,
     required this.onRadiusChanged,
-    required this.onUseLocation,
   });
 
   final double radiusKm;
   final ValueChanged<double> onRadiusChanged;
-  final VoidCallback onUseLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -1784,71 +1980,52 @@ class _NearbyControlWidget extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            'Radio',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w500),
-                          ),
-                          Text(
-                            '${radiusKm.toInt()} km',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.w600),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 6,
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 9,
-                          ),
-                          overlayShape: const RoundSliderOverlayShape(
-                            overlayRadius: 18,
-                          ),
-                          activeTrackColor: Theme.of(
-                            context,
-                          ).colorScheme.primary,
-                          inactiveTrackColor: Theme.of(
-                            context,
-                          ).colorScheme.primary.withOpacity(0.25),
-                          thumbColor: Theme.of(context).colorScheme.primary,
-                          overlayColor: Theme.of(
-                            context,
-                          ).colorScheme.primary.withOpacity(0.16),
-                        ),
-                        child: Slider(
-                          value: radiusKm,
-                          min: 5,
-                          max: 100,
-                          divisions: 19,
-                          label: '${radiusKm.round()} km',
-                          onChanged: onRadiusChanged,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                OutlinedButton.icon(
-                  onPressed: onUseLocation,
-                  icon: const Icon(Icons.location_on, size: 18),
-                  label: const Text('Usar mi ubicación'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 12,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Radio',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500),
                     ),
+                    Text(
+                      '${radiusKm.toInt()} km',
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 6,
+                    thumbShape: const RoundSliderThumbShape(
+                      enabledThumbRadius: 9,
+                    ),
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 18,
+                    ),
+                    activeTrackColor: Theme.of(
+                      context,
+                    ).colorScheme.primary,
+                    inactiveTrackColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.25),
+                    thumbColor: Theme.of(context).colorScheme.primary,
+                    overlayColor: Theme.of(
+                      context,
+                    ).colorScheme.primary.withOpacity(0.16),
+                  ),
+                  child: Slider(
+                    value: radiusKm,
+                    min: 5,
+                    max: 100,
+                    divisions: 19,
+                    label: '${radiusKm.round()} km',
+                    onChanged: onRadiusChanged,
                   ),
                 ),
               ],
@@ -2064,14 +2241,12 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
   _NearbyControlHeaderDelegate({
     required this.radiusKm,
     required this.onRadiusChanged,
-    required this.onUseLocation,
     this.min = 80.0,
     this.max = 80.0,
   });
 
   final double radiusKm;
   final ValueChanged<double> onRadiusChanged;
-  final VoidCallback onUseLocation;
   final double min;
   final double max;
 
@@ -2095,40 +2270,21 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Row(
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'A ${radiusKm.round()} km',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(fontWeight: FontWeight.w600),
-                        ),
-                        Slider(
-                          value: radiusKm,
-                          min: 5,
-                          max: 100,
-                          divisions: 19,
-                          label: '${radiusKm.round()} km',
-                          onChanged: onRadiusChanged,
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                    ),
+                  Text(
+                    'A ${radiusKm.round()} km',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
-                  const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed: onUseLocation,
-                    icon: const Icon(Icons.location_on, size: 18),
-                    label: const Text('Usar mi ubicación'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                    ),
+                  Slider(
+                    value: radiusKm,
+                    min: 5,
+                    max: 100,
+                    divisions: 19,
+                    label: '${radiusKm.round()} km',
+                    onChanged: onRadiusChanged,
                   ),
                 ],
               ),
