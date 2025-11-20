@@ -56,9 +56,9 @@ class CategoriesGrid extends StatelessWidget {
                 onTap: () {
                   onCategoryTap(null);
                 },
-                borderRadius: BorderRadius.circular(16),
+                borderRadius: BorderRadius.circular(12),
                 child: Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
                     color: isAllSelected
                         ? Theme.of(
@@ -67,7 +67,7 @@ class CategoriesGrid extends StatelessWidget {
                         : Theme.of(
                             context,
                           ).colorScheme.surfaceVariant.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                     border: isAllSelected
                         ? Border.all(
                             color: Theme.of(context).colorScheme.primary,
@@ -81,12 +81,12 @@ class CategoriesGrid extends StatelessWidget {
                     children: [
                       Icon(
                         Icons.grid_view,
-                        size: 28,
+                        size: 24,
                         color: isAllSelected
                             ? Theme.of(context).colorScheme.onPrimaryContainer
                             : Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Flexible(
                         child: Text(
                           'Todas',
@@ -94,7 +94,7 @@ class CategoriesGrid extends StatelessWidget {
                             fontWeight: isAllSelected
                                 ? FontWeight.bold
                                 : FontWeight.w500,
-                            fontSize: 12,
+                            fontSize: 11,
                             color: isAllSelected
                                 ? Theme.of(
                                     context,
@@ -123,14 +123,14 @@ class CategoriesGrid extends StatelessWidget {
                   onTap: () {
                     onCategoryTap(category.id);
                   },
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(12),
                   child: Container(
-                    padding: const EdgeInsets.all(8),
+                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
                       color: isSelected
                           ? categoryColor.withOpacity(0.3)
                           : categoryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(16),
+                      borderRadius: BorderRadius.circular(12),
                       border: isSelected
                           ? Border.all(color: categoryColor, width: 2)
                           : null,
@@ -141,12 +141,12 @@ class CategoriesGrid extends StatelessWidget {
                       children: [
                         Icon(
                           iconFromName(category.icon),
-                          size: 28,
+                          size: 24,
                           color: isSelected
                               ? categoryColor
                               : Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 4),
                         Flexible(
                           child: Text(
                             category.name,
@@ -154,7 +154,7 @@ class CategoriesGrid extends StatelessWidget {
                               fontWeight: isSelected
                                   ? FontWeight.bold
                                   : FontWeight.w500,
-                              fontSize: 12,
+                              fontSize: 11,
                               color: isSelected
                                   ? categoryColor
                                   : Theme.of(context).colorScheme.onSurface,
@@ -175,10 +175,10 @@ class CategoriesGrid extends StatelessWidget {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
               padding: EdgeInsets.zero,
-              childAspectRatio: 0.9,
+              childAspectRatio: 1.1,
               children: categoryWidgets,
             );
           },

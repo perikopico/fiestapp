@@ -8,8 +8,14 @@ import '../../../services/favorites_service.dart';
 class UpcomingList extends StatefulWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
+  final bool showCategory;
 
-  const UpcomingList({super.key, required this.events, this.onClearFilters});
+  const UpcomingList({
+    super.key,
+    required this.events,
+    this.onClearFilters,
+    this.showCategory = true,
+  });
 
   @override
   State<UpcomingList> createState() => _UpcomingListState();
@@ -95,9 +101,17 @@ class _UpcomingListState extends State<UpcomingList> {
               itemBuilder: (context, index) {
                 final event = widget.events[index];
                 final isFavorite = FavoritesService.instance.isFavorite(event.id);
-                final isMobile = MediaQuery.of(context).size.width < 600;
-                final imageSize = isMobile ? 64.0 : 72.0;
 
+                // Obtener color de categoría
+                Color? categoryColor;
+                if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
+                  try {
+                    categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+                  } catch (e) {
+                    categoryColor = null;
+                  }
+                }
+                
                 return Card(
                   margin: EdgeInsets.zero,
                   elevation: 0.3,
@@ -117,30 +131,32 @@ class _UpcomingListState extends State<UpcomingList> {
                     child: Padding(
                       padding: const EdgeInsets.all(12),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // Imagen más grande
                           ClipRRect(
                             borderRadius: BorderRadius.circular(12),
                             child:
                                 event.imageUrl != null && event.imageUrl!.isNotEmpty
                                 ? Image.network(
                                     event.imageUrl!,
-                                    width: imageSize,
-                                    height: imageSize,
+                                    width: 100,
+                                    height: 100,
                                     fit: BoxFit.cover,
                                     alignment: _alignmentFromString(event.imageAlignment),
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
-                                        width: imageSize,
-                                        height: imageSize,
+                                        width: 100,
+                                        height: 100,
                                         decoration: BoxDecoration(
                                           color: Theme.of(
                                             context,
                                           ).colorScheme.surfaceVariant,
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(12),
                                         ),
                                         child: Icon(
                                           iconFromName(event.categoryIcon),
-                                          size: imageSize * 0.7,
+                                          size: 50,
                                           color: Theme.of(
                                             context,
                                           ).colorScheme.onSurfaceVariant,
@@ -149,17 +165,17 @@ class _UpcomingListState extends State<UpcomingList> {
                                     },
                                   )
                                 : Container(
-                                    width: imageSize,
-                                    height: imageSize,
+                                    width: 100,
+                                    height: 100,
                                     decoration: BoxDecoration(
                                       color: Theme.of(
                                         context,
                                       ).colorScheme.surfaceVariant,
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                     child: Icon(
                                       iconFromName(event.categoryIcon),
-                                      size: imageSize * 0.7,
+                                      size: 50,
                                       color: Theme.of(
                                         context,
                                       ).colorScheme.onSurfaceVariant,
@@ -170,35 +186,83 @@ class _UpcomingListState extends State<UpcomingList> {
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
+                              mainAxisAlignment: MainAxisAlignment.start,
                               children: [
                                 Text(
                                   event.title,
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
+                                    fontSize: 16,
                                     color: Theme.of(context).colorScheme.onSurface,
                                   ),
-                                  maxLines: 1,
+                                  maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
                                 ),
-                                if (event.cityName != null ||
-                                    event.place != null) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    '${event.cityName ?? ''}${event.cityName != null && event.place != null ? ' · ' : ''}${event.place ?? ''}',
-                                    style: Theme.of(context).textTheme.bodySmall
-                                        ?.copyWith(
-                                          color: Theme.of(context)
-                                              .colorScheme
-                                              .onSurfaceVariant
-                                              .withOpacity(0.7),
-                                        ),
+                                const SizedBox(height: 6),
+                                // Fecha y lugar
+                                Row(
+                                  children: [
+                                    Text(
+                                      DateFormat('dd MMM', 'es').format(event.startsAt),
+                                      style: Theme.of(context).textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                                .withOpacity(0.7),
+                                          ),
+                                    ),
+                                    if (event.cityName != null) ...[
+                                      Text(
+                                        ' · ',
+                                        style: Theme.of(context).textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant
+                                                  .withOpacity(0.7),
+                                            ),
+                                      ),
+                                      Text(
+                                        event.cityName!,
+                                        style: Theme.of(context).textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .onSurfaceVariant
+                                                  .withOpacity(0.7),
+                                            ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                // Chip de categoría con color (solo si showCategory es true)
+                                if (widget.showCategory && event.categoryName != null && categoryColor != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: categoryColor.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(
+                                        color: categoryColor.withOpacity(0.5),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      event.categoryName!,
+                                      style: TextStyle(
+                                        color: categoryColor,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
                                   ),
-                                ],
                               ],
                             ),
                           ),
                           const SizedBox(width: 8),
+                          // Iconos de corazón y ubicación
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
@@ -217,22 +281,20 @@ class _UpcomingListState extends State<UpcomingList> {
                                 },
                                 padding: EdgeInsets.zero,
                                 constraints: const BoxConstraints(),
-                                iconSize: 20,
+                                iconSize: 22,
                               ),
                               const SizedBox(height: 4),
-                              Text(
-                                () {
-                                  final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                  final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                  return "$fullDate · $fullHour";
-                                }(),
-                                style: Theme.of(context).textTheme.labelLarge
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant
-                                          .withOpacity(0.8),
-                                    ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.location_on_outlined,
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                ),
+                                onPressed: () {
+                                  // TODO: Abrir mapa o detalles de ubicación
+                                },
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                iconSize: 22,
                               ),
                             ],
                           ),

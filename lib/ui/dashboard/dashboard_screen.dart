@@ -9,7 +9,7 @@ import 'package:fiestapp/services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/event.dart';
 import '../../models/category.dart';
-import 'widgets/hero_banner.dart';
+import 'widgets/hero_slider.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
@@ -93,6 +93,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   int _adminTapCount = 0;
   DateTime? _lastAdminTap;
 
+  // Estado del desplegable de filtros
+  bool _isFilterPanelExpanded = false;
+  Timer? _filterPanelAutoCloseTimer;
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +112,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _searchCtrl.dispose();
     _citySearchDebouncer?.cancel();
     _citySearchCtrl.dispose();
+    _filterPanelAutoCloseTimer?.cancel();
     super.dispose();
   }
 
@@ -115,6 +120,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_mode == mode) return;
     setState(() {
       _mode = mode;
+      // Abrir desplegable automáticamente al cambiar de modo
+      _isFilterPanelExpanded = true;
+      _resetFilterPanelTimer();
       if (_mode == LocationMode.city) {
         // Al volver a Ciudad, el radio no se aplica (pero mantenemos el valor para cuando vuelvas a Radio)
         // No hacemos nada con _radiusKm
@@ -134,6 +142,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     });
     _reloadEvents();
+  }
+
+  void _resetFilterPanelTimer() {
+    _filterPanelAutoCloseTimer?.cancel();
+    if (_isFilterPanelExpanded) {
+      _filterPanelAutoCloseTimer = Timer(const Duration(seconds: 7), () {
+        if (mounted) {
+          setState(() {
+            _isFilterPanelExpanded = false;
+          });
+        }
+      });
+    }
+  }
+
+  void _onFilterInteraction() {
+    // Resetear el timer cuando hay interacción con los filtros
+    _resetFilterPanelTimer();
   }
 
   Future<void> _reloadEvents() async {
@@ -559,6 +585,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return _NearbyControlWidget(
       radiusKm: _radiusKm,
       onRadiusChanged: (value) async {
+        _onFilterInteraction();
         setState(() {
           _radiusKm = value;
         });
@@ -871,170 +898,185 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFilterPanel() {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Barra de toggle que ocupa todo el ancho con flecha
+          InkWell(
+            onTap: () {
+              setState(() {
+                _isFilterPanelExpanded = !_isFilterPanelExpanded;
+                if (_isFilterPanelExpanded) {
+                  _resetFilterPanelTimer();
+                }
+              });
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: CityRadioToggle(
+                      selectedMode: _mode,
+                      onModeChanged: (mode) {
+                        if (mode != _mode) {
+                          _switchMode(mode);
+                        }
+                      },
+                      selectedCityName: _selectedCityName,
+                      radiusKm: _radiusKm,
+                      hasLocationPermission: _hasLocationPermission,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  AnimatedRotation(
+                    turns: _isFilterPanelExpanded ? 0.5 : 0,
+                    duration: const Duration(milliseconds: 300),
+                    child: Icon(
+                      Icons.arrow_drop_down,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          // Desplegable con animación
+          AnimatedCrossFade(
+            firstChild: const SizedBox.shrink(),
+            secondChild: _buildExpandedFilterContent(),
+            crossFadeState: _isFilterPanelExpanded
+                ? CrossFadeState.showSecond
+                : CrossFadeState.showFirst,
+            duration: const Duration(milliseconds: 300),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedFilterContent() {
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         elevation: 0,
         margin: EdgeInsets.zero,
         child: Padding(
-          padding: const EdgeInsets.all(12),
+          padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Toggle Ciudad/Radio
-              CityRadioToggle(
-                selectedMode: _mode,
-                onModeChanged: (mode) {
-                  if (mode != _mode) {
-                    _switchMode(mode);
-                  }
-                },
-                selectedCityName: _selectedCityName,
-                radiusKm: _radiusKm,
-                hasLocationPermission: _hasLocationPermission,
-              ),
-              const SizedBox(height: 12),
-              // 2. Contenido dependiente del modo
-              if (_mode == LocationMode.city)
-                // Barra de búsqueda unificada (solo en modo Ciudad)
+              // Contenido según el modo
+              if (_mode == LocationMode.radius) ...[
+                // Modo Radio: Categorías en slide lateral + selector de radio
+                if (_hasLocationPermission) ...[
+                  _buildRadiusAndLocationContent(),
+                  const SizedBox(height: 16),
+                ],
+                // Categorías en slide horizontal
+                Text(
+                  'Categorías',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 120,
+                  child: _buildHorizontalCategoriesList(),
+                ),
+              ] else ...[
+                // Modo Ciudad: Búsqueda de ciudad + categorías
                 UnifiedSearchBar(
                   selectedCityId: _selectedCityId,
                   onCitySelected: (city) {
+                    _onFilterInteraction();
                     if (mounted) {
                       setState(() {
                         _selectedCityId = city.id;
                         _selectedCityIds = {city.id};
                         _selectedCityName = city.name;
                       });
-                      _reloadEvents(); // esto sí: al elegir ciudad, recargamos eventos
+                      _reloadEvents();
                     }
                   },
-                  // De momento no usamos onSearchChanged para refrescar la lista global,
-                  // la búsqueda de eventos globales la manejamos con el botón de lupa del AppBar.
                   onSearchChanged: null,
-                )
-              else
-                // Slider de radio + botón "Usar mi ubicación" (solo en modo Radio y si hay permisos)
-                _hasLocationPermission
-                    ? _buildRadiusAndLocationContent()
-                    : _buildDisabledRadiusContent(),
-              const SizedBox(height: 12),
-              // 3. Chips rápidos de fecha
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                    ActionChip(
-                      label: const Text('Hoy'),
-                      onPressed: () {
-                        final r = todayRange();
-                        setState(() {
-                          _isToday = true;
-                          _isWeekend = false;
-                          _isThisMonth = false;
-                        });
-                        _reloadWithDateRange(from: r.from, to: r.to);
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    ActionChip(
-                      label: const Text('Fin de semana'),
-                      onPressed: () {
-                        final r = weekendRange();
-                        setState(() {
-                          _isToday = false;
-                          _isWeekend = true;
-                          _isThisMonth = false;
-                        });
-                        _reloadWithDateRange(from: r.from, to: r.to);
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    ActionChip(
-                      label: const Text('Este mes'),
-                      onPressed: () {
-                        final r = thisMonthRange();
-                        setState(() {
-                          _isToday = false;
-                          _isWeekend = false;
-                          _isThisMonth = true;
-                        });
-                        _reloadWithDateRange(from: r.from, to: r.to);
-                      },
-                    ),
-                    const SizedBox(width: 4),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.date_range, size: 16),
-                      label: const Text('Rango...'),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        minimumSize: const Size(0, 32),
-                      ),
-                      onPressed: () async {
-                        final now = DateTime.now();
-                        final first = DateTime(now.year - 1, 1, 1);
-                        final last = DateTime(now.year + 2, 12, 31);
-
-                        final picked = await showDateRangePicker(
-                          context: context,
-                          firstDate: first,
-                          lastDate: last,
-                          initialDateRange:
-                              (_fromDate != null && _toDate != null)
-                              ? DateTimeRange(start: _fromDate!, end: _toDate!)
-                              : null,
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _selectedDatePreset = null;
-                            _isToday = false;
-                            _isWeekend = false;
-                            _isThisMonth = false;
-                          });
-                          _reloadWithDateRange(
-                            from: picked.start,
-                            to: picked.end,
-                          );
-                        }
-                      },
-                    ),
-                    ],
+                ),
+                const SizedBox(height: 16),
+                // Categorías en slide horizontal
+                Text(
+                  'Categorías',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 120,
+                  child: _buildHorizontalCategoriesList(),
+                ),
+              ],
+              const SizedBox(height: 16),
+              // Chips de fecha (Hoy, Fin de semana, Rango)
+              Text(
+                'Fechas',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
               ),
               const SizedBox(height: 12),
-              // 4. ExpansionTile "Categorías"
-              ExpansionTile(
-                title: Text(
-                  'Categorías',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                ),
-                subtitle: Text(
-                  _selectedCategoryId == null
-                      ? 'Todas'
-                      : _getSelectedCategoryName(),
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-                leading: Icon(
-                  Icons.category,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
-                  // Grid de categorías
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
-                    child: _buildCategoriesGrid(),
+                  ActionChip(
+                    label: const Text('Hoy'),
+                    onPressed: () {
+                      _onFilterInteraction();
+                      final r = todayRange();
+                      setState(() {
+                        _isToday = true;
+                        _isWeekend = false;
+                        _isThisMonth = false;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
                   ),
-                  const SizedBox(height: 8),
+                  ActionChip(
+                    label: const Text('Fin de semana'),
+                    onPressed: () {
+                      _onFilterInteraction();
+                      final r = weekendRange();
+                      setState(() {
+                        _isToday = false;
+                        _isWeekend = true;
+                        _isThisMonth = false;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.date_range, size: 16),
+                    label: const Text('Rango...'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      minimumSize: const Size(0, 32),
+                    ),
+                    onPressed: () {
+                      _onFilterInteraction();
+                      _showDateRangePicker();
+                    },
+                  ),
                 ],
               ),
             ],
@@ -1042,6 +1084,164 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildHorizontalCategoriesList() {
+    if (_categories.isEmpty) {
+      return const Center(child: Text('No hay categorías disponibles'));
+    }
+
+    final List<Widget> categoryWidgets = [];
+
+    // Cuadro "Todas"
+    final isAllSelected = _selectedCategoryId == null;
+    categoryWidgets.add(
+      SizedBox(
+        width: 100,
+        child: InkWell(
+          onTap: () {
+            _onFilterInteraction();
+            setState(() {
+              _selectedCategoryId = null;
+            });
+            _reloadEvents();
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: isAllSelected
+                  ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
+                  : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+              borderRadius: BorderRadius.circular(12),
+              border: isAllSelected
+                  ? Border.all(
+                      color: Theme.of(context).colorScheme.primary,
+                      width: 2,
+                    )
+                  : null,
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.grid_view,
+                  size: 32,
+                  color: isAllSelected
+                      ? Theme.of(context).colorScheme.onPrimaryContainer
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Todas',
+                  style: TextStyle(
+                    fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w500,
+                    fontSize: 12,
+                    color: isAllSelected
+                        ? Theme.of(context).colorScheme.onPrimaryContainer
+                        : Theme.of(context).colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    // Agregar las categorías
+    categoryWidgets.addAll(
+      _categories.where((c) => c.id != null).map((category) {
+        final categoryColor = _getColorForCategory(category.name);
+        final isSelected = category.id == _selectedCategoryId;
+
+        return SizedBox(
+          width: 100,
+          child: InkWell(
+            onTap: () {
+              _onFilterInteraction();
+              setState(() {
+                _selectedCategoryId = isSelected ? null : category.id;
+              });
+              _reloadEvents();
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? categoryColor.withOpacity(0.3)
+                    : categoryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: isSelected
+                    ? Border.all(color: categoryColor, width: 2)
+                    : null,
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    iconFromName(category.icon),
+                    size: 32,
+                    color: isSelected
+                        ? categoryColor
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    category.name,
+                    style: TextStyle(
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      fontSize: 12,
+                      color: isSelected
+                          ? categoryColor
+                          : Theme.of(context).colorScheme.onSurface,
+                    ),
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      }),
+    );
+
+    return ListView(
+      scrollDirection: Axis.horizontal,
+      children: categoryWidgets,
+    );
+  }
+
+  Future<void> _showDateRangePicker() async {
+    final now = DateTime.now();
+    final first = DateTime(now.year - 1, 1, 1);
+    final last = DateTime(now.year + 2, 12, 31);
+
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: first,
+      lastDate: last,
+      initialDateRange: (_fromDate != null && _toDate != null)
+          ? DateTimeRange(start: _fromDate!, end: _toDate!)
+          : null,
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDatePreset = null;
+        _isToday = false;
+        _isWeekend = false;
+        _isThisMonth = false;
+      });
+      _reloadWithDateRange(from: picked.start, to: picked.end);
+    }
   }
 
   Color _getColorForCategory(String categoryName) {
@@ -1214,7 +1414,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     if (_error != null && !_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Fiestapp')),
+        appBar: AppBar(title: const Text('QuePlan')),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -1248,64 +1448,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Fiestapp'),
-        elevation: 0,
-        actions: [
-          // Botón de admin invisible (requiere 3 toques)
-          Opacity(
-            opacity: 0.0,
-            child: IconButton(
-              icon: const Icon(Icons.admin_panel_settings),
-              tooltip: 'Panel de administración',
-              onPressed: () {
-                final now = DateTime.now();
-                // Resetear contador si pasan más de 2 segundos entre toques
-                if (_lastAdminTap != null &&
-                    now.difference(_lastAdminTap!).inSeconds > 2) {
-                  _adminTapCount = 0;
-                }
-                
-                _adminTapCount++;
-                _lastAdminTap = now;
-                
-                if (_adminTapCount >= 3) {
-                  _adminTapCount = 0;
-                  _openAdminPanel();
-                } else {
-                  // Feedback visual para indicar que se está contando
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Toca ${3 - _adminTapCount} vez${3 - _adminTapCount > 1 ? 'es' : ''} más para acceder'),
-                      duration: const Duration(milliseconds: 800),
-                    ),
-                  );
-                }
-              },
-            ),
-          ),
-        ],
-      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _reloadEvents,
           child: CustomScrollView(
             slivers: [
+              SliverAppBar(
+                title: const Text('QuePlan'),
+                floating: true,
+                snap: true,
+                elevation: 0,
+                actions: [
+                  // Botón de admin invisible (requiere 3 toques)
+                  Opacity(
+                    opacity: 0.0,
+                    child: IconButton(
+                      icon: const Icon(Icons.admin_panel_settings),
+                      tooltip: 'Panel de administración',
+                      onPressed: () {
+                        final now = DateTime.now();
+                        // Resetear contador si pasan más de 2 segundos entre toques
+                        if (_lastAdminTap != null &&
+                            now.difference(_lastAdminTap!).inSeconds > 2) {
+                          _adminTapCount = 0;
+                        }
+                        
+                        _adminTapCount++;
+                        _lastAdminTap = now;
+                        
+                        if (_adminTapCount >= 3) {
+                          _adminTapCount = 0;
+                          _openAdminPanel();
+                        } else {
+                          // Feedback visual para indicar que se está contando
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Toca ${3 - _adminTapCount} vez${3 - _adminTapCount > 1 ? 'es' : ''} más para acceder'),
+                              duration: const Duration(milliseconds: 800),
+                            ),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                ],
+              ),
               SliverToBoxAdapter(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Área invisible para acceso admin (3 toques)
                     Stack(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                          child: DashboardHero(featured: _featuredEvent),
+                          padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: const HeroSlider(),
+                          ),
                         ),
                         // Detector invisible centrado arriba del banner
                         Positioned(
-                          top: 8,
+                          top: 4,
                           left: 0,
                           right: 0,
                           child: Center(
@@ -1340,7 +1545,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     // Resultados de búsqueda
                     if (_searchEventTerm != null &&
                         _searchEventTerm!.isNotEmpty) ...[
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Row(
@@ -1348,17 +1553,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           children: [
                             Text(
                               'Resultados para "$_searchEventTerm"',
-                              style: Theme.of(context).textTheme.titleMedium,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 12),
                     ],
                     // Próximos eventos
                     if (_isLoading)
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                         child: Container(
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           decoration: BoxDecoration(
@@ -1391,7 +1598,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                         child: UpcomingEventsSection(
                           events: _upcomingEvents,
                           selectedCategoryId: _selectedCategoryId,
@@ -1400,6 +1607,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               ? _selectedCityId
                               : null,
                           onClearFilters: _clearFilters,
+                          showCategory: true,
                         ),
                       ),
                     // Popular esta semana
@@ -1444,42 +1652,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                         child: PopularThisWeekSection(
                           events: _featuredEvents,
                           onClearFilters: _clearFilters,
                         ),
                       ),
-                    // Sección "Tus favoritos"
-                    ValueListenableBuilder<Set<String>>(
-                      valueListenable: FavoritesService.instance.favoritesNotifier,
-                      builder: (context, favorites, _) {
-                        if (favorites.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        
-                        // Combinar todas las listas de eventos para buscar favoritos
-                        final allEvents = [
-                          ..._upcomingEvents,
-                          ..._featuredEvents,
-                        ];
-                        
-                        // Filtrar eventos favoritos
-                        final favoriteEvents = allEvents
-                            .where((e) => favorites.contains(e.id))
-                            .toSet()
-                            .toList();
-                        
-                        if (favoriteEvents.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
-                        
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                          child: FavoritesSection(events: favoriteEvents),
-                        );
-                      },
-                    ),
                     // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
                     // En modo Radio no se muestra porque "Próximos eventos" ya muestra los eventos del radio
                     if (_isNearbyLoading)
@@ -1520,14 +1698,7 @@ class DashboardHero extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
-    return HeroBanner(
-      title: featured!.title,
-      subtitle: 'Temporada actual',
-      imageUrl: featured!.imageUrl ?? '',
-      onFeaturedTap: () {
-        // TODO: Navegar a eventos destacados
-      },
-    );
+    return const HeroSlider();
   }
 }
 
@@ -1536,6 +1707,7 @@ class UpcomingEventsSection extends StatelessWidget {
   final int? selectedCategoryId;
   final int? selectedCityId;
   final VoidCallback? onClearFilters;
+  final bool showCategory;
 
   const UpcomingEventsSection({
     super.key,
@@ -1543,6 +1715,7 @@ class UpcomingEventsSection extends StatelessWidget {
     this.selectedCategoryId,
     this.selectedCityId,
     this.onClearFilters,
+    this.showCategory = true,
   });
 
   @override
@@ -1563,7 +1736,11 @@ class UpcomingEventsSection extends StatelessWidget {
         color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
-      child: UpcomingList(events: filtered, onClearFilters: onClearFilters),
+      child: UpcomingList(
+        events: filtered,
+        onClearFilters: onClearFilters,
+        showCategory: showCategory,
+      ),
     );
   }
 }

@@ -40,13 +40,13 @@ Future<void> main() async {
     debugPrint("⚠️ Supabase no inicializado (archivo .env no encontrado)");
   }
 
-  runApp(const Fiestapp());
+  runApp(const QuePlan());
 }
 
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
 
-class Fiestapp extends StatelessWidget {
-  const Fiestapp({super.key});
+class QuePlan extends StatelessWidget {
+  const QuePlan({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,7 @@ class Fiestapp extends StatelessWidget {
       valueListenable: appThemeMode,
       builder: (context, mode, _) {
         return MaterialApp(
-          title: 'Fiestapp',
+          title: 'QuePlan',
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
           themeMode: mode, // 👈 aquí usamos el modo dinámico

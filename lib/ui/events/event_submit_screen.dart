@@ -70,10 +70,7 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   String _imageAlignment = 'center'; // valores posibles: 'top', 'center', 'bottom'
 
   // Captcha
-  int _captchaA = 0;
-  int _captchaB = 0;
-  String _captchaUserAnswer = '';
-  String? _captchaError;
+  bool _captchaValidated = false;
 
   // Programación diaria
   List<DateTime> _eventDays = [];
@@ -83,29 +80,94 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   void initState() {
     super.initState();
     _loadData();
-    _generateCaptcha();
   }
 
-  void _generateCaptcha() {
+  Future<void> _showCaptchaDialog() async {
     final rnd = Random();
-    setState(() {
-      _captchaA = rnd.nextInt(8) + 1; // 1..9
-      _captchaB = rnd.nextInt(8) + 1;
-      _captchaUserAnswer = '';
-      _captchaError = null;
-    });
-  }
+    final numA = rnd.nextInt(10) + 1; // 1..10
+    final numB = rnd.nextInt(10) + 1; // 1..10
+    final correctAnswer = numA + numB;
 
-  bool _validateCaptcha() {
-    final expected = _captchaA + _captchaB;
-    final parsed = int.tryParse(_captchaUserAnswer.trim());
-    if (parsed == null || parsed != expected) {
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) {
+        final answerController = TextEditingController();
+        
+        return AlertDialog(
+          title: const Text('Verificación'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Demuestra que no eres un robot. ¿Cuánto es $numA + $numB?',
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: answerController,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Respuesta',
+                    hintText: 'Ingresa el resultado',
+                  ),
+                  autofocus: true,
+                  onSubmitted: (value) {
+                    final userAnswer = int.tryParse(value.trim());
+                    if (userAnswer == correctAnswer) {
+                      Navigator.of(dialogContext).pop(true);
+                    } else {
+                      Navigator.of(dialogContext).pop(false);
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop(false);
+              },
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final userAnswer = int.tryParse(answerController.text.trim());
+                if (userAnswer == correctAnswer) {
+                  Navigator.of(dialogContext).pop(true);
+                } else {
+                  Navigator.of(dialogContext).pop(false);
+                }
+              },
+              child: const Text('Validar'),
+            ),
+          ],
+        );
+      },
+    );
+    
+    if (!mounted) return;
+    
+    if (result == true) {
+      // Respuesta correcta
       setState(() {
-        _captchaError = 'Respuesta incorrecta';
+        _captchaValidated = true;
       });
-      return false;
+    } else if (result == false) {
+      // Respuesta incorrecta o cancelado
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Respuesta incorrecta'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      setState(() {
+        _captchaValidated = false;
+      });
     }
-    return true;
   }
 
   @override
@@ -930,37 +992,21 @@ $dayProgram''';
               const SizedBox(height: 16),
 
               // Captcha
-              Text(
-                'Verificación anti-bot',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text('¿Cuánto es $_captchaA + $_captchaB?'),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 80,
-                    child: TextField(
-                      keyboardType: TextInputType.number,
-                      decoration: InputDecoration(
-                        hintText: 'Resultado',
-                        errorText: _captchaError,
-                      ),
-                      onChanged: (value) {
-                        setState(() {
-                          _captchaUserAnswer = value;
-                          _captchaError = null;
-                        });
-                      },
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Otra pregunta',
-                    onPressed: _generateCaptcha,
-                  ),
-                ],
+              CheckboxListTile(
+                title: const Text('No soy un robot'),
+                value: _captchaValidated,
+                onChanged: (bool? value) {
+                  if (value == true && !_captchaValidated) {
+                    // Solo mostrar el diálogo si el usuario intenta marcar el checkbox
+                    _showCaptchaDialog();
+                  } else if (value == false) {
+                    // Permitir desmarcar
+                    setState(() {
+                      _captchaValidated = false;
+                    });
+                  }
+                },
+                controlAffinity: ListTileControlAffinity.leading,
               ),
               const SizedBox(height: 32),
 
@@ -973,8 +1019,13 @@ $dayProgram''';
                           return;
                         }
 
-                        if (!_validateCaptcha()) {
-                          return; // no seguimos si el captcha falla
+                        if (!_captchaValidated) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Debes verificar que no eres un robot'),
+                            ),
+                          );
+                          return;
                         }
 
                         if (_startDate == null) {

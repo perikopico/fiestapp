@@ -41,8 +41,8 @@ class BottomNavBar extends StatelessWidget {
       ),
       child: SafeArea(
         child: Container(
-          height: 60,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          height: 50,
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
@@ -148,22 +148,22 @@ class _NavBarButton extends StatelessWidget {
         child: InkWell(
           onTap: isDisabled ? null : onTap,
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 12),
-            decoration: isActive
-                ? BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-                    borderRadius: BorderRadius.circular(12),
-                  )
-                : null,
-            child: Center(
-              child: Icon(
-                icon,
-                size: 26,
-                color: color,
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              decoration: isActive
+                  ? BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(12),
+                    )
+                  : null,
+              child: Center(
+                child: Icon(
+                  icon,
+                  size: 24,
+                  color: color,
+                ),
               ),
             ),
-          ),
         ),
       ),
     );
