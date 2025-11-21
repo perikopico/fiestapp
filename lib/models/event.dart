@@ -20,6 +20,9 @@ class Event {
   
   /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
+  
+  /// Campo calculado que indica si el evento está en el pasado
+  bool get isPast => startsAt.isBefore(DateTime.now());
 
   Event({
     required this.id,

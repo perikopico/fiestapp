@@ -39,6 +39,81 @@ class _PopularCarouselState extends State<PopularCarousel> {
     return Colors.grey;
   }
 
+  /// Construye la imagen del evento con filtro de escala de grises si está en el pasado
+  Widget _buildEventImage(BuildContext context, Event event, double width, double height) {
+    final imageWidget = event.imageUrl != null && event.imageUrl!.isNotEmpty
+        ? Image.network(
+            event.imageUrl!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: width,
+                height: height,
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Center(
+                  child: Icon(
+                    iconFromName(event.categoryIcon),
+                    size: 48,
+                    color: event.isPast
+                        ? Theme.of(context).disabledColor
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              );
+            },
+          )
+        : Container(
+            width: width,
+            height: height,
+            color: Theme.of(context).colorScheme.surfaceVariant,
+            child: Center(
+              child: Icon(
+                iconFromName(event.categoryIcon),
+                size: 48,
+                color: event.isPast
+                    ? Theme.of(context).disabledColor
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          );
+
+    if (!event.isPast) {
+      return imageWidget;
+    }
+
+    // Aplicar filtro de escala de grises y opacidad para eventos pasados
+    return ColorFiltered(
+      colorFilter: const ColorFilter.matrix(<double>[
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0.2126, 0.7152, 0.0722, 0, 0,
+        0,      0,      0,      1, 0,
+      ]),
+      child: Opacity(
+        opacity: 0.7,
+        child: imageWidget,
+      ),
+    );
+  }
+
+  /// Obtiene el color del chip según si el evento está en el pasado
+  Color _getChipColor(BuildContext context, Event event, Color originalColor) {
+    if (event.isPast) {
+      return Theme.of(context).disabledColor.withOpacity(0.2);
+    }
+    return originalColor;
+  }
+
+  /// Obtiene el color del texto del chip según si el evento está en el pasado
+  Color _getChipTextColor(BuildContext context, Event event, Color originalColor) {
+    if (event.isPast) {
+      return Theme.of(context).disabledColor;
+    }
+    return originalColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.events.isEmpty) {
@@ -58,7 +133,7 @@ class _PopularCarouselState extends State<PopularCarousel> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No hay eventos para estos filtros',
+                'No hay eventos populares esta semana',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -66,19 +141,12 @@ class _PopularCarouselState extends State<PopularCarousel> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Prueba cambiando de ciudad o categoría.',
+                'Vuelve pronto para ver los eventos más destacados.',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
                 textAlign: TextAlign.center,
               ),
-              if (widget.onClearFilters != null) ...[
-                const SizedBox(height: 16),
-                OutlinedButton(
-                  onPressed: widget.onClearFilters,
-                  child: const Text('Borrar filtros'),
-                ),
-              ],
             ],
           ),
         ),
@@ -106,6 +174,7 @@ class _PopularCarouselState extends State<PopularCarousel> {
                 itemBuilder: (context, index) {
                   final event = widget.events[index];
                   final isFavorite = FavoritesService.instance.isFavorite(event.id);
+                  final isPast = event.isPast;
                   
                   // Obtener color de categoría
                   Color categoryColor = Colors.grey; // Color por defecto
@@ -156,42 +225,13 @@ class _PopularCarouselState extends State<PopularCarousel> {
                           children: [
                             // Image on top with fixed height
                             Container(
-                              height: 115,
+                              height: 110,
                               width: double.infinity,
-                              color: Theme.of(context).colorScheme.surfaceVariant,
-                              child:
-                                  event.imageUrl != null &&
-                                      event.imageUrl!.isNotEmpty
-                                  ? Image.network(
-                                      event.imageUrl!,
-                                      width: double.infinity,
-                                      height: 115,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Center(
-                                          child: Icon(
-                                            iconFromName(event.categoryIcon),
-                                            size: 48,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.onSurfaceVariant,
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Center(
-                                      child: Icon(
-                                        iconFromName(event.categoryIcon),
-                                        size: 48,
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.onSurfaceVariant,
-                                      ),
-                                    ),
+                              child: _buildEventImage(context, event, double.infinity, 110),
                             ),
                             // Title and date below
                             Padding(
-                              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
@@ -200,15 +240,17 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                     event.title,
                                     style: TextStyle(
                                       fontWeight: FontWeight.w600,
-                                      fontSize: 13,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurface,
+                                      fontSize: 12,
+                                      color: isPast
+                                          ? Theme.of(context).disabledColor
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 3),
+                                  const SizedBox(height: 2),
                                   Text(
                                     () {
                                       final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
@@ -217,26 +259,26 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                     }(),
                                     style: Theme.of(
                                       context,
-                                    ).textTheme.bodySmall?.copyWith(fontSize: 11),
+                                    ).textTheme.bodySmall?.copyWith(fontSize: 10),
                                   ),
                                   // Chip de categoría
                                   if (event.categoryName != null) ...[
-                                    const SizedBox(height: 6),
+                                    const SizedBox(height: 4),
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                       decoration: BoxDecoration(
-                                        color: categoryColor.withOpacity(0.2),
+                                        color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
                                         borderRadius: BorderRadius.circular(6),
                                         border: Border.all(
-                                          color: categoryColor.withOpacity(0.5),
+                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.5)),
                                           width: 1,
                                         ),
                                       ),
                                       child: Text(
                                         event.categoryName!,
                                         style: TextStyle(
-                                          color: categoryColor,
-                                          fontSize: 10,
+                                          color: _getChipTextColor(context, event, categoryColor),
+                                          fontSize: 9,
                                           fontWeight: FontWeight.w600,
                                         ),
                                         maxLines: 1,
@@ -249,6 +291,27 @@ class _PopularCarouselState extends State<PopularCarousel> {
                             ),
                           ],
                         ),
+                        // Etiqueta FINALIZADO en rojo (si es pasado)
+                        if (isPast)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.9),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'FINALIZADO',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
                         // Icono de favorito en la esquina superior derecha
                         Positioned(
                           top: 8,

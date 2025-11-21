@@ -57,6 +57,90 @@ class _UpcomingListState extends State<UpcomingList> {
     }
   }
 
+  /// Construye la imagen del evento con filtro de escala de grises si está en el pasado
+  Widget _buildEventImage(BuildContext context, Event event, double width, double height) {
+    final imageWidget = event.imageUrl != null && event.imageUrl!.isNotEmpty
+        ? Image.network(
+            event.imageUrl!,
+            width: width,
+            height: height,
+            fit: BoxFit.cover,
+            alignment: _alignmentFromString(event.imageAlignment),
+            errorBuilder: (context, error, stackTrace) {
+              return Container(
+                width: width,
+                height: height,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  iconFromName(event.categoryIcon),
+                  size: 50,
+                  color: event.isPast
+                      ? Theme.of(context).disabledColor
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              );
+            },
+          )
+        : Container(
+            width: width,
+            height: height,
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              iconFromName(event.categoryIcon),
+              size: 50,
+              color: event.isPast
+                  ? Theme.of(context).disabledColor
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          );
+
+    if (!event.isPast) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: imageWidget,
+      );
+    }
+
+    // Aplicar filtro de escala de grises y opacidad para eventos pasados
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: ColorFiltered(
+        colorFilter: const ColorFilter.matrix(<double>[
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0.2126, 0.7152, 0.0722, 0, 0,
+          0,      0,      0,      1, 0,
+        ]),
+        child: Opacity(
+          opacity: 0.7,
+          child: imageWidget,
+        ),
+      ),
+    );
+  }
+
+  /// Obtiene el color del chip según si el evento está en el pasado
+  Color _getChipColor(BuildContext context, Event event, Color originalColor) {
+    if (event.isPast) {
+      return Theme.of(context).disabledColor.withOpacity(0.2);
+    }
+    return originalColor;
+  }
+
+  /// Obtiene el color del texto del chip según si el evento está en el pasado
+  Color _getChipTextColor(BuildContext context, Event event, Color originalColor) {
+    if (event.isPast) {
+      return Theme.of(context).disabledColor;
+    }
+    return originalColor;
+  }
+
   @override
   Widget build(BuildContext context) {
     // Estado vacío: mantenemos la tarjeta con "Borrar filtros"
@@ -140,6 +224,8 @@ class _UpcomingListState extends State<UpcomingList> {
                   categoryColor = _getColorForCategory(event.categoryName!);
                 }
                 
+                final isPast = event.isPast;
+                
                 return Card(
                   margin: EdgeInsets.zero,
                   elevation: 0.3,
@@ -161,54 +247,32 @@ class _UpcomingListState extends State<UpcomingList> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Imagen más grande
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child:
-                                event.imageUrl != null && event.imageUrl!.isNotEmpty
-                                ? Image.network(
-                                    event.imageUrl!,
-                                    width: 100,
-                                    height: 100,
-                                    fit: BoxFit.cover,
-                                    alignment: _alignmentFromString(event.imageAlignment),
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        width: 100,
-                                        height: 100,
-                                        decoration: BoxDecoration(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.surfaceVariant,
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                        child: Icon(
-                                          iconFromName(event.categoryIcon),
-                                          size: 50,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.onSurfaceVariant,
-                                        ),
-                                      );
-                                    },
-                                  )
-                                : Container(
-                                    width: 100,
-                                    height: 100,
+                          // Imagen más grande con etiqueta FINALIZADO si está en el pasado
+                          Stack(
+                            children: [
+                              _buildEventImage(context, event, 100, 100),
+                              // Etiqueta FINALIZADO en rojo
+                              if (isPast)
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.surfaceVariant,
-                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.red.withOpacity(0.9),
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: Icon(
-                                      iconFromName(event.categoryIcon),
-                                      size: 50,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.onSurfaceVariant,
+                                    child: const Text(
+                                      'FINALIZADO',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
+                                ),
+                            ],
                           ),
                           const SizedBox(width: 12),
                           Expanded(
@@ -221,7 +285,9 @@ class _UpcomingListState extends State<UpcomingList> {
                                   style: TextStyle(
                                     fontWeight: FontWeight.w700,
                                     fontSize: 16,
-                                    color: Theme.of(context).colorScheme.onSurface,
+                                    color: isPast
+                                        ? Theme.of(context).disabledColor
+                                        : Theme.of(context).colorScheme.onSurface,
                                   ),
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
@@ -270,17 +336,17 @@ class _UpcomingListState extends State<UpcomingList> {
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: categoryColor.withOpacity(0.2),
+                                      color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: categoryColor.withOpacity(0.5),
+                                        color: _getChipColor(context, event, categoryColor.withOpacity(0.5)),
                                         width: 1,
                                       ),
                                     ),
                                     child: Text(
                                       event.categoryName!,
                                       style: TextStyle(
-                                        color: categoryColor,
+                                        color: _getChipTextColor(context, event, categoryColor),
                                         fontSize: 12,
                                         fontWeight: FontWeight.w600,
                                       ),

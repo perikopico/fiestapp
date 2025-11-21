@@ -9,6 +9,7 @@ import '../icons/icon_mapper.dart';
 import '../common/theme_mode_toggle.dart';
 import 'fullscreen_image_screen.dart';
 import '../../services/favorites_local_service.dart';
+import '../../services/event_service.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -26,6 +27,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void initState() {
     super.initState();
     _loadFavoriteStatus();
+    // Incrementar contador de vistas al abrir el evento
+    EventService.instance.incrementEventView(widget.event.id);
   }
 
   Future<void> _loadFavoriteStatus() async {

@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:geolocator/geolocator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/event_service.dart';
 import 'package:fiestapp/data/events_repository.dart';
 import 'package:fiestapp/models/event.dart' as model;
@@ -28,6 +30,72 @@ import 'widgets/bottom_nav_bar.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
+
+// ==== Taglines por mes ====
+final Map<String, List<String>> kMonthlyTaglines = {
+  'january': [
+    'Nuevo año, nuevos planes. Empieza fuerte con QuePlan.',
+    'Enero lleno de eventos especiales',
+    'Empieza el año con planes increíbles',
+  ],
+  'february': [
+    'Febrero, mes de celebraciones',
+    'Disfruta de los mejores eventos',
+    'El amor está en el aire',
+  ],
+  'march': [
+    'Marzo trae primavera y diversión',
+    'Eventos para todos los gustos',
+    'La primavera está aquí',
+  ],
+  'april': [
+    'Abril, mes de fiestas',
+    'Disfruta de la primavera',
+    'Eventos únicos te esperan',
+  ],
+  'may': [
+    'Mayo florece con eventos',
+    'Disfruta del buen tiempo',
+    'La diversión no para',
+  ],
+  'june': [
+    'Junio, comienza el verano',
+    'Eventos para disfrutar al aire libre',
+    'El verano está aquí',
+  ],
+  'july': [
+    'Julio, mes de verano',
+    'Disfruta del calor y los eventos',
+    'El verano en su máximo esplendor',
+  ],
+  'august': [
+    'Agosto, disfruta del verano',
+    'Eventos para toda la familia',
+    'Últimos días de verano',
+  ],
+  'september': [
+    'Septiembre, vuelta a la rutina con estilo',
+    'Eventos para empezar el otoño',
+    'El otoño trae nuevos planes',
+  ],
+  'october': [
+    'Octubre, mes de tradiciones',
+    'Disfruta de eventos únicos',
+    'El otoño está en su apogeo',
+  ],
+  'november': [
+    '¿Qué plan hay hoy cerca de ti?',
+    'Zambombas, tapas y noches de otoño. ¿Te lo vas a perder?',
+    'Descubre qué se mueve en tu zona este noviembre',
+    'Encuentra tu próxima zambomba sin perder tiempo',
+  ],
+  'december': [
+    'Navidad, mercadillos y luces. QuePlan te lo cuenta todo.',
+    'Brindis, fiestas y planes de invierno cerca de ti',
+    'Diciembre, mes mágico',
+    'Cierra el año con estilo',
+  ],
+};
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -97,6 +165,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isFilterPanelExpanded = false;
   Timer? _filterPanelAutoCloseTimer;
 
+  // Hero banner state
+  List<String> _heroImageUrls = [];
+  int _heroIndex = 0;
+  Timer? _heroTimer;
+  List<String> _heroTaglines = [];
+  bool _isHeroLoading = false;
+
   @override
   void initState() {
     super.initState();
@@ -104,6 +179,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _reloadEvents().then((_) => _loadNearby());
     _loadCities();
     _loadNearbyCities();
+    _loadHeroBanner();
   }
 
   @override
@@ -113,6 +189,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _citySearchDebouncer?.cancel();
     _citySearchCtrl.dispose();
     _filterPanelAutoCloseTimer?.cancel();
+    _heroTimer?.cancel();
     super.dispose();
   }
 
@@ -162,6 +239,165 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _resetFilterPanelTimer();
   }
 
+  /// Obtiene la fecha de hoy a las 00:00 en la zona horaria local
+  DateTime _getTodayStart() {
+    final now = DateTime.now();
+    return DateTime(now.year, now.month, now.day);
+  }
+
+  /// Determina si hay un filtro de fecha manual activo
+  bool _hasManualDateFilter() {
+    return _isToday || _isWeekend || _isThisMonth || 
+           (_fromDate != null || _toDate != null);
+  }
+
+  /// Obtiene el valor de 'from' a usar en las consultas
+  /// Si no hay filtro manual, devuelve hoy a las 00:00
+  DateTime? _getEffectiveFromDate() {
+    if (_hasManualDateFilter()) {
+      return _fromDate; // Si hay filtro manual, usar el valor establecido
+    }
+    // Si no hay filtro manual, usar hoy a las 00:00 por defecto
+    return _getTodayStart();
+  }
+
+  /// Obtiene el nombre de la carpeta del mes actual
+  String _currentMonthFolder() {
+    final now = DateTime.now();
+    switch (now.month) {
+      case 1:
+        return 'january';
+      case 2:
+        return 'february';
+      case 3:
+        return 'march';
+      case 4:
+        return 'april';
+      case 5:
+        return 'may';
+      case 6:
+        return 'june';
+      case 7:
+        return 'july';
+      case 8:
+        return 'august';
+      case 9:
+        return 'september';
+      case 10:
+        return 'october';
+      case 11:
+        return 'november';
+      case 12:
+        return 'december';
+      default:
+        return 'november';
+    }
+  }
+
+  /// Obtiene una frase aleatoria para el mes dado
+  String _getRandomTaglineForMonth(String monthKey) {
+    final list = kMonthlyTaglines[monthKey];
+    if (list == null || list.isEmpty) {
+      return 'Encuentra tu próximo plan con QuePlan';
+    }
+    return list[Random().nextInt(list.length)];
+  }
+
+  /// Genera las frases (taglines) por mes
+  List<String> _getMonthlyTaglines(DateTime now) {
+    final month = now.month;
+    switch (month) {
+      case 11: // noviembre
+        return [
+          'Encuentra tu zambomba hoy en QuePlan',
+          'Castañas, luces y buen ambiente. ¿Qué plan tienes?',
+          'Zambombas, mercadillos y mucho arte en tu zona',
+          'Este otoño no te quedes en casa. Mira qué planes hay cerca.',
+        ];
+      case 12: // diciembre
+        return [
+          'Navidad, amigos y planes cerca de ti',
+          'Mercadillos, conciertos y fiestas de fin de año',
+          'Despedimos el año con los mejores planes',
+        ];
+      default:
+        return [
+          'Descubre qué está pasando hoy cerca de ti',
+          'Conciertos, mercados y fiestas en tu zona',
+          'Abre QuePlan y no te pierdas nada',
+        ];
+    }
+  }
+
+  /// Carga el hero banner desde Supabase Storage
+  Future<void> _loadHeroBanner() async {
+    setState(() {
+      _isHeroLoading = true;
+    });
+
+    try {
+      final monthFolder = _currentMonthFolder();
+      final storage = Supabase.instance.client.storage.from('hero_banners');
+      final result = await storage.list(path: monthFolder);
+
+      // Filtrar solo imágenes (jpg, jpeg, png)
+      final imageFiles = result.where((file) {
+        final name = file.name.toLowerCase();
+        return name.endsWith('.jpg') ||
+            name.endsWith('.jpeg') ||
+            name.endsWith('.png');
+      }).toList();
+
+      if (imageFiles.isEmpty) {
+        setState(() {
+          _heroImageUrls = [];
+          _heroTaglines = _getMonthlyTaglines(DateTime.now());
+          _heroIndex = 0;
+          _isHeroLoading = false;
+        });
+        _heroTimer?.cancel();
+        return;
+      }
+
+      // Construir todas las URLs públicas
+      final imageUrls = imageFiles.map((file) {
+        return storage.getPublicUrl('$monthFolder/${file.name}');
+      }).toList();
+
+      // Mezclar las URLs para tener un orden aleatorio
+      imageUrls.shuffle(Random());
+
+      setState(() {
+        _heroImageUrls = imageUrls;
+        _heroTaglines = _getMonthlyTaglines(DateTime.now());
+        _heroIndex = 0;
+        _isHeroLoading = false;
+      });
+
+      // Cancelar timer anterior si lo hubiera
+      _heroTimer?.cancel();
+
+      // Inicializar timer solo si hay más de una imagen
+      if (_heroImageUrls.length > 1) {
+        _heroTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+          if (!mounted || _heroImageUrls.isEmpty) return;
+          setState(() {
+            _heroIndex = (_heroIndex + 1) % _heroImageUrls.length;
+          });
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar hero banner: $e');
+      setState(() {
+        _heroImageUrls = [];
+        _heroTaglines = _getMonthlyTaglines(DateTime.now());
+        _heroIndex = 0;
+        _isHeroLoading = false;
+      });
+      _heroTimer?.cancel();
+    }
+  }
+
   Future<void> _reloadEvents() async {
     setState(() {
       _isLoading = true;
@@ -191,16 +427,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
+      // Obtener la fecha 'from' efectiva (hoy a las 00:00 si no hay filtro manual)
+      final effectiveFrom = _getEffectiveFromDate();
+
       final results = await Future.wait([
         EventService.instance.fetchEvents(
           cityIds: cityIds,
           categoryId: _selectedCategoryId,
-          from: _fromDate,
+          from: effectiveFrom,
           to: _toDate,
           radiusKm: radius,
           center: center,
           searchTerm: _searchEventTerm,
         ),
+        // Popular esta semana: eventos más vistos de esta semana (usando RPC)
         _eventService.fetchFeatured(limit: 10),
         _categoryService.fetchAll(),
       ]);
@@ -312,10 +552,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
 
+      // Obtener la fecha 'from' efectiva (hoy a las 00:00 si no hay filtro manual)
+      // En _reloadWithDateRange, si se pasa from/to explícito, usarlo; si es null, usar hoy
+      final effectiveFrom = (from != null || _hasManualDateFilter()) 
+          ? _fromDate 
+          : _getTodayStart();
+
       final events = await EventService.instance.fetchEvents(
         cityIds: cityIds,
         categoryId: _selectedCategoryId,
-        from: _fromDate,
+        from: effectiveFrom,
         to: _toDate,
         radiusKm: radius,
         center: center,
@@ -373,10 +619,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     try {
       // Usar un radio fijo razonable (25km) para "Cerca de ti" en modo Ciudad
       // Esto muestra eventos cercanos a tu ubicación real, independientemente de la ciudad seleccionada
+      // Pasar el 'from' efectivo para filtrar eventos pasados por defecto
       final list = await _repoNearby.fetchNearby(
         lat: _userLat!,
         lng: _userLng!,
         radiusKm: 25, // Radio fijo para "Cerca de ti"
+        from: _getEffectiveFromDate(),
       );
       setState(() => _nearbyEvents = list);
     } finally {
@@ -599,10 +847,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final defaultLng = -5.9219;
           setState(() => _isNearbyLoading = true);
           try {
+            // Pasar el 'from' efectivo para filtrar eventos pasados por defecto
             final list = await _repoNearby.fetchNearby(
               lat: defaultLat,
               lng: defaultLng,
               radiusKm: _radiusKm,
+              from: _getEffectiveFromDate(),
             );
             setState(() => _nearbyEvents = list);
           } finally {
@@ -1410,6 +1660,121 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Construye el widget del hero banner con rotación automática
+  Widget _buildHeroBanner(BuildContext context) {
+    if (_isHeroLoading) {
+      return SizedBox(
+        width: double.infinity,
+        height: 220,
+        child: Container(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
+    if (_heroImageUrls.isEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        height: 220,
+        child: Container(
+          color: Theme.of(context).colorScheme.surfaceVariant,
+          child: Center(
+            child: Icon(
+              Icons.event,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final imageUrl = _heroImageUrls[_heroIndex];
+    String? tagline;
+    if (_heroTaglines.isNotEmpty) {
+      tagline = _heroTaglines[_heroIndex % _heroTaglines.length];
+    }
+
+    return SizedBox(
+      height: 220,
+      width: double.infinity,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(0),
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              width: double.infinity,
+              height: 220,
+              errorBuilder: (_, __, ___) => Container(
+                width: double.infinity,
+                height: 220,
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Icon(
+                  Icons.image_not_supported,
+                  size: 48,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Container(
+                  width: double.infinity,
+                  height: 220,
+                  color: Theme.of(context).colorScheme.surfaceVariant,
+                  child: const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              },
+            ),
+          ),
+          // Capa oscura suave para mejorar la lectura del texto
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [
+                  Colors.black.withOpacity(0.6),
+                  Colors.black.withOpacity(0.0),
+                ],
+              ),
+            ),
+          ),
+          if (tagline != null)
+            Positioned(
+              left: 16,
+              right: 16,
+              bottom: 16,
+              child: Text(
+                tagline,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  shadows: [
+                    Shadow(
+                      blurRadius: 8,
+                      color: Colors.black.withOpacity(0.6),
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null && !_isLoading) {
@@ -1506,10 +1871,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: const HeroSlider(),
-                          ),
+                          child: _buildHeroBanner(context),
                         ),
                         // Detector invisible centrado arriba del banner
                         Positioned(

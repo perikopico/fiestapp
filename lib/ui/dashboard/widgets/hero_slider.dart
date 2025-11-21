@@ -125,11 +125,13 @@ class _HeroSliderState extends State<HeroSlider> {
                 child: child,
               );
             },
-            child: ParticleEffects(
-              key: ValueKey<int>(_currentPage),
-              type: _getParticleTypeForImage(_currentPage),
-              child: _buildSlide(_heroImages[_currentPage]),
-            ),
+            // Partículas deshabilitadas
+            // child: ParticleEffects(
+            //   key: ValueKey<int>(_currentPage),
+            //   type: _getParticleTypeForImage(_currentPage),
+            //   child: _buildSlide(_heroImages[_currentPage]),
+            // ),
+            child: _buildSlide(_heroImages[_currentPage]),
           ),
           // Sin indicadores - solo transición automática
         ],

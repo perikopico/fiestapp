@@ -39,3 +39,18 @@ QuickDateRange thisMonthRange() {
   final end = nextMonth.subtract(const Duration(milliseconds: 1));
   return QuickDateRange(start, end);
 }
+
+/// Obtiene el rango de la semana actual (desde hoy hasta el final de la semana)
+QuickDateRange thisWeekRange() {
+  final now = DateTime.now();
+  // Inicio: hoy a las 00:00
+  final start = DateTime(now.year, now.month, now.day);
+  // Fin: domingo de esta semana a las 23:59:59.999
+  int weekday = now.weekday; // 1=lunes ... 7=domingo
+  final daysUntilSunday = 7 - weekday;
+  final sundayEnd = DateTime(now.year, now.month, now.day)
+      .add(Duration(days: daysUntilSunday))
+      .add(const Duration(days: 1))
+      .subtract(const Duration(milliseconds: 1)); // Domingo 23:59:59.999
+  return QuickDateRange(start, sundayEnd);
+}

@@ -27,20 +27,30 @@ class EventService {
   }
 
   Future<List<Event>> fetchFeatured({int limit = 10}) async {
-    final r = await supa
-        .from('events_view')
-        .select(
-          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color',
-        )
-        .eq('is_featured', true)
-        .order('starts_at', ascending: true)
-        .limit(limit);
-    final events = (r as List)
-        .map((e) => Event.fromMap(e as Map<String, dynamic>))
-        .toList();
+    final res = await supa.rpc(
+      'get_popular_events_this_week',
+      params: {'p_limit': limit},
+    );
+
+    if (res == null) return [];
+
+    final list = (res as List).cast<Map<String, dynamic>>();
+    final events = list.map((m) => Event.fromMap(m)).toList();
+    
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
     return events;
+  }
+
+  Future<void> incrementEventView(String eventId) async {
+    try {
+      await supa.rpc('increment_event_view', params: {
+        'p_event_id': eventId,
+      });
+    } catch (e) {
+      // Por ahora solo log, no queremos romper la UI si falla
+      debugPrint('incrementEventView error: $e');
+    }
   }
 
   Future<List<Event>> fetchEvents({
