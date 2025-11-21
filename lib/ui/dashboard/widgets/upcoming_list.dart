@@ -23,6 +23,28 @@ class UpcomingList extends StatefulWidget {
 
 class _UpcomingListState extends State<UpcomingList> {
 
+  Color _getColorForCategory(String categoryName) {
+    final name = categoryName.toLowerCase();
+    if (name.contains('música') || name.contains('music')) {
+      return Colors.purple;
+    } else if (name.contains('mercados') || name.contains('market')) {
+      return Colors.orange;
+    } else if (name.contains('deporte') || name.contains('sport')) {
+      return Colors.green;
+    } else if (name.contains('tradición') || name.contains('tradition') || name.contains('tradicion')) {
+      return Colors.redAccent;
+    } else if (name.contains('gastronomía') || name.contains('gastronomy') || name.contains('comida')) {
+      return Colors.amber;
+    } else if (name.contains('cultura') || name.contains('culture')) {
+      return Colors.blue;
+    } else if (name.contains('arte') || name.contains('art')) {
+      return Colors.pink;
+    } else if (name.contains('naturaleza') || name.contains('nature')) {
+      return Colors.teal;
+    }
+    return Colors.grey;
+  }
+
   Alignment _alignmentFromString(String? value) {
     switch (value) {
       case 'top':
@@ -103,13 +125,19 @@ class _UpcomingListState extends State<UpcomingList> {
                 final isFavorite = FavoritesService.instance.isFavorite(event.id);
 
                 // Obtener color de categoría
-                Color? categoryColor;
+                Color categoryColor = Colors.grey; // Color por defecto
                 if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
                   try {
                     categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
                   } catch (e) {
-                    categoryColor = null;
+                    // Si falla el parse, usar color por defecto basado en el nombre
+                    if (event.categoryName != null) {
+                      categoryColor = _getColorForCategory(event.categoryName!);
+                    }
                   }
+                } else if (event.categoryName != null) {
+                  // Si no hay color, usar color por defecto basado en el nombre de la categoría
+                  categoryColor = _getColorForCategory(event.categoryName!);
                 }
                 
                 return Card(
@@ -238,7 +266,7 @@ class _UpcomingListState extends State<UpcomingList> {
                                 ),
                                 const SizedBox(height: 8),
                                 // Chip de categoría con color (solo si showCategory es true)
-                                if (widget.showCategory && event.categoryName != null && categoryColor != null)
+                                if (widget.showCategory && event.categoryName != null)
                                   Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(

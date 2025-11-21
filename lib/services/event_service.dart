@@ -148,6 +148,8 @@ class EventService {
       // Ordenar y limitar
       events.sort((a, b) => a.startsAt.compareTo(b.startsAt));
       final limitedEvents = events.take(limit).toList();
+      // Enriquecer con información de categoría si falta
+      await _enrichEventsWithCategory(limitedEvents);
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(limitedEvents);
       return limitedEvents;
@@ -270,6 +272,80 @@ class EventService {
     }
 
     return events;
+  }
+
+  /// Enriquece los eventos con información de categoría si falta
+  Future<void> _enrichEventsWithCategory(List<Event> events) async {
+    if (events.isEmpty) return;
+
+    // Filtrar eventos que necesitan información de categoría
+    final eventsNeedingCategory = events.where((e) =>
+      e.categoryId != null &&
+      (e.categoryName == null || e.categoryIcon == null || e.categoryColor == null)
+    ).toList();
+
+    if (eventsNeedingCategory.isEmpty) return;
+
+    try {
+      // Obtener todos los categoryIds únicos
+      final categoryIds = eventsNeedingCategory
+          .map((e) => e.categoryId!)
+          .toSet()
+          .toList();
+
+      if (categoryIds.isEmpty) return;
+
+      // Consultar categorías desde la tabla categories
+      final batchSize = 50;
+      final categoryMap = <int, Map<String, dynamic>>{};
+
+      for (int i = 0; i < categoryIds.length; i += batchSize) {
+        final batch = categoryIds.skip(i).take(batchSize).toList();
+        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
+
+        final catRes = await supa
+            .from('categories')
+            .select('id, name, icon, color')
+            .or(orCondition);
+
+        if (catRes is List) {
+          for (final cat in catRes) {
+            final catMap = cat as Map<String, dynamic>;
+            final id = (catMap['id'] as num).toInt();
+            categoryMap[id] = catMap;
+          }
+        }
+      }
+
+      // Actualizar eventos con información de categoría usando el mismo patrón que _enrichEventsWithDescription
+      for (int i = 0; i < events.length; i++) {
+        final event = events[i];
+        if (event.categoryId != null && categoryMap.containsKey(event.categoryId)) {
+          final cat = categoryMap[event.categoryId]!;
+          // Crear un nuevo evento con la información de categoría actualizada
+          final updatedMap = {
+            'id': event.id,
+            'title': event.title,
+            'starts_at': event.startsAt.toIso8601String(),
+            'city_name': event.cityName,
+            'category_name': event.categoryName ?? cat['name'],
+            'category_icon': event.categoryIcon ?? cat['icon'],
+            'category_color': event.categoryColor ?? cat['color'],
+            'place': event.place,
+            'image_url': event.imageUrl,
+            'category_id': event.categoryId,
+            'city_id': event.cityId,
+            'is_free': event.isFree,
+            'maps_url': event.mapsUrl,
+            'description': event.description,
+            'image_alignment': event.imageAlignment,
+          };
+          events[i] = Event.fromMap(updatedMap);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error al enriquecer eventos con categoría: $e');
+    }
   }
 
   /// Enriquece los eventos con la descripción desde la tabla base events

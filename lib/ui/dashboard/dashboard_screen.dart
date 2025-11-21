@@ -1458,6 +1458,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 floating: true,
                 snap: true,
                 elevation: 0,
+                toolbarHeight: 48,
+                collapsedHeight: 48,
+                expandedHeight: 48,
                 actions: [
                   // Botón de admin invisible (requiere 3 toques)
                   Opacity(
@@ -1502,7 +1505,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     Stack(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 4, 0, 4),
+                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
                           child: SizedBox(
                             width: double.infinity,
                             child: const HeroSlider(),
@@ -1894,6 +1897,7 @@ class NearbyEventsSection extends StatelessWidget {
                           ),
                         )
                         .toList(),
+                    showCategory: true,
                   ),
                 ),
               ],

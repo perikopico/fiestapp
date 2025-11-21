@@ -17,6 +17,28 @@ class PopularCarousel extends StatefulWidget {
 
 class _PopularCarouselState extends State<PopularCarousel> {
 
+  Color _getColorForCategory(String categoryName) {
+    final name = categoryName.toLowerCase();
+    if (name.contains('música') || name.contains('music')) {
+      return Colors.purple;
+    } else if (name.contains('mercados') || name.contains('market')) {
+      return Colors.orange;
+    } else if (name.contains('deporte') || name.contains('sport')) {
+      return Colors.green;
+    } else if (name.contains('tradición') || name.contains('tradition') || name.contains('tradicion')) {
+      return Colors.redAccent;
+    } else if (name.contains('gastronomía') || name.contains('gastronomy') || name.contains('comida')) {
+      return Colors.amber;
+    } else if (name.contains('cultura') || name.contains('culture')) {
+      return Colors.blue;
+    } else if (name.contains('arte') || name.contains('art')) {
+      return Colors.pink;
+    } else if (name.contains('naturaleza') || name.contains('nature')) {
+      return Colors.teal;
+    }
+    return Colors.grey;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (widget.events.isEmpty) {
@@ -84,6 +106,23 @@ class _PopularCarouselState extends State<PopularCarousel> {
                 itemBuilder: (context, index) {
                   final event = widget.events[index];
                   final isFavorite = FavoritesService.instance.isFavorite(event.id);
+                  
+                  // Obtener color de categoría
+                  Color categoryColor = Colors.grey; // Color por defecto
+                  if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
+                    try {
+                      categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+                    } catch (e) {
+                      // Si falla el parse, usar color por defecto basado en el nombre
+                      if (event.categoryName != null) {
+                        categoryColor = _getColorForCategory(event.categoryName!);
+                      }
+                    }
+                  } else if (event.categoryName != null) {
+                    // Si no hay color, usar color por defecto basado en el nombre de la categoría
+                    categoryColor = _getColorForCategory(event.categoryName!);
+                  }
+                  
                   return InkWell(
                     onTap: () {
                       Navigator.of(context).push(
@@ -180,6 +219,31 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                       context,
                                     ).textTheme.bodySmall?.copyWith(fontSize: 11),
                                   ),
+                                  // Chip de categoría
+                                  if (event.categoryName != null) ...[
+                                    const SizedBox(height: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: categoryColor.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(
+                                          color: categoryColor.withOpacity(0.5),
+                                          width: 1,
+                                        ),
+                                      ),
+                                      child: Text(
+                                        event.categoryName!,
+                                        style: TextStyle(
+                                          color: categoryColor,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
