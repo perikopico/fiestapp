@@ -108,17 +108,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           children: [
             // Imagen principal (con fallback)
             if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) ...[
-              GestureDetector(
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
-                    ),
-                  );
-                },
-                child: SizedBox(
-                  height: 220,
-                  width: double.infinity,
+              Builder(
+                builder: (context) {
+                  final size = MediaQuery.of(context).size;
+                  final isMobile = size.width < 600;
+                  final headerHeight = isMobile ? 320.0 : 260.0;
+                  
+                  return GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
+                        ),
+                      );
+                    },
+                    child: SizedBox(
+                      height: headerHeight,
+                      width: double.infinity,
                   child: Stack(
                     children: [
                       ClipRRect(
@@ -181,25 +187,35 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                     ],
                   ),
-                ),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
             ] else ...[
-              SizedBox(
-                height: 220,
-                width: double.infinity,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(0),
-                  child: Container(
-                    color: theme.colorScheme.surfaceVariant,
-                    alignment: Alignment.center,
-                    child: Icon(
-                      Icons.event,
-                      size: 56,
-                      color: theme.colorScheme.onSurfaceVariant,
+              Builder(
+                builder: (context) {
+                  final size = MediaQuery.of(context).size;
+                  final isMobile = size.width < 600;
+                  final headerHeight = isMobile ? 320.0 : 260.0;
+                  
+                  return SizedBox(
+                    height: headerHeight,
+                    width: double.infinity,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(0),
+                      child: Container(
+                        color: theme.colorScheme.surfaceVariant,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.event,
+                          size: 56,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
                     ),
-                  ),
-                ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
             ],

@@ -186,7 +186,10 @@ class _UpcomingListState extends State<UpcomingList> {
               'Próximos eventos',
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+              ).textTheme.titleLarge?.copyWith(
+                fontWeight: FontWeight.w700,
+                letterSpacing: -0.5,
+              ),
             ),
             if (widget.onClearFilters != null)
               TextButton(

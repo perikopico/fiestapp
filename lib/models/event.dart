@@ -22,7 +22,18 @@ class Event {
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
   
   /// Campo calculado que indica si el evento está en el pasado
-  bool get isPast => startsAt.isBefore(DateTime.now());
+  /// Un evento se considera "FINALIZADO" solo a partir de las 5:00 del día siguiente a su fecha
+  bool get isPast {
+    // Fecha del evento (ignorando horas)
+    final eventDate = DateTime(startsAt.year, startsAt.month, startsAt.day);
+    
+    // El evento deja de ser "activo" a las 05:00 del día siguiente
+    final cutoff = eventDate.add(const Duration(days: 1)).add(const Duration(hours: 5));
+    
+    final now = DateTime.now();
+    
+    return now.isAfter(cutoff);
+  }
 
   Event({
     required this.id,

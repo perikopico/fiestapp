@@ -8,8 +8,14 @@ import '../../../services/favorites_service.dart';
 class PopularCarousel extends StatefulWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
+  final String title;
 
-  const PopularCarousel({super.key, required this.events, this.onClearFilters});
+  const PopularCarousel({
+    super.key,
+    required this.events,
+    this.onClearFilters,
+    this.title = 'Popular esta semana',
+  });
 
   @override
   State<PopularCarousel> createState() => _PopularCarouselState();
@@ -133,7 +139,9 @@ class _PopularCarouselState extends State<PopularCarousel> {
               ),
               const SizedBox(height: 16),
               Text(
-                'No hay eventos populares esta semana',
+                widget.title == 'Popular esta semana'
+                    ? 'No hay eventos populares esta semana'
+                    : 'No hay eventos populares esta semana en tu provincia',
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
@@ -157,8 +165,11 @@ class _PopularCarouselState extends State<PopularCarousel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Popular esta semana',
-          style: Theme.of(context).textTheme.titleMedium,
+          widget.title,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
         ),
         const SizedBox(height: 12),
         ValueListenableBuilder<Set<String>>(

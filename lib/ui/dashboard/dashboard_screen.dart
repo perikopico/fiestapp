@@ -128,6 +128,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Set<int> _selectedCityIds = {};
   String? _selectedCityName;
   List<City> _cities = [];
+  int? _currentProvinceId; // Province ID para filtrar eventos populares
   DateTime? _fromDate;
   DateTime? _toDate;
   String? _selectedDatePreset;
@@ -171,6 +172,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Timer? _heroTimer;
   List<String> _heroTaglines = [];
   bool _isHeroLoading = false;
+  bool _textVisible = true; // Control de visibilidad del texto para fade
 
   @override
   void initState() {
@@ -212,6 +214,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _selectedCityId = null;
         _selectedCityIds.clear();
         _selectedCityName = null;
+        _currentProvinceId = null; // Limpiar provinceId en modo Radio
         // Inicializar radio a un valor válido si está en 0
         if (_radiusKm == 0 || _radiusKm < 5) _radiusKm = 25;
         // Limpiar eventos cercanos porque no se muestran en modo Radio
@@ -329,6 +332,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Precarga la siguiente imagen del hero banner
+  Future<void> _preloadNextImage() async {
+    if (_heroImageUrls.isEmpty || _heroImageUrls.length <= 1) return;
+    
+    final nextIndex = (_heroIndex + 1) % _heroImageUrls.length;
+    final nextImageUrl = _heroImageUrls[nextIndex];
+    
+    try {
+      await precacheImage(NetworkImage(nextImageUrl), context);
+    } catch (e) {
+      debugPrint('Error al precargar imagen del hero: $e');
+    }
+  }
+
   /// Carga el hero banner desde Supabase Storage
   Future<void> _loadHeroBanner() async {
     setState(() {
@@ -354,6 +371,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _heroTaglines = _getMonthlyTaglines(DateTime.now());
           _heroIndex = 0;
           _isHeroLoading = false;
+          _textVisible = true;
         });
         _heroTimer?.cancel();
         return;
@@ -372,6 +390,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _heroTaglines = _getMonthlyTaglines(DateTime.now());
         _heroIndex = 0;
         _isHeroLoading = false;
+        _textVisible = true; // Asegurar que el texto esté visible inicialmente
       });
 
       // Cancelar timer anterior si lo hubiera
@@ -379,11 +398,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Inicializar timer solo si hay más de una imagen
       if (_heroImageUrls.length > 1) {
-        _heroTimer = Timer.periodic(const Duration(seconds: 7), (_) {
+        // Precargar la primera imagen siguiente
+        _preloadNextImage();
+        
+        _heroTimer = Timer.periodic(const Duration(seconds: 7), (_) async {
           if (!mounted || _heroImageUrls.isEmpty) return;
-          setState(() {
-            _heroIndex = (_heroIndex + 1) % _heroImageUrls.length;
-          });
+          
+          // Precargar la siguiente imagen antes de cambiar
+          await _preloadNextImage();
+          
+          // Cambiar el índice solo después de precargar
+          if (mounted) {
+            // Ocultar texto y cambiar imagen simultáneamente
+            // Ambos tendrán su fade respectivo (AnimatedSwitcher para imagen, AnimatedOpacity para texto)
+            setState(() {
+              _textVisible = false;
+              _heroIndex = (_heroIndex + 1) % _heroImageUrls.length;
+            });
+            
+            // Esperar a que termine el fade para mostrar el texto de nuevo
+            await Future.delayed(const Duration(milliseconds: 600));
+            
+            if (mounted) {
+              setState(() {
+                _textVisible = true;
+              });
+            }
+          }
         });
       }
     } catch (e) {
@@ -393,9 +434,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _heroTaglines = _getMonthlyTaglines(DateTime.now());
         _heroIndex = 0;
         _isHeroLoading = false;
+        _textVisible = true;
       });
       _heroTimer?.cancel();
     }
+  }
+
+  /// Calcula el provinceId para filtrar eventos populares
+  int? _getProvinceIdForPopular() {
+    // 1) Si estamos en modo ciudad y hay ciudad seleccionada → usar provincia de esa ciudad
+    if (_mode == LocationMode.city && _selectedCityId != null && _cities.isNotEmpty) {
+      try {
+        final city = _cities.firstWhere(
+          (c) => c.id == _selectedCityId,
+          orElse: () => _cities.first,
+        );
+        return city.provinceId; // asumiendo que City tiene provinceId
+      } catch (_) {}
+    }
+
+    // 2) Si estamos en modo radio y tenemos ciudades cercanas → usar provincia de la primera
+    if (_mode == LocationMode.radius && _nearbyCities.isNotEmpty) {
+      return _nearbyCities.first.provinceId;
+    }
+
+    // 3) Sin ubicación ni ciudad → null (populares de toda la app)
+    return null;
   }
 
   Future<void> _reloadEvents() async {
@@ -430,6 +494,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Obtener la fecha 'from' efectiva (hoy a las 00:00 si no hay filtro manual)
       final effectiveFrom = _getEffectiveFromDate();
 
+      // Calcular provinceId para eventos populares
+      final provinceIdForPopular = _getProvinceIdForPopular();
+      
       final results = await Future.wait([
         EventService.instance.fetchEvents(
           cityIds: cityIds,
@@ -441,7 +508,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           searchTerm: _searchEventTerm,
         ),
         // Popular esta semana: eventos más vistos de esta semana (usando RPC)
-        _eventService.fetchFeatured(limit: 10),
+        _eventService.fetchPopularEvents(
+          provinceId: provinceIdForPopular,
+          limit: 7, // por ejemplo, 7 eventos populares
+        ),
         _categoryService.fetchAll(),
       ]);
 
@@ -476,6 +546,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Obtiene el título para la sección de eventos populares
+  String _popularTitle() {
+    final provinceId = _getProvinceIdForPopular();
+    if (provinceId == null) {
+      return 'Popular esta semana';
+    }
+    return 'Popular esta semana en tu provincia';
+  }
+
+  /// Actualiza el provinceId actual basado en la ciudad seleccionada
+  void _updateCurrentProvinceId() {
+    if (_selectedCityId != null) {
+      // Buscar en la lista de ciudades principales primero
+      try {
+        final cityInMainList = _cities.firstWhere((c) => c.id == _selectedCityId);
+        _currentProvinceId = cityInMainList.provinceId;
+        return;
+      } catch (e) {
+        // Ciudad no encontrada en la lista principal
+      }
+      
+      // Si no está en la lista principal, buscar en ciudades cercanas
+      try {
+        final cityInNearbyList = _nearbyCities.firstWhere((c) => c.id == _selectedCityId);
+        _currentProvinceId = cityInNearbyList.provinceId;
+        return;
+      } catch (e) {
+        // Ciudad no encontrada en la lista cercana
+      }
+      
+      // Si no se encuentra, establecer a null
+      _currentProvinceId = null;
+    } else {
+      _currentProvinceId = null;
+    }
+  }
+
   Future<void> _loadCities() async {
     // por ahora usamos Cádiz por slug (para producción usaremos selector)
     final provId = await _cityService.getProvinceIdBySlug('cadiz');
@@ -483,6 +590,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!mounted) return;
     setState(() {
       _cities = cities;
+      // Establecer el provinceId inicial
+      _currentProvinceId = provId;
       // si no hay selección, seleccionar la primera o mantener null (tu criterio)
       _selectedCityId ??= _cities.isNotEmpty ? _cities.first.id : null;
       if (_selectedCityId != null) {
@@ -492,6 +601,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
         _selectedCityName = city.name;
         _selectedCityIds = {city.id};
+        _currentProvinceId = city.provinceId ?? provId;
       }
     });
   }
@@ -502,6 +612,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _selectedCityId = null;
       _selectedCityIds.clear();
       _selectedCityName = null;
+      _currentProvinceId = null;
 
       // Categoría
       _selectedCategoryId = null;
@@ -673,6 +784,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   _selectedCityName = city.name;
                   _selectedCityIds = {city.id};
                 });
+                _updateCurrentProvinceId();
                 _reloadEvents();
               },
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -693,14 +805,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ChoiceChip(
           label: Text('Todas', style: Theme.of(context).textTheme.labelLarge),
           selected: _selectedCityId == null,
-          onSelected: (_) {
-            setState(() {
-              _selectedCityId = null; // todas las ciudades del radio
-              _selectedCityName = null;
-              _selectedCityIds.clear();
-            });
-            _reloadEvents();
-          },
+            onSelected: (_) {
+              setState(() {
+                _selectedCityId = null; // todas las ciudades del radio
+                _selectedCityName = null;
+                _selectedCityIds.clear();
+              });
+              _updateCurrentProvinceId();
+              _reloadEvents();
+            },
           materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           visualDensity: VisualDensity.compact,
         ),
@@ -717,6 +830,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _selectedCityName = city.name;
                 _selectedCityIds = {city.id};
               });
+              _updateCurrentProvinceId();
               _reloadEvents();
             },
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -1148,11 +1262,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFilterPanel() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Barra de toggle que ocupa todo el ancho con flecha
+          // Barra de toggle que ocupa todo el ancho con flecha abajo
           InkWell(
             onTap: () {
               setState(() {
@@ -1162,38 +1276,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 }
               });
             },
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(16),
+                color: Theme.of(context).colorScheme.surface,
                 border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.12),
+                  width: 1.5,
                 ),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: CityRadioToggle(
-                      selectedMode: _mode,
-                      onModeChanged: (mode) {
-                        if (mode != _mode) {
-                          _switchMode(mode);
-                        }
-                      },
-                      selectedCityName: _selectedCityName,
-                      radiusKm: _radiusKm,
-                      hasLocationPermission: _hasLocationPermission,
-                    ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
                   ),
-                  const SizedBox(width: 12),
+                ],
+              ),
+              child: Column(
+                children: [
+                  CityRadioToggle(
+                    selectedMode: _mode,
+                    onModeChanged: (mode) {
+                      if (mode != _mode) {
+                        _switchMode(mode);
+                      }
+                    },
+                    selectedCityName: _selectedCityName,
+                    radiusKm: _radiusKm,
+                    hasLocationPermission: _hasLocationPermission,
+                  ),
+                  const SizedBox(height: 8),
+                  // Flecha centrada abajo
                   AnimatedRotation(
                     turns: _isFilterPanelExpanded ? 0.5 : 0,
                     duration: const Duration(milliseconds: 300),
                     child: Icon(
-                      Icons.arrow_drop_down,
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      Icons.keyboard_arrow_down,
+                      color: Theme.of(context).colorScheme.primary,
+                      size: 28,
                     ),
                   ),
                 ],
@@ -1217,12 +1340,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildExpandedFilterContent() {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Card(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        elevation: 0,
-        margin: EdgeInsets.zero,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          color: Theme.of(context).colorScheme.surface,
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Theme.of(context).colorScheme.shadow.withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1257,6 +1392,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         _selectedCityIds = {city.id};
                         _selectedCityName = city.name;
                       });
+                      _updateCurrentProvinceId();
                       _reloadEvents();
                     }
                   },
@@ -1662,10 +1798,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Construye el widget del hero banner con rotación automática
   Widget _buildHeroBanner(BuildContext context) {
+    // Calcular altura responsive - aumentada significativamente
+    final size = MediaQuery.of(context).size;
+    final isMobile = size.width < 600;
+    final bannerHeight = isMobile ? 480.0 : 400.0;
+
     if (_isHeroLoading) {
       return SizedBox(
         width: double.infinity,
-        height: 220,
+        height: bannerHeight,
         child: Container(
           color: Theme.of(context).colorScheme.surfaceVariant,
           child: const Center(
@@ -1678,7 +1819,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (_heroImageUrls.isEmpty) {
       return SizedBox(
         width: double.infinity,
-        height: 220,
+        height: bannerHeight,
         child: Container(
           color: Theme.of(context).colorScheme.surfaceVariant,
           child: Center(
@@ -1699,39 +1840,44 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return SizedBox(
-      height: 220,
+      height: bannerHeight,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(0),
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.cover,
-              width: double.infinity,
-              height: 220,
-              errorBuilder: (_, __, ___) => Container(
+          // Imagen con AnimatedSwitcher para fade suave
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 600),
+            child: ClipRRect(
+              key: ValueKey<String>(imageUrl), // Key único para cada imagen
+              borderRadius: BorderRadius.circular(0),
+              child: Image.network(
+                imageUrl,
+                fit: BoxFit.cover,
                 width: double.infinity,
-                height: 220,
-                color: Theme.of(context).colorScheme.surfaceVariant,
-                child: Icon(
-                  Icons.image_not_supported,
-                  size: 48,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Container(
+                height: bannerHeight,
+                errorBuilder: (_, __, ___) => Container(
                   width: double.infinity,
-                  height: 220,
+                  height: bannerHeight,
                   color: Theme.of(context).colorScheme.surfaceVariant,
-                  child: const Center(
-                    child: CircularProgressIndicator(),
+                  child: Icon(
+                    Icons.image_not_supported,
+                    size: 48,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
-                );
-              },
+                ),
+                loadingBuilder: (context, child, loadingProgress) {
+                  if (loadingProgress == null) return child;
+                  return Container(
+                    width: double.infinity,
+                    height: bannerHeight,
+                    color: Theme.of(context).colorScheme.surfaceVariant,
+                    child: const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                  );
+                },
+              ),
             ),
           ),
           // Capa oscura suave para mejorar la lectura del texto
@@ -1747,27 +1893,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
             ),
           ),
+          // Texto con AnimatedOpacity para fade suave
           if (tagline != null)
             Positioned(
               left: 16,
               right: 16,
               bottom: 16,
-              child: Text(
-                tagline,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                  shadows: [
-                    Shadow(
-                      blurRadius: 8,
-                      color: Colors.black.withOpacity(0.6),
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+              child: AnimatedOpacity(
+                opacity: _textVisible ? 1.0 : 0.0,
+                duration: const Duration(milliseconds: 600),
+                child: Text(
+                  tagline,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    shadows: [
+                      Shadow(
+                        blurRadius: 8,
+                        color: Colors.black.withOpacity(0.6),
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                textAlign: TextAlign.center,
               ),
             ),
         ],
@@ -1963,7 +2114,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                         child: UpcomingEventsSection(
                           events: _upcomingEvents,
                           selectedCategoryId: _selectedCategoryId,
@@ -2017,20 +2168,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
                         child: PopularThisWeekSection(
                           events: _featuredEvents,
                           onClearFilters: _clearFilters,
+                          title: _popularTitle(),
                         ),
                       ),
                     // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
                     // En modo Radio no se muestra porque "Próximos eventos" ya muestra los eventos del radio
+                    // Solo mostrar si hay permisos de ubicación y ubicación real del usuario
                     if (_isNearbyLoading)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                         child: ShimmerBlock(height: 80),
                       )
-                    else if (_mode == LocationMode.city && _userLat != null && _userLng != null)
+                    else if (_mode == LocationMode.city && 
+                             _hasLocationPermission && 
+                             _userLat != null && 
+                             _userLng != null &&
+                             _nearbyEvents.isNotEmpty)
                       Padding(
                         padding: const EdgeInsets.fromLTRB(8, 8, 8, 16),
                         child: NearbyEventsSection(events: _nearbyEvents),
@@ -2096,10 +2253,21 @@ class UpcomingEventsSection extends StatelessWidget {
         .toList();
 
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
       child: UpcomingList(
         events: filtered,
@@ -2142,22 +2310,39 @@ class CategoriesSection extends StatelessWidget {
 class PopularThisWeekSection extends StatelessWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
+  final String title;
 
   const PopularThisWeekSection({
     super.key,
     required this.events,
     this.onClearFilters,
+    this.title = 'Popular esta semana',
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 16),
+      padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      child: PopularCarousel(events: events, onClearFilters: onClearFilters),
+      child: PopularCarousel(
+        events: events,
+        onClearFilters: onClearFilters,
+        title: title,
+      ),
     );
   }
 }
@@ -2216,7 +2401,7 @@ class NearbyEventsSection extends StatelessWidget {
               padding: const EdgeInsets.all(24),
               child: Center(
                 child: Text(
-                  'No hay eventos en este radio.',
+                  'No hay eventos cerca de ti.',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),

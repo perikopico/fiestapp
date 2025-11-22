@@ -42,6 +42,27 @@ class EventService {
     return events;
   }
 
+  Future<List<Event>> fetchPopularEvents({
+    int? provinceId,
+    int limit = 10,
+  }) async {
+    final params = <String, dynamic>{
+      'p_limit': limit,
+      'p_province_id': provinceId,
+    };
+
+    final res = await supa.rpc('get_popular_events', params: params);
+
+    if (res == null) return [];
+
+    final list = (res as List).cast<Map<String, dynamic>>();
+    final events = list.map((m) => Event.fromMap(m)).toList();
+    
+    // Obtener description desde la tabla base para cada evento
+    await _enrichEventsWithDescription(events);
+    return events;
+  }
+
   Future<void> incrementEventView(String eventId) async {
     try {
       await supa.rpc('increment_event_view', params: {
