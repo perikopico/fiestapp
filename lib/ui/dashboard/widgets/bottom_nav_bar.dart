@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../events/favorites_screen.dart';
 import '../../events/event_submit_screen.dart';
-import '../../common/theme_mode_toggle.dart';
+import '../../notifications/notifications_screen.dart';
 import '../../../main.dart' show appThemeMode;
 
 class BottomNavBar extends StatelessWidget {
@@ -97,17 +97,14 @@ class BottomNavBar extends StatelessWidget {
                   );
                 },
               ),
-              // Botón Notificaciones (placeholder para futuro)
+              // Botón Notificaciones
               _NavBarButton(
                 icon: Icons.notifications_outlined,
-                isActive: false,
-                isDisabled: true,
+                isActive: currentRoute == 'notifications',
                 onTap: () {
-                  // TODO: Implementar notificaciones
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Próximamente: Notificaciones'),
-                      duration: Duration(seconds: 2),
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const NotificationsScreen(),
                     ),
                   );
                 },

@@ -1,6 +1,5 @@
 import 'dart:io' show File;
 import 'dart:math';
-import 'dart:typed_data';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
@@ -72,6 +71,14 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   // Captcha
   bool _captchaValidated = false;
 
+  // Estados de validación para UX mejorada
+  String? _titleError;
+  String? _descriptionError;
+  String? _placeError;
+  String? _cityError;
+  String? _categoryError;
+  String? _startDateError;
+
   // Programación diaria
   List<DateTime> _eventDays = [];
   final Map<DateTime, TextEditingController> _dailyProgramControllers = {};
@@ -80,6 +87,38 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   void initState() {
     super.initState();
     _loadData();
+    
+    // Agregar listeners para validación en tiempo real
+    _titleController.addListener(() {
+      if (mounted) {
+        setState(() {
+          if (_titleController.text.trim().isNotEmpty) {
+            _titleError = null;
+          }
+        });
+      }
+    });
+    
+    _descriptionController.addListener(() {
+      if (mounted) {
+        setState(() {
+          final desc = _descriptionController.text.trim();
+          if (desc.isNotEmpty && desc.length >= 20) {
+            _descriptionError = null;
+          }
+        });
+      }
+    });
+    
+    _placeController.addListener(() {
+      if (mounted) {
+        setState(() {
+          if (_placeController.text.trim().isNotEmpty) {
+            _placeError = null;
+          }
+        });
+      }
+    });
   }
 
   Future<void> _showCaptchaDialog() async {
@@ -536,6 +575,111 @@ $dayProgram''';
     }
   }
 
+  /// Valida todos los campos y actualiza los estados de error
+  bool _validateAllFields() {
+    bool isValid = true;
+
+    // Validar título
+    if (_titleController.text.trim().isEmpty) {
+      _titleError = 'El título es obligatorio';
+      isValid = false;
+    } else {
+      _titleError = null;
+    }
+
+    // Validar descripción (mínimo 20 caracteres)
+    final description = _descriptionController.text.trim();
+    if (description.isEmpty) {
+      _descriptionError = 'La descripción es obligatoria';
+      isValid = false;
+    } else if (description.length < 20) {
+      _descriptionError = 'La descripción debe tener al menos 20 caracteres';
+      isValid = false;
+    } else {
+      _descriptionError = null;
+    }
+
+    // Validar lugar
+    if (_placeController.text.trim().isEmpty) {
+      _placeError = 'El lugar es obligatorio';
+      isValid = false;
+    } else {
+      _placeError = null;
+    }
+
+    // Validar ciudad
+    if (_selectedCity == null || _selectedCityId == null) {
+      _cityError = 'Por favor, selecciona una ciudad';
+      isValid = false;
+    } else {
+      _cityError = null;
+    }
+
+    // Validar categoría
+    if (_selectedCategory == null || _selectedCategory!.id == null) {
+      _categoryError = 'Por favor, selecciona una categoría';
+      isValid = false;
+    } else {
+      _categoryError = null;
+    }
+
+    // Validar fecha de inicio
+    if (_startDate == null) {
+      _startDateError = 'La fecha de inicio es obligatoria';
+      isValid = false;
+    } else {
+      _startDateError = null;
+    }
+
+    return isValid;
+  }
+
+  /// Verifica si el formulario está listo para enviar
+  bool _isFormReady() {
+    return _validateAllFields() && _captchaValidated;
+  }
+
+  /// Construye un título de sección
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+
+  /// Obtiene la descripción de una categoría
+  String _getCategoryDescription(String categoryName) {
+    final lowerName = categoryName.toLowerCase();
+    
+    // Mapeo de nombres de categorías a sus descripciones
+    if (lowerName.contains('cultura')) {
+      return 'Teatro, exposiciones, cine, charlas…';
+    } else if (lowerName.contains('deporte')) {
+      return 'Partidos, torneos, rutas, surf…';
+    } else if (lowerName.contains('mercado')) {
+      return 'Mercadillos, artesanía, segunda mano…';
+    } else if (lowerName.contains('música') || lowerName.contains('musica')) {
+      return 'Conciertos, bandas, DJ, acústicos…';
+    } else if (lowerName.contains('noche')) {
+      return 'Discotecas, copas, fiestas de madrugada.';
+    } else if (lowerName.contains('naturaleza')) {
+      return 'Eventos de Naturaleza';
+    } else if (lowerName.contains('fiesta') && lowerName.contains('local')) {
+      return 'Eventos de fiestas locales';
+    } else if (lowerName.contains('motor')) {
+      return 'Eventos de Motor';
+    } else {
+      // Descripción genérica para categorías no mapeadas
+      return 'Eventos de $categoryName';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoadingData) {
@@ -548,12 +692,16 @@ $dayProgram''';
       appBar: AppBar(title: const Text('Publicar evento')),
       bottomNavigationBar: const BottomNavBar(activeRoute: 'submit'),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(20),
         child: Form(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // === SECCIÓN: Información básica ===
+              _buildSectionTitle('Información básica'),
+              const SizedBox(height: 12),
+              
               // Título del evento (obligatorio)
               TextFormField(
                 controller: _titleController,
@@ -563,7 +711,13 @@ $dayProgram''';
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
+                  errorText: _titleError,
                 ),
+                onChanged: (_) {
+                  setState(() {
+                    _titleError = null;
+                  });
+                },
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
                     return 'El título es obligatorio';
@@ -583,205 +737,24 @@ $dayProgram''';
                     borderRadius: BorderRadius.circular(8),
                   ),
                   alignLabelWithHint: true,
+                  errorText: _descriptionError,
+                  helperText: _descriptionController.text.isEmpty
+                      ? 'Mínimo 20 caracteres'
+                      : '${_descriptionController.text.length}/20 caracteres',
                 ),
                 maxLines: 4,
                 minLines: 3,
+                onChanged: (_) {
+                  setState(() {
+                    _descriptionError = null;
+                  });
+                },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
-              // Switch de programación diaria
-              Card(
-                child: SwitchListTile(
-                  title: const Text('Programación diaria'),
-                  subtitle: const Text(
-                    'Añade contenido específico para cada día del evento (opcional)',
-                  ),
-                  value: _hasDailyProgram,
-                  onChanged: (value) {
-                    setState(() {
-                      _hasDailyProgram = value;
-                      if (value) {
-                        _updateEventDays();
-                      } else {
-                        // Limpiar controladores si se desactiva
-                        for (final controller
-                            in _dailyProgramControllers.values) {
-                          controller.dispose();
-                        }
-                        _dailyProgramControllers.clear();
-                        _eventDays.clear();
-                      }
-                    });
-                  },
-                ),
-              ),
-
-              // Campos de programación diaria
-              if (_hasDailyProgram) ...[
-                const SizedBox(height: 16),
-                if (_startDate != null &&
-                    _endDate != null &&
-                    !_endDate!.isBefore(_startDate!) &&
-                    _eventDays.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Programación por día',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 12),
-                      ..._eventDays.map((day) {
-                        final controller = _dailyProgramControllers[day];
-                        if (controller == null) return const SizedBox.shrink();
-
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                DateFormat('EEE d MMM', 'es').format(day),
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w600,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                              ),
-                              const SizedBox(height: 8),
-                              TextField(
-                                controller: controller,
-                                decoration: InputDecoration(
-                                  labelText: 'Programación de este día',
-                                  hintText:
-                                      'Ej: 10:00 - Apertura\n12:00 - Actuación principal...',
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  alignLabelWithHint: true,
-                                ),
-                                maxLines: 4,
-                                minLines: 3,
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ],
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text(
-                      'Selecciona primero un rango de fechas para añadir programación diaria.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-              ],
-              const SizedBox(height: 16),
-
-              // Imagen del evento (opcional)
-              Text(
-                'Imagen del evento (opcional)',
-                style: Theme.of(context).textTheme.labelLarge,
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  ElevatedButton.icon(
-                    onPressed:
-                        _isSubmitting || _isUploadingImage ? null : _pickImage,
-                    icon: const Icon(Icons.photo),
-                    label: const Text('Seleccionar imagen'),
-                  ),
-                  const SizedBox(width: 12),
-                  if (_isUploadingImage)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else if (_selectedImage != null)
-                    Expanded(
-                      child: Text(
-                        _selectedImage!.name,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-              ),
-              // Preview simple (mostrar imagen recortada si existe, sino la original)
-              if (_selectedImage != null) ...[
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: _croppedImageFile != null
-                      ? Image.file(
-                          _croppedImageFile!,
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : (!kIsWeb && _selectedImage!.path != null)
-                          ? Image.file(
-                              File(_selectedImage!.path!),
-                              height: 150,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            )
-                          : (_selectedImage!.bytes != null)
-                              ? Image.memory(
-                                  _selectedImage!.bytes!,
-                                  height: 150,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                )
-                              : const SizedBox.shrink(),
-                ),
-              ],
-              const SizedBox(height: 16),
-
-              // Enfoque de la imagen (solo si hay imagen seleccionada)
-              if (_selectedImage != null || _uploadedImageUrl != null) ...[
-                Text(
-                  'Enfoque de la imagen',
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(height: 8),
-                SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'top', label: Text('Arriba')),
-                    ButtonSegment(value: 'center', label: Text('Centro')),
-                    ButtonSegment(value: 'bottom', label: Text('Abajo')),
-                  ],
-                  selected: <String>{_imageAlignment},
-                  onSelectionChanged: (values) {
-                    setState(() {
-                      _imageAlignment = values.first;
-                    });
-                  },
-                ),
-                const SizedBox(height: 16),
-              ],
-
-              // Lugar
-              TextFormField(
-                controller: _placeController,
-                decoration: InputDecoration(
-                  labelText: 'Lugar',
-                  hintText: 'Ej: Plaza del Ayuntamiento',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
+              // === SECCIÓN: Fecha y horario ===
+              _buildSectionTitle('Fecha y horario'),
+              const SizedBox(height: 12),
 
               // Selector de fecha de inicio
               OutlinedButton.icon(
@@ -796,6 +769,7 @@ $dayProgram''';
                   if (date != null) {
                     setState(() {
                       _startDate = DateTime(date.year, date.month, date.day);
+                      _startDateError = null;
                       // Si la fecha fin es anterior a la nueva fecha inicio, resetearla
                       if (_endDate != null && _endDate!.isBefore(_startDate!)) {
                         _endDate = null;
@@ -896,6 +870,201 @@ $dayProgram''';
               ],
               const SizedBox(height: 16),
 
+              // Switch de programación diaria (movido aquí desde Información básica)
+              Card(
+                child: SwitchListTile(
+                  title: const Text('Programación diaria'),
+                  subtitle: _startDate == null
+                      ? const Text(
+                          'Selecciona primero la fecha de inicio para activar la programación diaria.',
+                          style: TextStyle(fontSize: 12),
+                        )
+                      : const Text(
+                          'Añade contenido específico para cada día del evento (opcional)',
+                        ),
+                  value: _hasDailyProgram,
+                  onChanged: _startDate == null
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _hasDailyProgram = value;
+                            if (value) {
+                              _updateEventDays();
+                            } else {
+                              // Limpiar controladores si se desactiva
+                              for (final controller
+                                  in _dailyProgramControllers.values) {
+                                controller.dispose();
+                              }
+                              _dailyProgramControllers.clear();
+                              _eventDays.clear();
+                            }
+                          });
+                        },
+                ),
+              ),
+
+              // Campos de programación diaria
+              if (_hasDailyProgram && _startDate != null) ...[
+                const SizedBox(height: 16),
+                if (_endDate != null &&
+                    !_endDate!.isBefore(_startDate!) &&
+                    _eventDays.isNotEmpty)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Programación por día',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 12),
+                      ..._eventDays.map((day) {
+                        final controller = _dailyProgramControllers[day];
+                        if (controller == null) return const SizedBox.shrink();
+
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                DateFormat('EEE d MMM', 'es').format(day),
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.w600,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                              ),
+                              const SizedBox(height: 8),
+                              TextField(
+                                controller: controller,
+                                decoration: InputDecoration(
+                                  labelText: 'Programación de este día',
+                                  hintText:
+                                      'Ej: 10:00 - Apertura\n12:00 - Actuación principal...',
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  alignLabelWithHint: true,
+                                ),
+                                maxLines: 4,
+                                minLines: 3,
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ],
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text(
+                      'Selecciona primero un rango de fechas para añadir programación diaria.',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+              ],
+              if (_startDateError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 12),
+                  child: Text(
+                    _startDateError!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 32),
+
+              // === SECCIÓN: Imagen del evento ===
+              _buildSectionTitle('Imagen del evento'),
+              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  ElevatedButton.icon(
+                    onPressed:
+                        _isSubmitting || _isUploadingImage ? null : _pickImage,
+                    icon: const Icon(Icons.photo),
+                    label: const Text('Seleccionar imagen'),
+                  ),
+                  const SizedBox(width: 12),
+                  if (_isUploadingImage)
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  else if (_selectedImage != null)
+                    Expanded(
+                      child: Text(
+                        _selectedImage!.name,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+              // Preview simple (mostrar imagen recortada si existe, sino la original)
+              if (_selectedImage != null) ...[
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: _croppedImageFile != null
+                      ? Image.file(
+                          _croppedImageFile!,
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        )
+                      : (!kIsWeb && _selectedImage!.path != null)
+                          ? Image.file(
+                              File(_selectedImage!.path!),
+                              height: 150,
+                              width: double.infinity,
+                              fit: BoxFit.cover,
+                            )
+                          : (_selectedImage!.bytes != null)
+                              ? Image.memory(
+                                  _selectedImage!.bytes!,
+                                  height: 150,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                )
+                              : const SizedBox.shrink(),
+                ),
+              ],
+              const SizedBox(height: 16),
+              const SizedBox(height: 32),
+
+              // === SECCIÓN: Lugar ===
+              _buildSectionTitle('Lugar'),
+              const SizedBox(height: 12),
+              
+              TextFormField(
+                controller: _placeController,
+                decoration: InputDecoration(
+                  labelText: 'Lugar',
+                  hintText: 'Ej: Plaza del Ayuntamiento',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  errorText: _placeError,
+                ),
+                onChanged: (_) {
+                  setState(() {
+                    _placeError = null;
+                  });
+                },
+              ),
+              const SizedBox(height: 16),
+
               // Selector de ciudad con búsqueda
               CitySearchField(
                 initialCity: _selectedCity,
@@ -903,42 +1072,81 @@ $dayProgram''';
                   setState(() {
                     _selectedCity = city;
                     _selectedCityId = city.id;
+                    _cityError = null;
                   });
                 },
                 labelText: 'Ciudad',
               ),
-              if (_selectedCity == null)
+              if (_cityError != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 8, left: 12),
                   child: Text(
-                    'Por favor, selecciona una ciudad',
+                    _cityError!,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
                 ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
-              // Selector de categoría
+              // === SECCIÓN: Categoría ===
+              _buildSectionTitle('Categoría'),
+              const SizedBox(height: 12),
+              
+              // Dropdown de categorías con descripciones
               DropdownButtonFormField<Category>(
                 decoration: InputDecoration(
                   labelText: 'Categoría',
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
+                  errorText: _categoryError,
                 ),
                 value: _selectedCategory,
+                // Mostrar solo el nombre en el campo seleccionado (evita overflow)
+                selectedItemBuilder: (BuildContext context) {
+                  return _categories
+                      .where((Category c) => c.id != null)
+                      .map<Widget>((Category category) {
+                        return Text(
+                          category.name,
+                          overflow: TextOverflow.ellipsis,
+                        );
+                      }).toList();
+                },
+                // En el menú desplegable, mostrar nombre + descripción
                 items: _categories.where((Category c) => c.id != null).map((
                   Category category,
                 ) {
+                  final description = _getCategoryDescription(category.name);
                   return DropdownMenuItem<Category>(
                     value: category,
-                    child: Text(category.name),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          category.name,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        Text(
+                          description,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Theme.of(context)
+                                .colorScheme
+                                .onSurfaceVariant
+                                .withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ),
                   );
                 }).toList(),
                 onChanged: (value) {
                   setState(() {
                     _selectedCategory = value;
+                    _categoryError = null;
                   });
                 },
                 validator: (value) {
@@ -948,8 +1156,12 @@ $dayProgram''';
                   return null;
                 },
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
+              // === SECCIÓN: Tipo de evento ===
+              _buildSectionTitle('Tipo de evento'),
+              const SizedBox(height: 12),
+              
               // Switch para evento gratuito
               Card(
                 child: SwitchListTile(
@@ -962,14 +1174,11 @@ $dayProgram''';
                   },
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
-              // Selector de ubicación en el mapa
-              Text(
-                'Ubicación en el mapa',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 8),
+              // === SECCIÓN: Ubicación en el mapa ===
+              _buildSectionTitle('Ubicación en el mapa'),
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: _openMapPicker,
                 icon: const Icon(Icons.map),
@@ -989,8 +1198,12 @@ $dayProgram''';
                       : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 32),
 
+              // === SECCIÓN: Envío ===
+              _buildSectionTitle('Envío'),
+              const SizedBox(height: 12),
+              
               // Captcha
               CheckboxListTile(
                 title: const Text('No soy un robot'),
@@ -1008,14 +1221,25 @@ $dayProgram''';
                 },
                 controlAffinity: ListTileControlAffinity.leading,
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 24),
 
               // Botón de enviar
               ElevatedButton(
-                onPressed: _isSubmitting
+                onPressed: _isSubmitting || !_isFormReady()
                     ? null
                     : () async {
-                        if (!_formKey.currentState!.validate()) {
+                        // Validar todos los campos
+                        setState(() {
+                          _validateAllFields();
+                        });
+
+                        if (!_validateAllFields()) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text('Por favor, completa todos los campos obligatorios'),
+                              backgroundColor: Colors.orange,
+                            ),
+                          );
                           return;
                         }
 
@@ -1023,38 +1247,6 @@ $dayProgram''';
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Debes verificar que no eres un robot'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (_startDate == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Por favor, selecciona una fecha de inicio',
-                              ),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (_selectedCity == null || _selectedCityId == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Por favor, selecciona una ciudad'),
-                            ),
-                          );
-                          return;
-                        }
-
-                        if (_selectedCategory == null ||
-                            _selectedCategory!.id == null) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Por favor, selecciona una categoría',
-                              ),
                             ),
                           );
                           return;
@@ -1261,6 +1453,7 @@ $dayProgram''';
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
+                  foregroundColor: Theme.of(context).colorScheme.onPrimary,
                 ),
                 child: _isSubmitting
                     ? Row(

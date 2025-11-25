@@ -3,14 +3,29 @@ import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'ui/dashboard/dashboard_screen.dart';
+import 'ui/onboarding/permissions_onboarding_screen.dart';
 import 'services/favorites_service.dart';
+import 'services/onboarding_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('es');
+  
+  // Inicializar Firebase
+  try {
+    await Firebase.initializeApp();
+    debugPrint("✅ Firebase inicializado con éxito");
+    
+    // Obtener y loggear el token FCM
+    _initializeFCMToken();
+  } catch (e) {
+    debugPrint("⚠️ Error al inicializar Firebase: $e");
+  }
   
   // Inicializar servicio de favoritos
   await FavoritesService.instance.init();
@@ -43,13 +58,84 @@ Future<void> main() async {
   runApp(const QuePlan());
 }
 
+/// Inicializa y obtiene el token FCM, loggeándolo en consola
+Future<void> _initializeFCMToken() async {
+  try {
+    final messaging = FirebaseMessaging.instance;
+    
+    // Solicitar permisos de notificación (opcional, pero recomendado)
+    final settings = await messaging.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint("✅ Permisos de notificación concedidos");
+    } else {
+      debugPrint("⚠️ Permisos de notificación: ${settings.authorizationStatus}");
+    }
+    
+    // Obtener el token
+    final token = await messaging.getToken();
+    if (token != null) {
+      debugPrint("🔑 FCM TOKEN: $token");
+    } else {
+      debugPrint("⚠️ No se pudo obtener el token FCM");
+    }
+    
+    // Escuchar cambios en el token (se regenera periódicamente)
+    messaging.onTokenRefresh.listen((newToken) {
+      debugPrint("🔄 FCM TOKEN ACTUALIZADO: $newToken");
+    });
+  } catch (e) {
+    debugPrint("❌ Error al obtener token FCM: $e");
+  }
+}
+
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
 
-class QuePlan extends StatelessWidget {
+class QuePlan extends StatefulWidget {
   const QuePlan({super.key});
 
   @override
+  State<QuePlan> createState() => _QuePlanState();
+}
+
+class _QuePlanState extends State<QuePlan> {
+  bool _isCheckingOnboarding = true;
+  bool _showOnboarding = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkOnboardingStatus();
+  }
+
+  Future<void> _checkOnboardingStatus() async {
+    final hasSeen = await OnboardingService.instance.hasSeenPermissionOnboarding();
+    if (mounted) {
+      setState(() {
+        _showOnboarding = !hasSeen;
+        _isCheckingOnboarding = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isCheckingOnboarding) {
+      // Mostrar splash mientras se verifica
+      return MaterialApp(
+        home: Scaffold(
+          backgroundColor: const Color(0xFFF8FBFF),
+          body: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      );
+    }
+
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
       builder: (context, mode, _) {
@@ -250,7 +336,9 @@ class QuePlan extends StatelessWidget {
             ),
           ),
 
-          home: const DashboardScreen(),
+          home: _showOnboarding
+              ? const PermissionsOnboardingScreen()
+              : const DashboardScreen(),
         );
       },
     );

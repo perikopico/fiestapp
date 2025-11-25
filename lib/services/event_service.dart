@@ -530,4 +530,207 @@ class EventService {
 
     await supa.from('events').insert(payload);
   }
+
+  /// Actualiza un evento existente
+  Future<void> updateEvent({
+    required String eventId,
+    required String title,
+    required String town,
+    required String place,
+    required DateTime startsAt,
+    required int cityId,
+    required int categoryId,
+    String? description,
+    String? mapsUrl,
+    String? imageUrl,
+    double? lat,
+    double? lng,
+    bool? isFree,
+    String? imageAlignment,
+  }) async {
+    final payload = <String, dynamic>{
+      'title': title.trim(),
+      'town': town.trim(),
+      'place': place.trim(),
+      'starts_at': startsAt.toUtc().toIso8601String(),
+      'city_id': cityId,
+      'category_id': categoryId,
+      'description': description?.trim(),
+      'maps_url': mapsUrl?.trim(),
+      'image_url': imageUrl?.trim(),
+      'lat': lat,
+      'lng': lng,
+      'is_free': isFree,
+      'image_alignment': imageAlignment ?? 'center',
+    };
+
+    // Eliminar claves con null para no pisar valores existentes
+    payload.removeWhere((key, value) => value == null);
+
+    await supa.from('events').update(payload).eq('id', eventId);
+  }
+
+  /// Busca posibles eventos duplicados basándose en criterios de similitud
+  /// Un evento es considerado duplicado si:
+  /// 1) Comparte la misma ciudad, y
+  /// 2) Ocurre en el mismo día calendario (ignorando hora), o
+  /// 3) Tiene un título/descripción muy similar
+  Future<List<Event>> getPotentialDuplicateEvents(Event event) async {
+    if (event.cityId == null) {
+      return [];
+    }
+
+    try {
+      // Obtener la fecha del evento (solo día, sin hora)
+      final eventDate = DateTime(
+        event.startsAt.year,
+        event.startsAt.month,
+        event.startsAt.day,
+      );
+      
+      // Fechas de inicio y fin del mismo día calendario
+      final dateStart = DateTime(eventDate.year, eventDate.month, eventDate.day, 0, 0, 0);
+      final dateEnd = DateTime(eventDate.year, eventDate.month, eventDate.day, 23, 59, 59);
+
+      // Normalizar el título para búsqueda de similitud
+      // Tomar las primeras palabras significativas del título (hasta 30 caracteres)
+      final normalizedTitle = event.title
+          .trim()
+          .toLowerCase()
+          .split(' ')
+          .where((w) => w.length > 2)
+          .take(5)
+          .join(' ');
+      final normalizedTitleForSearch = normalizedTitle.length > 30 
+          ? normalizedTitle.substring(0, 30) 
+          : normalizedTitle;
+
+      // Construir consulta base - buscar eventos en la misma ciudad
+      // Haremos dos consultas: una para mismo día, otra para similitud de texto
+      
+      // Consulta 1: Mismo día calendario
+      final sameDateQuery = supa
+          .from('events_view')
+          .select(
+            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+          )
+          .eq('city_id', event.cityId!)
+          .neq('id', event.id)
+          .gte('starts_at', dateStart.toIso8601String())
+          .lte('starts_at', dateEnd.toIso8601String());
+
+      // Consulta 2: Similitud de texto (solo si hay título normalizado)
+      List<Event> textSimilarEvents = [];
+      if (normalizedTitleForSearch.isNotEmpty && normalizedTitleForSearch.length >= 3) {
+        try {
+          // Hacer dos consultas separadas: una para título, otra para descripción
+          // Esto es más robusto que usar OR con ilike
+          
+          // Consulta por título
+          final titleQuery = supa
+              .from('events_view')
+              .select(
+                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+              )
+              .eq('city_id', event.cityId!)
+              .neq('id', event.id)
+              .ilike('title', '%$normalizedTitleForSearch%');
+
+          final titleRes = await titleQuery.limit(10);
+          if (titleRes is List) {
+            final titleEvents = (titleRes as List)
+                .cast<Map<String, dynamic>>()
+                .map((m) => Event.fromMap(m))
+                .toList();
+            textSimilarEvents.addAll(titleEvents);
+          }
+
+          // Consulta por descripción
+          final descQuery = supa
+              .from('events_view')
+              .select(
+                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+              )
+              .eq('city_id', event.cityId!)
+              .neq('id', event.id)
+              .ilike('description', '%$normalizedTitleForSearch%');
+
+          final descRes = await descQuery.limit(10);
+          if (descRes is List) {
+            final descEvents = (descRes as List)
+                .cast<Map<String, dynamic>>()
+                .map((m) => Event.fromMap(m))
+                .toList();
+            textSimilarEvents.addAll(descEvents);
+          }
+        } catch (e) {
+          debugPrint('Error en consulta de similitud de texto: $e');
+          // Continuar sin esta consulta si falla
+        }
+      }
+
+      // Ejecutar consulta de mismo día
+      final sameDateRes = await sameDateQuery.order('starts_at', ascending: true).limit(10);
+
+      // Combinar resultados
+      final Set<String> seenIds = {};
+      final List<Event> duplicates = [];
+
+      // Agregar eventos del mismo día
+      if (sameDateRes is List) {
+        final sameDateEvents = (sameDateRes as List)
+            .cast<Map<String, dynamic>>()
+            .map((m) => Event.fromMap(m))
+            .toList();
+        
+        for (final evt in sameDateEvents) {
+          if (!seenIds.contains(evt.id)) {
+            duplicates.add(evt);
+            seenIds.add(evt.id);
+          }
+        }
+      }
+
+      // Agregar eventos con similitud de texto (solo si no están ya incluidos)
+      for (final evt in textSimilarEvents) {
+        if (!seenIds.contains(evt.id)) {
+          // Verificar que el título/descripción sea realmente similar
+          final evtTitle = evt.title.toLowerCase();
+          final evtDesc = (evt.description ?? '').toLowerCase();
+          
+          // Verificar si el título normalizado está contenido en el título o descripción del candidato
+          if (evtTitle.contains(normalizedTitleForSearch) || 
+              (evtDesc.isNotEmpty && evtDesc.contains(normalizedTitleForSearch))) {
+            duplicates.add(evt);
+            seenIds.add(evt.id);
+          }
+        }
+      }
+
+      // Enriquecer con descripciones
+      await _enrichEventsWithDescription(duplicates);
+
+      // Ordenar por proximidad de fecha (mismo día primero, luego por diferencia de días)
+      duplicates.sort((a, b) {
+        final aDate = DateTime(a.startsAt.year, a.startsAt.month, a.startsAt.day);
+        final bDate = DateTime(b.startsAt.year, b.startsAt.month, b.startsAt.day);
+        
+        // Mismo día primero
+        final aIsSameDay = aDate == eventDate;
+        final bIsSameDay = bDate == eventDate;
+        if (aIsSameDay && !bIsSameDay) return -1;
+        if (!aIsSameDay && bIsSameDay) return 1;
+        
+        // Luego por diferencia de días
+        final aDiff = (aDate.difference(eventDate).inDays).abs();
+        final bDiff = (bDate.difference(eventDate).inDays).abs();
+        return aDiff.compareTo(bDiff);
+      });
+
+      return duplicates.take(5).toList();
+    } catch (e) {
+      debugPrint('Error al buscar duplicados: $e');
+      return [];
+    }
+  }
 }
