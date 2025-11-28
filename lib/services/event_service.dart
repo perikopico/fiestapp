@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 
 import '../models/event.dart';
+import 'auth_service.dart';
 
 class EventService {
   EventService._();
@@ -504,11 +505,15 @@ class EventService {
     String? submittedByName,
     String? submittedByEmail,
     String? imageAlignment,
+    String? venueId, // ID del lugar si se seleccionó uno existente
   }) async {
+    // Obtener el ID del usuario si está autenticado
+    final userId = AuthService.instance.currentUserId;
+    
     final payload = <String, dynamic>{
       'title': title.trim(),
       'town': town.trim(),
-      'place': place.trim(),
+      'place': place.trim(), // Mantener para compatibilidad
       'starts_at': startsAt.toUtc().toIso8601String(),
       'city_id': cityId,
       'category_id': categoryId,
@@ -523,6 +528,8 @@ class EventService {
       'submitted_by_name': submittedByName?.trim(),
       'submitted_by_email': submittedByEmail?.trim(),
       'image_alignment': imageAlignment ?? 'center',
+      'created_by': userId, // Guardar el ID del usuario que crea el evento
+      'venue_id': venueId, // ID del lugar si se seleccionó uno
     };
 
     // Eliminar claves con null para no pisar defaults
@@ -731,6 +738,106 @@ class EventService {
     } catch (e) {
       debugPrint('Error al buscar duplicados: $e');
       return [];
+    }
+  }
+
+  /// Obtiene los eventos creados por el usuario actual
+  /// Solo funciona si el usuario está autenticado
+  Future<List<Event>> fetchUserCreatedEvents() async {
+    final userId = AuthService.instance.currentUserId;
+    if (userId == null) {
+      debugPrint('⚠️ Usuario no autenticado, no se pueden obtener eventos del usuario');
+      return [];
+    }
+
+    try {
+      // Obtener eventos directamente de la tabla events (no events_view porque solo muestra published)
+      final r = await supa
+          .from('events')
+          .select(
+            'id, title, city_id, category_id, starts_at, image_url, maps_url, place, '
+            'is_featured, is_free, status, description, image_alignment',
+          )
+          .eq('created_by', userId)
+          .order('starts_at', ascending: false); // Más recientes primero
+
+      final events = (r as List)
+          .map((e) => Event.fromMap(e as Map<String, dynamic>))
+          .toList();
+
+      // Enriquecer con información de categorías y ciudades
+      await _enrichEventsWithCategory(events);
+      await _enrichEventsWithCities(events);
+      // Las descripciones ya están incluidas en la query
+
+      return events;
+    } catch (e) {
+      debugPrint('❌ Error al obtener eventos del usuario: $e');
+      throw Exception('Error al obtener tus eventos: ${e.toString()}');
+    }
+  }
+
+  /// Enriquece eventos con información de ciudades
+  Future<void> _enrichEventsWithCities(List<Event> events) async {
+    if (events.isEmpty) return;
+
+    try {
+      final cityIds = events
+          .where((e) => e.cityId != null)
+          .map((e) => e.cityId!)
+          .toSet()
+          .toList();
+
+      if (cityIds.isEmpty) return;
+
+      // Obtener ciudades una por una o usar consulta con OR
+      // Para múltiples IDs, hacemos consultas en lotes
+      final citiesResponse = <Map<String, dynamic>>[];
+      final batchSize = 50;
+      
+      for (int i = 0; i < cityIds.length; i += batchSize) {
+        final batch = cityIds.skip(i).take(batchSize).toList();
+        // Construir condición OR para múltiples IDs
+        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
+        final batchResponse = await supa
+            .from('cities')
+            .select('id, name')
+            .or(orCondition);
+        citiesResponse.addAll((batchResponse as List).cast<Map<String, dynamic>>());
+      }
+
+      final citiesMap = {
+        for (var city in citiesResponse as List)
+          (city['id'] as num).toInt(): city['name'] as String
+      };
+
+      // Enriquecer eventos con nombres de ciudades
+      for (int i = 0; i < events.length; i++) {
+        final event = events[i];
+        if (event.cityId != null && citiesMap.containsKey(event.cityId)) {
+          final updatedMap = {
+            'id': event.id,
+            'title': event.title,
+            'starts_at': event.startsAt.toIso8601String(),
+            'city_name': citiesMap[event.cityId],
+            'category_name': event.categoryName,
+            'category_icon': event.categoryIcon,
+            'category_color': event.categoryColor,
+            'place': event.place,
+            'image_url': event.imageUrl,
+            'category_id': event.categoryId,
+            'city_id': event.cityId,
+            'is_free': event.isFree,
+            'maps_url': event.mapsUrl,
+            'description': event.description,
+            'image_alignment': event.imageAlignment,
+            'status': event.status,
+          };
+          events[i] = Event.fromMap(updatedMap);
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error al enriquecer eventos con ciudades: $e');
     }
   }
 }

@@ -127,7 +127,8 @@ lib/generated_plugin_registrant.dart
 .LSOverride
 
 # Icon must end with two \r
-Icon
+Icon
+
 
 # Thumbnails
 ._*
@@ -179,3 +180,13 @@ $RECYCLE.BIN/
 *.lnk
 
 # End of https://www.toptal.com/developers/gitignore/api/flutter,android,windows,macos,linux
+
+### Custom - Environment files ###
+# Archivos de variables de entorno (contienen credenciales sensibles)
+.env
+.env.local
+.env.*.local
+*.env
+
+# Configuración de administrador (ya no contiene credenciales, pero por seguridad)
+# lib/config/admin_config.dart está en Git pero ahora carga desde .env

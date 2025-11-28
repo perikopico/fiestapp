@@ -1,34 +1,61 @@
+import 'dart:ui' show PlatformDispatcher;
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'ui/dashboard/dashboard_screen.dart';
 import 'ui/onboarding/permissions_onboarding_screen.dart';
 import 'services/favorites_service.dart';
 import 'services/onboarding_service.dart';
+import 'services/fcm_token_service.dart';
+import 'services/notification_handler.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await initializeDateFormatting('es');
+  
+  // Configurar manejo de errores no capturados
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+    debugPrint("❌ ERROR NO CAPTURADO: ${details.exception}");
+    debugPrint("Stack trace: ${details.stack}");
+  };
+  
+  // Manejar errores de plataforma
+  PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint("❌ ERROR DE PLATAFORMA: $error");
+    debugPrint("Stack trace: $stack");
+    return true;
+  };
+  
+  try {
+    await initializeDateFormatting('es');
+    debugPrint("✅ Formato de fecha inicializado");
+  } catch (e) {
+    debugPrint("⚠️ Error al inicializar formato de fecha: $e");
+  }
   
   // Inicializar Firebase
   try {
     await Firebase.initializeApp();
     debugPrint("✅ Firebase inicializado con éxito");
     
-    // Obtener y loggear el token FCM
-    _initializeFCMToken();
+    // Inicializar servicio de tokens FCM y handlers de notificaciones
+    await FCMTokenService.instance.initialize();
+    await NotificationHandler.instance.initialize();
   } catch (e) {
     debugPrint("⚠️ Error al inicializar Firebase: $e");
   }
   
   // Inicializar servicio de favoritos
-  await FavoritesService.instance.init();
+  try {
+    await FavoritesService.instance.init();
+    debugPrint("✅ FavoritesService inicializado");
+  } catch (e) {
+    debugPrint("⚠️ Error al inicializar FavoritesService: $e");
+  }
 
   // Cargar .env
   bool dotenvLoaded = false;
@@ -38,60 +65,77 @@ Future<void> main() async {
     debugPrint("✅ Archivo .env cargado correctamente");
   } catch (e) {
     debugPrint("⚠️ Error al cargar .env: $e");
+    debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
   }
 
   // Inicializar Supabase si hay credenciales
   if (dotenvLoaded) {
-    final url = dotenv.env['SUPABASE_URL'];
-    final key = dotenv.env['SUPABASE_ANON_KEY'];
+    try {
+      final url = dotenv.env['SUPABASE_URL'];
+      final key = dotenv.env['SUPABASE_ANON_KEY'];
 
-    if (url == null || key == null || url.isEmpty || key.isEmpty) {
-      debugPrint("❌ Variables de entorno no encontradas");
-    } else {
-      await Supabase.initialize(url: url, anonKey: key);
-      debugPrint("✅ Supabase inicializado con éxito");
+      if (url == null || key == null || url.isEmpty || key.isEmpty) {
+        debugPrint("❌ Variables de entorno no encontradas o vacías");
+        debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+      } else {
+        await Supabase.initialize(url: url, anonKey: key);
+        debugPrint("✅ Supabase inicializado con éxito");
+        
+        // Configurar listener para cambios de autenticación
+        Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+          final event = data.event;
+          final session = data.session;
+          
+          if (event == AuthChangeEvent.signedIn && session != null) {
+            debugPrint("✅ Usuario autenticado: ${session.user.email}");
+            
+            // Sincronizar favoritos locales con Supabase cuando el usuario inicia sesión
+            FavoritesService.instance.syncLocalToSupabase().then((_) {
+              debugPrint("✅ Favoritos sincronizados");
+            }).catchError((e) {
+              debugPrint("⚠️ Error al sincronizar favoritos: $e");
+            });
+            
+            // Guardar token FCM cuando el usuario inicia sesión
+            final token = await FCMTokenService.instance.getCurrentToken();
+            if (token != null) {
+              FCMTokenService.instance.saveTokenToSupabase(token).then((_) {
+                debugPrint("✅ Token FCM guardado después de login");
+              }).catchError((e) {
+                debugPrint("⚠️ Error al guardar token FCM: $e");
+              });
+            }
+          } else if (event == AuthChangeEvent.signedOut) {
+            debugPrint("👋 Usuario cerró sesión");
+            
+            // Eliminar token FCM cuando el usuario cierra sesión
+            final token = await FCMTokenService.instance.getCurrentToken();
+            if (token != null) {
+              FCMTokenService.instance.deleteTokenFromSupabase(token).catchError((e) {
+                debugPrint("⚠️ Error al eliminar token FCM: $e");
+              });
+            }
+            
+            // Recargar favoritos desde local
+            FavoritesService.instance.init();
+          }
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint("❌ Error al inicializar Supabase: $e");
+      debugPrint("Stack trace: $stackTrace");
+      debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
     }
   } else {
     debugPrint("⚠️ Supabase no inicializado (archivo .env no encontrado)");
+    debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
   }
 
   runApp(const QuePlan());
 }
 
-/// Inicializa y obtiene el token FCM, loggeándolo en consola
-Future<void> _initializeFCMToken() async {
-  try {
-    final messaging = FirebaseMessaging.instance;
-    
-    // Solicitar permisos de notificación (opcional, pero recomendado)
-    final settings = await messaging.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    
-    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-      debugPrint("✅ Permisos de notificación concedidos");
-    } else {
-      debugPrint("⚠️ Permisos de notificación: ${settings.authorizationStatus}");
-    }
-    
-    // Obtener el token
-    final token = await messaging.getToken();
-    if (token != null) {
-      debugPrint("🔑 FCM TOKEN: $token");
-    } else {
-      debugPrint("⚠️ No se pudo obtener el token FCM");
-    }
-    
-    // Escuchar cambios en el token (se regenera periódicamente)
-    messaging.onTokenRefresh.listen((newToken) {
-      debugPrint("🔄 FCM TOKEN ACTUALIZADO: $newToken");
-    });
-  } catch (e) {
-    debugPrint("❌ Error al obtener token FCM: $e");
-  }
-}
+// La función _initializeFCMToken() ha sido reemplazada por FCMTokenService
+// que gestiona todo el ciclo de vida de los tokens FCM de forma más completa
 
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
 

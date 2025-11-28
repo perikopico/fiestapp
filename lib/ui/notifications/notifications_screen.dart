@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import '../../services/fcm_token_service.dart';
 import 'notification_settings_screen.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 
@@ -16,6 +16,7 @@ class NotificationsScreen extends StatefulWidget {
 class _NotificationsScreenState extends State<NotificationsScreen> {
   String? _fcmToken;
   bool _isLoadingToken = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -24,12 +25,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Future<void> _loadFCMToken() async {
+    setState(() {
+      _isLoadingToken = true;
+      _errorMessage = null;
+    });
+
     try {
-      final token = await FirebaseMessaging.instance.getToken();
+      // Usar el servicio FCMTokenService en lugar de obtener directamente
+      final token = await FCMTokenService.instance.getCurrentToken();
+      
       if (mounted) {
         setState(() {
           _fcmToken = token;
           _isLoadingToken = false;
+          if (token == null) {
+            _errorMessage = 'No se pudo obtener el token. Verifica que Firebase esté inicializado y los permisos concedidos.';
+          }
         });
       }
     } catch (e) {
@@ -37,6 +48,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         setState(() {
           _fcmToken = null;
           _isLoadingToken = false;
+          _errorMessage = 'Error: ${e.toString()}';
         });
       }
     }
@@ -173,13 +185,29 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
-            ] else
+            ] else ...[
+              Icon(
+                Icons.error_outline,
+                size: 20,
+                color: theme.colorScheme.error,
+              ),
+              const SizedBox(height: 8),
               Text(
-                'No se pudo obtener el token FCM',
+                _errorMessage ?? 'No se pudo obtener el token FCM',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),
               ),
+              const SizedBox(height: 8),
+              TextButton.icon(
+                onPressed: _loadFCMToken,
+                icon: const Icon(Icons.refresh, size: 16),
+                label: const Text('Reintentar'),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
+              ),
+            ],
           ],
         ),
       ),

@@ -23,9 +23,10 @@ import '../../utils/date_ranges.dart';
 import 'package:intl/intl.dart';
 
 import '../../utils/dashboard_utils.dart';
-import '../admin/pending_events_screen.dart';
-import '../../config/admin_config.dart';
 import '../../services/favorites_service.dart';
+import '../../services/auth_service.dart';
+import '../auth/login_screen.dart';
+import '../auth/profile_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
 
 // ==== Búsqueda unificada ====
@@ -158,9 +159,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isCitySearching = false;
   List<City> _citySearchResults = [];
 
-  // Contador de toques para acceso admin
-  int _adminTapCount = 0;
-  DateTime? _lastAdminTap;
 
   // Estado del desplegable de filtros
   bool _isFilterPanelExpanded = false;
@@ -1128,58 +1126,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await _loadNearbyCities();
   }
 
-  Future<void> _openAdminPanel() async {
-    final pinController = TextEditingController();
-    final ctx = context;
-
-    final result = await showDialog<bool>(
-      context: ctx,
-      barrierDismissible: false,
-      builder: (dialogCtx) {
-        return AlertDialog(
-          title: const Text('Acceso administrador'),
-          content: TextField(
-            controller: pinController,
-            keyboardType: TextInputType.number,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Introduce el PIN'),
-            autofocus: true,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.of(dialogCtx).pop(false);
-              },
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final entered = pinController.text.trim();
-                if (entered == kAdminPin) {
-                  Navigator.of(dialogCtx).pop(true);
-                } else {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    const SnackBar(
-                      content: Text('PIN incorrecto'),
-                      duration: Duration(seconds: 2),
-                    ),
-                  );
-                }
-              },
-              child: const Text('Entrar'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (result == true) {
-      if (!mounted) return;
-      Navigator.of(
-        ctx,
-      ).push(MaterialPageRoute(builder: (_) => const PendingEventsScreen()));
-    }
-  }
 
   void _openSearchBottomSheet() {
     final searchController = TextEditingController(
@@ -1978,37 +1924,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 collapsedHeight: 48,
                 expandedHeight: 48,
                 actions: [
-                  // Botón de admin invisible (requiere 3 toques)
-                  Opacity(
-                    opacity: 0.0,
-                    child: IconButton(
-                      icon: const Icon(Icons.admin_panel_settings),
-                      tooltip: 'Panel de administración',
-                      onPressed: () {
-                        final now = DateTime.now();
-                        // Resetear contador si pasan más de 2 segundos entre toques
-                        if (_lastAdminTap != null &&
-                            now.difference(_lastAdminTap!).inSeconds > 2) {
-                          _adminTapCount = 0;
-                        }
-                        
-                        _adminTapCount++;
-                        _lastAdminTap = now;
-                        
-                        if (_adminTapCount >= 3) {
-                          _adminTapCount = 0;
-                          _openAdminPanel();
-                        } else {
-                          // Feedback visual para indicar que se está contando
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Toca ${3 - _adminTapCount} vez${3 - _adminTapCount > 1 ? 'es' : ''} más para acceder'),
-                              duration: const Duration(milliseconds: 800),
-                            ),
-                          );
-                        }
-                      },
-                    ),
+                  // Botón de perfil/login
+                  StreamBuilder(
+                    stream: AuthService.instance.authStateChanges,
+                    builder: (context, snapshot) {
+                      final isAuthenticated = AuthService.instance.isAuthenticated;
+                      return IconButton(
+                        icon: Icon(
+                          isAuthenticated ? Icons.person : Icons.login,
+                        ),
+                        tooltip: isAuthenticated ? 'Mi perfil' : 'Iniciar sesión',
+                        onPressed: () async {
+                          if (isAuthenticated) {
+                            // Abrir perfil
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ProfileScreen(),
+                              ),
+                            );
+                            // Refrescar favoritos después de volver
+                            setState(() {});
+                          } else {
+                            // Abrir login
+                            final result = await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const LoginScreen(),
+                              ),
+                            );
+                            // Si el login fue exitoso, sincronizar favoritos
+                            if (result == true) {
+                              await FavoritesService.instance.syncLocalToSupabase();
+                              setState(() {});
+                            }
+                          }
+                        },
+                      );
+                    },
                   ),
                 ],
               ),
@@ -2017,45 +1968,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Área invisible para acceso admin (3 toques)
-                    Stack(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
-                          child: _buildHeroBanner(context),
-                        ),
-                        // Detector invisible centrado arriba del banner
-                        Positioned(
-                          top: 4,
-                          left: 0,
-                          right: 0,
-                          child: Center(
-                            child: GestureDetector(
-                              onTap: () {
-                                final now = DateTime.now();
-                                // Resetear contador si pasan más de 2 segundos entre toques
-                                if (_lastAdminTap != null &&
-                                    now.difference(_lastAdminTap!).inSeconds > 2) {
-                                  _adminTapCount = 0;
-                                }
-                                
-                                _adminTapCount++;
-                                _lastAdminTap = now;
-                                
-                                if (_adminTapCount >= 3) {
-                                  _adminTapCount = 0;
-                                  _openAdminPanel();
-                                }
-                              },
-                              child: Container(
-                                width: double.infinity,
-                                height: 60,
-                                color: Colors.transparent,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
+                      child: _buildHeroBanner(context),
                     ),
                     if (!_isLoading) ...[_buildFilterPanel()],
                     // Resultados de búsqueda

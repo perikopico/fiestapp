@@ -1541,11 +1541,19 @@ class _MapWidgetState extends State<_MapWidget> {
               Marker(
                 markerId: const MarkerId('picked'),
                 position: widget.pickedLatLng!,
+                draggable: true,
+                onDragEnd: (LatLng newPosition) {
+                  widget.onMarkerUpdated(newPosition);
+                },
               ),
             }
           : {},
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
+      scrollGesturesEnabled: true,
+      zoomGesturesEnabled: true,
+      tiltGesturesEnabled: false,
+      rotateGesturesEnabled: true,
       onMapCreated: (GoogleMapController controller) {
         _mapController = controller;
       },

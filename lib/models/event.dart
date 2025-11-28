@@ -17,6 +17,7 @@ class Event {
   final String? mapsUrl;
   final String? description;
   final String? imageAlignment;
+  final String? status; // 'pending', 'published', 'rejected'
   
   /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
@@ -51,6 +52,7 @@ class Event {
     this.mapsUrl,
     this.description,
     this.imageAlignment,
+    this.status,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -70,6 +72,7 @@ class Event {
       mapsUrl: m['maps_url'] as String?,
       description: m['description'] as String?,
       imageAlignment: m['image_alignment'] as String? ?? 'center',
+      status: m['status'] as String?,
     );
   }
 }

@@ -14,7 +14,9 @@ import '../../services/event_service.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/category.dart';
+import '../../models/venue.dart';
 import '../common/city_search_field.dart';
+import '../common/venue_search_field.dart';
 import 'image_crop_screen.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 
@@ -53,6 +55,7 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   City? _selectedCity;
   int? _selectedCityId;
   Category? _selectedCategory;
+  Venue? _selectedVenue; // Lugar seleccionado (opcional)
   DateTime? _startDate;
   DateTime? _endDate;
   TimeOfDay? _selectedTime;
@@ -599,9 +602,9 @@ $dayProgram''';
       _descriptionError = null;
     }
 
-    // Validar lugar
-    if (_placeController.text.trim().isEmpty) {
-      _placeError = 'El lugar es obligatorio';
+    // Validar lugar - debe haber un lugar seleccionado o texto escrito
+    if (_selectedVenue == null && _placeController.text.trim().isEmpty) {
+      _placeError = 'Por favor, selecciona o escribe un lugar';
       isValid = false;
     } else {
       _placeError = null;
@@ -1047,22 +1050,38 @@ $dayProgram''';
               _buildSectionTitle('Lugar'),
               const SizedBox(height: 12),
               
-              TextFormField(
-                controller: _placeController,
-                decoration: InputDecoration(
+              // Campo de búsqueda de lugares con autocompletado
+              if (_selectedCityId != null)
+                VenueSearchField(
+                  initialVenue: _selectedVenue,
+                  cityId: _selectedCityId,
                   labelText: 'Lugar',
-                  hintText: 'Ej: Plaza del Ayuntamiento',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
                   errorText: _placeError,
+                  onVenueSelected: (venue) {
+                    setState(() {
+                      _selectedVenue = venue;
+                      if (venue != null) {
+                        // Si hay un lugar seleccionado, actualizar el controller con su nombre
+                        _placeController.text = venue.name;
+                      }
+                      _placeError = null;
+                    });
+                  },
+                )
+              else
+                // Si no hay ciudad seleccionada, mostrar campo de texto normal
+                TextFormField(
+                  controller: _placeController,
+                  decoration: InputDecoration(
+                    labelText: 'Lugar',
+                    hintText: 'Primero selecciona una ciudad',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    errorText: _placeError,
+                    enabled: false,
+                  ),
                 ),
-                onChanged: (_) {
-                  setState(() {
-                    _placeError = null;
-                  });
-                },
-              ),
               const SizedBox(height: 16),
 
               // Selector de ciudad con búsqueda
@@ -1298,9 +1317,11 @@ $dayProgram''';
                               await _eventService.submitEvent(
                                 title: _titleController.text,
                                 town: _selectedCity!.name,
-                                place: _placeController.text.trim().isEmpty
-                                    ? _selectedCity!.name
-                                    : _placeController.text,
+                                place: _selectedVenue != null
+                                    ? _selectedVenue!.name
+                                    : (_placeController.text.trim().isEmpty
+                                        ? _selectedCity!.name
+                                        : _placeController.text),
                                 startsAt: startsAt,
                                 cityId: _selectedCityId!,
                                 categoryId: _selectedCategory!.id!,
@@ -1313,6 +1334,7 @@ $dayProgram''';
                                 isFree: _isFree,
                                 imageUrl: imageUrl,
                                 imageAlignment: _imageAlignment,
+                                venueId: _selectedVenue?.id, // Pasar venue_id si hay un lugar seleccionado
                               );
                               eventsCreated = 1;
                             } catch (e) {
@@ -1363,9 +1385,11 @@ $dayProgram''';
                                 await _eventService.submitEvent(
                                   title: _titleController.text,
                                   town: _selectedCity!.name,
-                                  place: _placeController.text.trim().isEmpty
-                                      ? _selectedCity!.name
-                                      : _placeController.text,
+                                  place: _selectedVenue != null
+                                      ? _selectedVenue!.name
+                                      : (_placeController.text.trim().isEmpty
+                                          ? _selectedCity!.name
+                                          : _placeController.text),
                                   startsAt: startsAt,
                                   cityId: _selectedCityId!,
                                   categoryId: _selectedCategory!.id!,
@@ -1378,6 +1402,7 @@ $dayProgram''';
                                   isFree: _isFree,
                                   imageUrl: imageUrl,
                                   imageAlignment: _imageAlignment,
+                                  venueId: _selectedVenue?.id, // Pasar venue_id si hay un lugar seleccionado
                                 );
                                 eventsCreated++;
                               } catch (e) {
@@ -1708,11 +1733,19 @@ class _MapWidgetState extends State<_MapWidget> {
               Marker(
                 markerId: const MarkerId('picked'),
                 position: widget.pickedLatLng!,
+                draggable: true,
+                onDragEnd: (LatLng newPosition) {
+                  widget.onMarkerUpdated(newPosition);
+                },
               ),
             }
           : {},
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
+      scrollGesturesEnabled: true,
+      zoomGesturesEnabled: true,
+      tiltGesturesEnabled: false,
+      rotateGesturesEnabled: true,
       onMapCreated: (GoogleMapController controller) {
         debugPrint('✅ Mapa creado correctamente');
         _mapController = controller;
