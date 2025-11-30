@@ -2,9 +2,13 @@
 
 Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamos en el desarrollo.
 
-**Última actualización**: Diciembre 2024
+**Última actualización**: Diciembre 2024 (actualizado con sistema de moderación y lugares de Barbate)
 
-**✨ Nuevo**: Sistema de gestión de lugares (venues) completamente implementado - Diciembre 2024
+**✨ Nuevo**: 
+- Sistema de moderación completo (eventos y lugares pendientes) - Diciembre 2024
+- Validación de duplicados implementada - Diciembre 2024
+- 61 lugares de interés de Barbate añadidos a la base de datos - Diciembre 2024
+- Integración Google Places API mejorada - Diciembre 2024
 
 ---
 
@@ -100,9 +104,10 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 - [x] Implementar handlers para notificaciones cuando app está cerrada - Diciembre 2024
 - [x] Crear tabla `user_fcm_tokens` en Supabase - Diciembre 2024
 - [x] Guardar token FCM al iniciar sesión - Diciembre 2024
-- [ ] Crear funciones para enviar notificaciones desde backend
+- [x] Crear funciones para enviar notificaciones desde backend - Diciembre 2024
+- [ ] Verificar que Edge Function `send_fcm_notification` esté desplegada en Supabase
 - [ ] Probar envío de notificaciones
-- **Estado**: ✅ Implementación completa - Pendiente crear función para enviar desde backend
+- **Estado**: ✅ Implementación completa - Pendiente verificar despliegue y probar envío
 
 ---
 
@@ -215,8 +220,10 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 
 1. **Esta semana:**
    - [ ] Verificar/Reparar Google Maps
-   - [ ] Completar handlers de notificaciones push
-   - [ ] Guardar tokens FCM en Supabase
+   - [x] Completar handlers de notificaciones push - Diciembre 2024
+   - [x] Guardar tokens FCM en Supabase - Diciembre 2024
+   - [ ] Verificar despliegue de Edge Function `send_fcm_notification`
+   - [ ] Probar envío de notificaciones push
 
 2. **Próximas 2 semanas:**
    - [ ] Mejorar perfil de usuario con "Mis Eventos"
@@ -261,7 +268,7 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 - **Funcionalidades Core**: 85% ✅
 - **UI/UX**: 75% ✅
 - **Backend/Base de Datos**: 90% ✅
-- **Notificaciones**: 40% 🟡
+- **Notificaciones**: 85% ✅
 - **Testing**: 30% 🟡
 - **Documentación**: 70% ✅
 

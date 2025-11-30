@@ -1,6 +1,7 @@
 import 'dart:io' show File;
 import 'dart:math';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'dart:io' show Platform;
@@ -10,11 +11,14 @@ import 'package:file_picker/file_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../services/event_service.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../models/category.dart';
 import '../../models/venue.dart';
+import '../../models/event.dart';
 import '../common/city_search_field.dart';
 import '../common/venue_search_field.dart';
 import 'image_crop_screen.dart';
@@ -1051,10 +1055,11 @@ $dayProgram''';
               const SizedBox(height: 12),
               
               // Campo de búsqueda de lugares con autocompletado
-              if (_selectedCityId != null)
+              if (_selectedCityId != null && _selectedCity != null)
                 VenueSearchField(
                   initialVenue: _selectedVenue,
                   cityId: _selectedCityId,
+                  cityName: _selectedCity!.name,
                   labelText: 'Lugar',
                   errorText: _placeError,
                   onVenueSelected: (venue) {
@@ -1063,6 +1068,15 @@ $dayProgram''';
                       if (venue != null) {
                         // Si hay un lugar seleccionado, actualizar el controller con su nombre
                         _placeController.text = venue.name;
+                        // Si el venue tiene coordenadas, actualizarlas también
+                        if (venue.lat != null && venue.lng != null) {
+                          _lat = venue.lat;
+                          _lng = venue.lng;
+                        }
+                      } else {
+                        // Si se deselecciona el venue, limpiar coordenadas también
+                        _lat = null;
+                        _lng = null;
                       }
                       _placeError = null;
                     });
@@ -1199,13 +1213,23 @@ $dayProgram''';
               _buildSectionTitle('Ubicación en el mapa'),
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: _openMapPicker,
+                onPressed: _canOpenMapPicker() ? _openMapPicker : null,
                 icon: const Icon(Icons.map),
                 label: const Text('Elegir en el mapa'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
               ),
+              if (!_canOpenMapPicker())
+                Padding(
+                  padding: const EdgeInsets.only(top: 8, left: 12),
+                  child: Text(
+                    'Primero debes seleccionar una ciudad y un lugar',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 8),
               Text(
                 _lat != null && _lng != null
@@ -1313,6 +1337,120 @@ $dayProgram''';
                             final double? latToSave = _lat ?? _selectedCity?.lat;
                             final double? lngToSave = _lng ?? _selectedCity?.lng;
 
+                            // VALIDACIÓN DE DUPLICADOS: Verificar si hay eventos similares antes de crear
+                            final placeName = _selectedVenue != null
+                                ? _selectedVenue!.name
+                                : (_placeController.text.trim().isEmpty
+                                    ? _selectedCity!.name
+                                    : _placeController.text);
+                            
+                            final tempEvent = Event(
+                              id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // ID temporal
+                              title: _titleController.text.trim(),
+                              startsAt: startsAt,
+                              cityId: _selectedCityId,
+                              categoryId: _selectedCategory!.id,
+                              place: placeName,
+                              description: description,
+                              cityName: _selectedCity!.name,
+                              categoryName: _selectedCategory?.name,
+                            );
+                            
+                            final duplicateEvents = await _eventService.getPotentialDuplicateEvents(tempEvent);
+                            
+                            // Si hay duplicados, mostrar diálogo
+                            if (duplicateEvents.isNotEmpty && mounted) {
+                              final shouldContinue = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Eventos similares encontrados'),
+                                  content: SizedBox(
+                                    width: double.maxFinite,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Se encontraron eventos similares en esta ciudad. ¿Quieres crear este evento de todas formas?',
+                                          style: TextStyle(fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Flexible(
+                                          child: ListView.builder(
+                                            shrinkWrap: true,
+                                            itemCount: duplicateEvents.length,
+                                            itemBuilder: (context, index) {
+                                              final duplicate = duplicateEvents[index];
+                                              final dateFormat = DateFormat('d MMM yyyy, HH:mm');
+                                              return Card(
+                                                margin: const EdgeInsets.only(bottom: 8),
+                                                child: ListTile(
+                                                  leading: Icon(
+                                                    duplicate.status == 'published' 
+                                                        ? Icons.check_circle 
+                                                        : duplicate.status == 'rejected'
+                                                            ? Icons.cancel
+                                                            : Icons.pending,
+                                                    color: duplicate.status == 'published' 
+                                                        ? Colors.green 
+                                                        : duplicate.status == 'rejected'
+                                                            ? Colors.red
+                                                            : Colors.orange,
+                                                  ),
+                                                  title: Text(duplicate.title),
+                                                  subtitle: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        dateFormat.format(duplicate.startsAt),
+                                                        style: const TextStyle(fontSize: 12),
+                                                      ),
+                                                      if (duplicate.place != null)
+                                                        Text(
+                                                          duplicate.place!,
+                                                          style: const TextStyle(fontSize: 11),
+                                                        ),
+                                                      const SizedBox(height: 4),
+                                                      Chip(
+                                                        label: Text(
+                                                          duplicate.status == 'published' 
+                                                              ? 'Publicado' 
+                                                              : duplicate.status == 'rejected'
+                                                                  ? 'Rechazado'
+                                                                  : 'Pendiente',
+                                                          style: const TextStyle(fontSize: 11),
+                                                        ),
+                                                        padding: EdgeInsets.zero,
+                                                        visualDensity: VisualDensity.compact,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(true),
+                                      child: const Text('Crear de todas formas'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              
+                              if (shouldContinue == null || !shouldContinue) {
+                                return; // El usuario canceló
+                              }
+                            }
+
                             try {
                               await _eventService.submitEvent(
                                 title: _titleController.text,
@@ -1357,6 +1495,131 @@ $dayProgram''';
                               endDate.month,
                               endDate.day,
                             );
+
+                            // VALIDACIÓN DE DUPLICADOS: Verificar una vez antes de crear múltiples eventos
+                            final placeName = _selectedVenue != null
+                                ? _selectedVenue!.name
+                                : (_placeController.text.trim().isEmpty
+                                    ? _selectedCity!.name
+                                    : _placeController.text);
+                            
+                            final firstDayStartsAt = DateTime(
+                              startDate.year,
+                              startDate.month,
+                              startDate.day,
+                              _selectedTime?.hour ?? 0,
+                              _selectedTime?.minute ?? 0,
+                            );
+                            
+                            final firstDayDescription = _buildDescriptionForDay(startDate);
+                            
+                            final tempEvent = Event(
+                              id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+                              title: _titleController.text.trim(),
+                              startsAt: firstDayStartsAt,
+                              cityId: _selectedCityId,
+                              categoryId: _selectedCategory!.id,
+                              place: placeName,
+                              description: firstDayDescription,
+                              cityName: _selectedCity!.name,
+                              categoryName: _selectedCategory?.name,
+                            );
+                            
+                            final duplicateEvents = await _eventService.getPotentialDuplicateEvents(tempEvent);
+                            
+                            // Si hay duplicados, mostrar diálogo
+                            if (duplicateEvents.isNotEmpty && mounted) {
+                              final daysCount = endDate.difference(startDate).inDays + 1;
+                              final shouldContinue = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Eventos similares encontrados'),
+                                  content: SizedBox(
+                                    width: double.maxFinite,
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Se encontraron ${duplicateEvents.length} evento(s) similar(es) en esta ciudad. ¿Quieres crear $daysCount evento(s) de todas formas?',
+                                          style: const TextStyle(fontSize: 14),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Flexible(
+                                          child: ListView.builder(
+                                            shrinkWrap: true,
+                                            itemCount: duplicateEvents.length,
+                                            itemBuilder: (context, index) {
+                                              final duplicate = duplicateEvents[index];
+                                              final dateFormat = DateFormat('d MMM yyyy, HH:mm');
+                                              return Card(
+                                                margin: const EdgeInsets.only(bottom: 8),
+                                                child: ListTile(
+                                                  leading: Icon(
+                                                    duplicate.status == 'published' 
+                                                        ? Icons.check_circle 
+                                                        : duplicate.status == 'rejected'
+                                                            ? Icons.cancel
+                                                            : Icons.pending,
+                                                    color: duplicate.status == 'published' 
+                                                        ? Colors.green 
+                                                        : duplicate.status == 'rejected'
+                                                            ? Colors.red
+                                                            : Colors.orange,
+                                                  ),
+                                                  title: Text(duplicate.title),
+                                                  subtitle: Column(
+                                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                                    children: [
+                                                      Text(
+                                                        dateFormat.format(duplicate.startsAt),
+                                                        style: const TextStyle(fontSize: 12),
+                                                      ),
+                                                      if (duplicate.place != null)
+                                                        Text(
+                                                          duplicate.place!,
+                                                          style: const TextStyle(fontSize: 11),
+                                                        ),
+                                                      const SizedBox(height: 4),
+                                                      Chip(
+                                                        label: Text(
+                                                          duplicate.status == 'published' 
+                                                              ? 'Publicado' 
+                                                              : duplicate.status == 'rejected'
+                                                                  ? 'Rechazado'
+                                                                  : 'Pendiente',
+                                                          style: const TextStyle(fontSize: 11),
+                                                        ),
+                                                        padding: EdgeInsets.zero,
+                                                        visualDensity: VisualDensity.compact,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(false),
+                                      child: const Text('Cancelar'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.of(context).pop(true),
+                                      child: const Text('Crear de todas formas'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                              
+                              if (shouldContinue == null || !shouldContinue) {
+                                return; // El usuario canceló
+                              }
+                            }
 
                             while (currentDate.isBefore(finalDate) ||
                                 currentDate.isAtSameMomentAs(finalDate)) {
@@ -1503,8 +1766,111 @@ $dayProgram''';
     );
   }
 
+  /// Verifica si se puede abrir el selector de mapa
+  bool _canOpenMapPicker() {
+    // Requiere ciudad y lugar (venue o texto del lugar)
+    if (_selectedCity == null || _selectedCityId == null) {
+      return false;
+    }
+    // Debe haber un lugar seleccionado (venue) o texto en el campo de lugar
+    if (_selectedVenue == null && _placeController.text.trim().isEmpty) {
+      return false;
+    }
+    return true;
+  }
+
+  /// Busca las coordenadas de un lugar usando geocoding
+  Future<LatLng?> _geocodeLocation(String address) async {
+    try {
+      // Usar la API de Geocoding de Google Maps
+      // Nota: En producción, deberías usar una API key de servidor para geocoding
+      // Por ahora usamos la misma key, pero idealmente debería estar en el backend
+      final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'AIzaSyDCE_o8jBruKq0__AJRL7SA8ztMCJrsK04';
+      final encodedAddress = Uri.encodeComponent(address);
+      final url = 'https://maps.googleapis.com/maps/api/geocode/json?address=$encodedAddress&key=$apiKey';
+      
+      final response = await http.get(Uri.parse(url));
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['status'] == 'OK' && data['results'].isNotEmpty) {
+          final location = data['results'][0]['geometry']['location'];
+          return LatLng(
+            location['lat'] as double,
+            location['lng'] as double,
+          );
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error en geocoding: $e');
+      return null;
+    }
+  }
+
   /// Abre el bottom sheet con el selector de mapa
-  void _openMapPicker() {
+  Future<void> _openMapPicker() async {
+    // Mostrar diálogo de carga mientras se busca la ubicación
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Buscando ubicación...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    
+    // Buscar la ubicación del lugar/ciudad antes de abrir el mapa
+    LatLng? initialLocation;
+    
+    // Si hay un venue seleccionado con coordenadas, usarlas
+    if (_selectedVenue != null && _selectedVenue!.lat != null && _selectedVenue!.lng != null) {
+      initialLocation = LatLng(_selectedVenue!.lat!, _selectedVenue!.lng!);
+    } 
+    // Si hay un venue pero sin coordenadas, buscar por nombre + ciudad
+    else if (_selectedVenue != null) {
+      final searchQuery = '${_selectedVenue!.name}, ${_selectedCity!.name}';
+      initialLocation = await _geocodeLocation(searchQuery);
+    }
+    // Si no hay venue pero hay texto en el campo de lugar, buscar por lugar + ciudad
+    else if (_placeController.text.trim().isNotEmpty) {
+      final searchQuery = '${_placeController.text.trim()}, ${_selectedCity!.name}';
+      initialLocation = await _geocodeLocation(searchQuery);
+    }
+    
+    // Si no se encontró el lugar, usar las coordenadas de la ciudad
+    if (initialLocation == null && _selectedCity != null) {
+      if (_selectedCity!.lat != null && _selectedCity!.lng != null) {
+        initialLocation = LatLng(_selectedCity!.lat!, _selectedCity!.lng!);
+      } else {
+        // Si la ciudad no tiene coordenadas, buscar por nombre
+        initialLocation = await _geocodeLocation(_selectedCity!.name);
+      }
+    }
+    
+    // Si aún no hay ubicación, usar Barbate por defecto
+    final finalLocation = initialLocation ?? const LatLng(36.1927, -5.9219);
+    
+    // Cerrar el diálogo de carga
+    if (mounted) {
+      Navigator.of(context).pop();
+    }
+    
+    if (!mounted) return;
+    
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1512,12 +1878,12 @@ $dayProgram''';
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => _buildMapBottomSheet(),
+      builder: (context) => _buildMapBottomSheet(initialLocation: finalLocation),
     );
   }
 
   /// Construye el bottom sheet con el mapa interactivo
-  Widget _buildMapBottomSheet() {
+  Widget _buildMapBottomSheet({required LatLng initialLocation}) {
     // Determinar el centro inicial del mapa y la posición inicial del marcador
     LatLng initialCenter;
     LatLng? initialMarkerPosition;
@@ -1526,14 +1892,10 @@ $dayProgram''';
       // Si ya hay coordenadas seleccionadas, usar esas
       initialCenter = LatLng(_lat!, _lng!);
       initialMarkerPosition = initialCenter;
-    } else if (_selectedCity?.lat != null && _selectedCity?.lng != null) {
-      // Si hay ciudad seleccionada con coordenadas, usar esas
-      initialCenter = LatLng(_selectedCity!.lat!, _selectedCity!.lng!);
-      initialMarkerPosition = initialCenter;
     } else {
-      // Por defecto, usar Barbate
-      initialCenter = const LatLng(36.1927, -5.9219);
-      initialMarkerPosition = initialCenter;
+      // Usar la ubicación encontrada por geocoding
+      initialCenter = initialLocation;
+      initialMarkerPosition = initialLocation;
     }
 
     return StatefulBuilder(
@@ -1651,75 +2013,17 @@ class _MapWidget extends StatefulWidget {
 }
 
 class _MapWidgetState extends State<_MapWidget> {
-  bool _mapCreated = false;
-  bool _showError = false;
-  Timer? _errorCheckTimer;
   GoogleMapController? _mapController;
 
   @override
-  void initState() {
-    super.initState();
-    // Verificar si hay error después de 4 segundos
-    // (dar tiempo para que el mapa intente cargar)
-    _errorCheckTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted) {
-        // Si el mapa se creó pero sigue habiendo problemas de renderizado,
-        // o si no se creó, mostrar error
-        setState(() {
-          _showError = true;
-        });
-      }
-    });
-  }
-
-  @override
   void dispose() {
-    _errorCheckTimer?.cancel();
     _mapController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Mostrar error si se detecta
-    if (_showError) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  Icons.error_outline,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Error al cargar el mapa',
-                  style: Theme.of(context).textTheme.titleLarge,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'El mapa requiere una API key válida de Google Maps.\n\nPasos para solucionarlo:\n\n1. Ve a Google Cloud Console\n2. Crea o selecciona un proyecto\n3. Habilita "Maps SDK for Android"\n4. Crea una API key\n5. Añade restricción Android:\n   - Package: com.perikopico.fiestapp\n   - SHA-1: 12:FE:47:5B:A4:14:D7:44:D0:C4:F8:C2:C3:68:F2:6A:63:8A:AD:7A\n6. Reemplaza la API key en AndroidManifest.xml',
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cerrar'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      );
-    }
-
-    // Mostrar el mapa
+    // Mostrar el mapa directamente - Google Maps mostrará su propio error si hay problema con la API key
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: widget.initialCenter,
@@ -1749,19 +2053,6 @@ class _MapWidgetState extends State<_MapWidget> {
       onMapCreated: (GoogleMapController controller) {
         debugPrint('✅ Mapa creado correctamente');
         _mapController = controller;
-        // Cancelar el timer de error si el mapa se crea
-        _errorCheckTimer?.cancel();
-        // Verificar después de 2 segundos más si el mapa se renderiza correctamente
-        // Si hay error de autorización, el mapa no se renderizará
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && !_showError) {
-            // Si después de 2 segundos de crear el mapa no hay renderizado visible,
-            // probablemente hay un error de autorización
-            setState(() {
-              _showError = true;
-            });
-          }
-        });
       },
     );
   }

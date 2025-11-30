@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:fiestapp/services/admin_moderation_service.dart';
@@ -58,11 +59,11 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
       final now = DateTime.now();
 
       if (_currentFilter == AdminEventFilter.pending) {
-        // Cargar eventos pendientes
+        // Cargar eventos pendientes con información del venue
         final res = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status, venue_id, venues(id, name, status, address)',
             )
             .eq('status', 'pending')
             .order('created_at', ascending: false);
@@ -74,11 +75,11 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
           });
         }
       } else {
-        // Cargar eventos publicados (vigentes)
+        // Cargar eventos publicados (vigentes) con información del venue
         final res = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status, venue_id, venues(id, name, status, address)',
             )
             .eq('status', 'published')
             .gte('starts_at', now.toIso8601String())
@@ -112,6 +113,124 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
       return cities?['name'] as String?;
     } catch (e) {
       return null;
+    }
+  }
+
+  Widget _buildVenueInfo(Map<String, dynamic> event) {
+    try {
+      final venues = event['venues'];
+      if (venues == null) return const SizedBox.shrink();
+      
+      // Puede ser un Map o una List
+      Map<String, dynamic>? venue;
+      if (venues is Map) {
+        venue = venues as Map<String, dynamic>?;
+      } else if (venues is List && venues.isNotEmpty) {
+        venue = venues.first as Map<String, dynamic>?;
+      }
+      
+      if (venue == null) return const SizedBox.shrink();
+      
+      final venueName = venue['name'] as String? ?? 'Sin nombre';
+      final venueStatus = venue['status'] as String? ?? 'pending';
+      final venueAddress = venue['address'] as String?;
+      
+      Color statusColor;
+      IconData statusIcon;
+      String statusText;
+      
+      switch (venueStatus) {
+        case 'approved':
+          statusColor = Colors.green;
+          statusIcon = Icons.check_circle;
+          statusText = 'Aprobado';
+          break;
+        case 'rejected':
+          statusColor = Colors.red;
+          statusIcon = Icons.cancel;
+          statusText = 'Rechazado';
+          break;
+        default:
+          statusColor = Colors.orange;
+          statusIcon = Icons.pending;
+          statusText = 'Pendiente';
+      }
+      
+      return Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: statusColor.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: statusColor.withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.place,
+                  size: 14,
+                  color: statusColor,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    venueName,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Chip(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(statusIcon, size: 12, color: statusColor),
+                      const SizedBox(width: 4),
+                      Text(
+                        statusText,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: statusColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  padding: EdgeInsets.zero,
+                  visualDensity: VisualDensity.compact,
+                  backgroundColor: statusColor.withOpacity(0.1),
+                  side: BorderSide(color: statusColor.withOpacity(0.3)),
+                ),
+              ],
+            ),
+            if (venueAddress != null && venueAddress.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 18),
+                child: Text(
+                  venueAddress,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontSize: 11,
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    } catch (e) {
+      debugPrint('Error al construir info del venue: $e');
+      return const SizedBox.shrink();
     }
   }
 
@@ -338,6 +457,33 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
                                 ),
                               ],
                             ),
+                            // Mostrar información del lugar (venue)
+                            if (event['venue_id'] != null) ...[
+                              const SizedBox(height: 8),
+                              _buildVenueInfo(event),
+                            ] else if (event['place'] != null && (event['place'] as String).isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.place,
+                                    size: 14,
+                                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Flexible(
+                                    child: Text(
+                                      event['place'] as String,
+                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                        fontStyle: FontStyle.italic,
+                                      ),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ],
                         ),
                       ),

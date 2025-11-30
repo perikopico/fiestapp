@@ -1,0 +1,11 @@
+# Archivo de ejemplo para local.properties
+# Copia este archivo a local.properties y añade tus valores reales
+# local.properties está en .gitignore y NO se subirá al repositorio
+
+sdk.dir=/ruta/a/tu/Android/Sdk
+flutter.sdk=/ruta/a/tu/flutter
+
+# API Key de Google Maps
+# Obtén tu API key en: https://console.cloud.google.com/
+GOOGLE_MAPS_API_KEY=tu_api_key_aqui
+
