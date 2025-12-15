@@ -54,36 +54,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (!mounted) return;
-      
-      // Navegar a pantalla de consentimiento GDPR
-      final consentResult = await Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const GDPRConsentScreen(isFirstTime: true),
-        ),
-      );
-      
-      if (!mounted) return;
-      
-      // Mostrar mensaje de confirmación
-      showDialog(
+
+      // En la mayoría de configuraciones de Supabase, después de registrarse
+      // NO hay sesión activa hasta que el usuario confirma el email.
+      // En ese caso no podemos guardar consentimientos porque no hay user_id aún.
+      final hasSession = _authService.isAuthenticated;
+
+      // Mostrar siempre el mensaje de confirmación por email
+      await showDialog(
         context: context,
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: const Text('Registro exitoso'),
           content: const Text(
-            'Te hemos enviado un email de confirmación. Por favor, revisa tu bandeja de entrada y confirma tu cuenta antes de iniciar sesión.',
+            'Te hemos enviado un email de confirmación. '
+            'Por favor, revisa tu bandeja de entrada y confirma tu cuenta antes de iniciar sesión.',
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(); // Cerrar diálogo
-                Navigator.of(context).pop(true); // Volver a login
-              },
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Entendido'),
             ),
           ],
         ),
       );
+
+      // Volver a la pantalla de login
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+
+      // Si en el futuro cambiamos la configuración de Supabase para que
+      // haya sesión inmediata tras el registro, podríamos navegar aquí a
+      // la pantalla de consentimiento GDPR usando hasSession == true.
     } catch (e) {
       if (!mounted) return;
       setState(() {

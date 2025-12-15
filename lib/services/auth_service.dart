@@ -98,11 +98,12 @@ class AuthService {
     }
     
     try {
-      // Especificar redirectTo para email de confirmación
-      // En móvil, usamos un deep link para que abra la app
-      final redirectUrl = kIsWeb
-          ? '${Uri.base.origin}/auth/callback'
-          : 'io.supabase.fiestapp://login-callback';
+      // URL a la que se redirige después de confirmar el email.
+      // Aquí usamos una página web sencilla que muestra un mensaje tipo
+      // "Email confirmado, ya puedes volver a la app".
+      // Asegúrate de que esta URL existe en tu web y está añadida en
+      // Supabase → Authentication → URL configuration → Redirect URLs.
+      const redirectUrl = 'https://queplan-app.com/auth/confirmed';
       
       final response = await client.auth.signUp(
         email: email,

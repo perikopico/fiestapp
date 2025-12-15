@@ -447,12 +447,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
       builder: (context) => AlertDialog(
         title: const Text('⚠️ Eliminar cuenta'),
         content: const Text(
-          'Esta acción no se puede deshacer. Se eliminarán:\n\n'
-          '• Tu cuenta y perfil\n'
-          '• Todos tus favoritos\n'
-          '• Tus eventos creados (se mantendrán pero sin tu nombre)\n'
-          '• Todas tus preferencias y datos\n\n'
-          '¿Estás seguro de que quieres eliminar tu cuenta?',
+          'Esta acción no se puede deshacer. Se eliminarán de forma permanente:\n\n'
+          '• Tus favoritos y preferencias\n'
+          '• Tus consentimientos de privacidad\n'
+          '• Tus datos asociados a eventos (los eventos públicos se mantendrán pero sin vincularse a tu usuario)\n\n'
+          'Tu identificador técnico en el sistema podrá conservarse durante un tiempo limitado solo para fines legales y de seguridad.\n\n'
+          '¿Estás seguro de que quieres solicitar la eliminación de tu cuenta?',
         ),
         actions: [
           TextButton(

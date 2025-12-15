@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -16,6 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authService = AuthService.instance;
+  StreamSubscription<AuthState>? _authSub;
   
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -23,9 +25,36 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    _authSub?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Si ya hay sesión activa (por ejemplo, porque el usuario acaba de
+    // confirmar el email y Supabase ha creado la sesión vía deep link),
+    // cerramos automáticamente la pantalla de login.
+    if (_authService.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop(true);
+        }
+      });
+    }
+
+    // Escuchar cambios de autenticación: si durante el login llega un evento
+    // de "signedIn" (por ejemplo, tras confirmar email en el navegador),
+    // cerramos esta pantalla para llevar al usuario de vuelta donde estaba.
+    _authSub = _authService.authStateChanges.listen((state) {
+      if (!mounted) return;
+      if (state.event == AuthChangeEvent.signedIn) {
+        Navigator.of(context).pop(true);
+      }
+    });
   }
 
   Future<void> _handleLogin() async {
