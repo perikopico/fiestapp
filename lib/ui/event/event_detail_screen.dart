@@ -809,7 +809,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         await ReportService.instance.reportContent(
           contentType: 'event',
           contentId: widget.event.id,
-          reason: selectedReason,
+          reason: selectedReason!,
           description: descriptionController.text.trim().isEmpty
               ? null
               : descriptionController.text.trim(),

@@ -100,7 +100,7 @@ class AuthService {
     try {
       // Especificar redirectTo para email de confirmación
       // En móvil, usamos un deep link para que abra la app
-      const redirectUrl = kIsWeb
+      final redirectUrl = kIsWeb
           ? '${Uri.base.origin}/auth/callback'
           : 'io.supabase.fiestapp://login-callback';
       
