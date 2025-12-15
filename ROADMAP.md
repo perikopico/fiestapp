@@ -2,13 +2,15 @@
 
 Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamos en el desarrollo.
 
-**Última actualización**: Diciembre 2024 (actualizado con sistema de moderación y lugares de Barbate)
+**Última actualización**: Diciembre 2024 (actualizado con funcionalidades legales y cumplimiento RGPD)
 
 **✨ Nuevo**: 
 - Sistema de moderación completo (eventos y lugares pendientes) - Diciembre 2024
 - Validación de duplicados implementada - Diciembre 2024
 - 61 lugares de interés de Barbate añadidos a la base de datos - Diciembre 2024
 - Integración Google Places API mejorada - Diciembre 2024
+- **Funcionalidades legales completas (RGPD) implementadas** - Diciembre 2024
+- **Firebase Hosting configurado para documentos legales** - Diciembre 2024
 
 ---
 
@@ -74,20 +76,55 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
   - ✅ Modo oscuro/claro
   - ✅ Navegación intuitiva
 
+- **Cumplimiento Legal y RGPD**
+  - ✅ Sistema de eliminación de cuenta (Derecho al Olvido)
+  - ✅ Sistema de exportación de datos (Derecho de Portabilidad)
+  - ✅ Sistema de reportes de contenido
+  - ✅ Pantalla de consentimiento GDPR
+  - ✅ Gestión de consentimientos en base de datos
+  - ✅ Pantalla "Sobre QuePlan" con información legal
+  - ✅ Enlaces a documentos legales en perfil y registro
+  - ✅ Firebase Hosting configurado para documentos legales
+  - ✅ Migraciones SQL para funcionalidades legales
+
 ---
 
 ## 🚧 Funcionalidades Pendientes / En Progreso
 
 ### 🔴 Alta Prioridad
 
-#### 1. Configuración de Emails SMTP
+#### 1. Verificar y Completar Configuración Legal
+- [ ] Ejecutar migración SQL de funcionalidades legales (`docs/migrations/008_add_legal_functions.sql`)
+- [ ] Verificar propagación DNS para dominio `queplan-app.com`
+- [ ] Completar verificación de dominio en Firebase Hosting
+- [ ] Verificar que SSL esté activo en `https://queplan-app.com`
+- [ ] Verificar que funcionen las URLs:
+  - [ ] `https://queplan-app.com/privacy`
+  - [ ] `https://queplan-app.com/terms`
+- [ ] Personalizar documentos legales (Política de Privacidad y Términos) con información específica
+- [ ] Actualizar email de contacto en `about_screen.dart` si es necesario
+- **Estado**: Implementación completa, pendiente verificación DNS y personalización
+- **Notas**: 
+  - Dominio configurado en Firebase Hosting
+  - Registros DNS añadidos en Squarespace
+  - Esperando propagación DNS (puede tardar 24-48 horas)
+  - Documentos legales en `docs/legal/` listos para personalizar
+
+#### 2. Corregir Errores de Seguridad en Supabase
+- [ ] Ejecutar script de seguridad (`docs/migrations/007_fix_security_issues.sql`)
+- **Estado**: Script creado, pendiente ejecutar
+- **Archivo**: `docs/migrations/007_fix_security_issues.sql`
+- **Tiempo estimado**: 5 minutos
+- **Notas**: Supabase Security Advisor detectó 3 errores (probablemente tablas sin RLS)
+
+#### 3. Configuración de Emails SMTP
 - [ ] Configurar SMTP para emails de confirmación
 - [ ] Habilitar confirmación de email en producción
 - [ ] Personalizar templates de email
 - **Estado**: Documentación creada (`docs/CONFIGURAR_EMAILS.md`), pendiente implementación
 - **Notas**: Se puede dejar desactivado para desarrollo - Decidido dejarlo para más adelante
 
-#### 2. Reparar/Verificar Google Maps
+#### 4. Reparar/Verificar Google Maps
 - [ ] Diagnosticar problemas con Google Maps
 - [ ] Verificar API Key y permisos
 - [ ] Mejorar manejo de errores en mapas
@@ -98,7 +135,7 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
   - `lib/ui/events/event_submit_screen.dart`
   - `lib/ui/admin/admin_event_edit_screen.dart`
 
-#### 3. Completar Sistema de Notificaciones Push
+#### 5. Completar Sistema de Notificaciones Push
 - [x] Implementar handlers para notificaciones en foreground - Diciembre 2024
 - [x] Implementar handlers para notificaciones en background - Diciembre 2024
 - [x] Implementar handlers para notificaciones cuando app está cerrada - Diciembre 2024
@@ -203,7 +240,11 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 - [ ] Cleanup de código no usado
 
 ### Seguridad
-- [ ] Auditoría de seguridad
+- [x] Implementar funcionalidades legales (eliminación cuenta, exportación datos) - Diciembre 2024
+- [x] Sistema de reportes de contenido - Diciembre 2024
+- [x] Consentimiento GDPR implementado - Diciembre 2024
+- [ ] Ejecutar script de corrección de seguridad Supabase (`007_fix_security_issues.sql`)
+- [ ] Auditoría de seguridad completa
 - [ ] Validación de inputs más robusta
 - [ ] Rate limiting en APIs
 - [ ] Protección contra spam en creación de eventos
@@ -219,9 +260,12 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 ## 📅 Próximos Pasos Inmediatos
 
 1. **Esta semana:**
+   - [ ] Verificar propagación DNS y completar configuración de dominio legal
+   - [ ] Ejecutar migraciones SQL pendientes (007 y 008)
    - [ ] Verificar/Reparar Google Maps
    - [x] Completar handlers de notificaciones push - Diciembre 2024
    - [x] Guardar tokens FCM en Supabase - Diciembre 2024
+   - [x] Implementar funcionalidades legales completas - Diciembre 2024
    - [ ] Verificar despliegue de Edge Function `send_fcm_notification`
    - [ ] Probar envío de notificaciones push
 
@@ -269,8 +313,9 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 - **UI/UX**: 75% ✅
 - **Backend/Base de Datos**: 90% ✅
 - **Notificaciones**: 85% ✅
+- **Cumplimiento Legal/RGPD**: 95% ✅ (pendiente verificación DNS)
 - **Testing**: 30% 🟡
-- **Documentación**: 70% ✅
+- **Documentación**: 75% ✅
 
 ---
 

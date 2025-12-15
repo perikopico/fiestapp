@@ -25,16 +25,18 @@ Ahora las API keys se cargan desde archivos de configuración que están en `.gi
 1. Abre el archivo `android/local.properties`
 2. Añade la siguiente línea (si no está ya):
    ```
-   GOOGLE_MAPS_API_KEY=AIzaSyDCE_o8jBruKq0__AJRL7SA8ztMCJrsK04
+   GOOGLE_MAPS_API_KEY=TU_API_KEY_AQUI
    ```
+   **⚠️ IMPORTANTE:** Reemplaza `TU_API_KEY_AQUI` con tu API key real de Google Maps.
 
 ### 2. Configurar API Key para Código Dart
 
 1. Abre el archivo `.env` en la raíz del proyecto
 2. Añade la siguiente línea:
    ```
-   GOOGLE_MAPS_API_KEY=AIzaSyDCE_o8jBruKq0__AJRL7SA8ztMCJrsK04
+   GOOGLE_MAPS_API_KEY=TU_API_KEY_AQUI
    ```
+   **⚠️ IMPORTANTE:** Reemplaza `TU_API_KEY_AQUI` con tu API key real de Google Maps.
 
 ## 🔍 Verificación
 

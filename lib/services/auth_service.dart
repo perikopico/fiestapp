@@ -98,9 +98,16 @@ class AuthService {
     }
     
     try {
+      // Especificar redirectTo para email de confirmación
+      // En móvil, usamos un deep link para que abra la app
+      const redirectUrl = kIsWeb
+          ? '${Uri.base.origin}/auth/callback'
+          : 'io.supabase.fiestapp://login-callback';
+      
       final response = await client.auth.signUp(
         email: email,
         password: password,
+        emailRedirectTo: redirectUrl,
       );
       
       if (response.user == null) {
@@ -108,6 +115,7 @@ class AuthService {
       }
       
       debugPrint('✅ Usuario registrado: ${response.user!.email}');
+      debugPrint('📍 URL de redirección para confirmación: $redirectUrl');
     } catch (e) {
       debugPrint('❌ Error al registrarse: $e');
       rethrow;

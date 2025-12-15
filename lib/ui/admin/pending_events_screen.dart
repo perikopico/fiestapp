@@ -58,39 +58,146 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
       final supa = Supabase.instance.client;
       final now = DateTime.now();
 
+      List<Map<String, dynamic>> events;
+      
       if (_currentFilter == AdminEventFilter.pending) {
-        // Cargar eventos pendientes con información del venue
+        // Cargar eventos pendientes desde la tabla events (para tener venue_id)
         final res = await supa
-            .from('events_view')
+            .from('events')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status, venue_id, venues(id, name, status, address)',
+              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, is_free, description, image_alignment, status, venue_id',
             )
             .eq('status', 'pending')
             .order('created_at', ascending: false);
 
-        if (mounted) {
-          setState(() {
-            _pendingEvents = (res as List).cast<Map<String, dynamic>>();
-            _isLoading = false;
-          });
-        }
+        events = (res as List).cast<Map<String, dynamic>>();
       } else {
-        // Cargar eventos publicados (vigentes) con información del venue
+        // Cargar eventos publicados (vigentes) desde la tabla events
         final res = await supa
-            .from('events_view')
+            .from('events')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment, status, venue_id, venues(id, name, status, address)',
+              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, is_free, description, image_alignment, status, venue_id',
             )
             .eq('status', 'published')
             .gte('starts_at', now.toIso8601String())
             .order('starts_at', ascending: true);
 
-        if (mounted) {
-          setState(() {
-            _publishedEvents = (res as List).cast<Map<String, dynamic>>();
-            _isLoading = false;
-          });
+        events = (res as List).cast<Map<String, dynamic>>();
+      }
+
+      // Obtener información de ciudades y categorías
+      final cityIds = events.map((e) => e['city_id'] as int?).whereType<int>().toSet().toList();
+      final categoryIds = events.map((e) => e['category_id'] as int?).whereType<int>().toSet().toList();
+      
+      Map<int, Map<String, dynamic>> citiesMap = {};
+      Map<int, Map<String, dynamic>> categoriesMap = {};
+      
+      // Cargar ciudades y categorías en paralelo
+      final futures = <Future>[];
+      
+      if (cityIds.isNotEmpty) {
+        dynamic citiesQuery = supa.from('cities').select('id, name');
+        if (cityIds.length == 1) {
+          citiesQuery = citiesQuery.eq('id', cityIds.first);
+        } else if (cityIds.length > 1) {
+          final orCondition = cityIds.map((id) => 'id.eq.$id').join(',');
+          citiesQuery = citiesQuery.or(orCondition);
         }
+        futures.add(citiesQuery.then((res) {
+          for (var city in res as List) {
+            citiesMap[city['id'] as int] = city as Map<String, dynamic>;
+          }
+        }));
+      }
+      
+      if (categoryIds.isNotEmpty) {
+        dynamic categoriesQuery = supa.from('categories').select('id, name, icon, color');
+        if (categoryIds.length == 1) {
+          categoriesQuery = categoriesQuery.eq('id', categoryIds.first);
+        } else if (categoryIds.length > 1) {
+          final orCondition = categoryIds.map((id) => 'id.eq.$id').join(',');
+          categoriesQuery = categoriesQuery.or(orCondition);
+        }
+        futures.add(categoriesQuery.then((res) {
+          for (var category in res as List) {
+            categoriesMap[category['id'] as int] = category as Map<String, dynamic>;
+          }
+        }));
+      }
+      
+      // Esperar a que se carguen ciudades y categorías
+      if (futures.isNotEmpty) {
+        await Future.wait(futures);
+      }
+      
+      // Enriquecer eventos con información de ciudades y categorías
+      events = events.map((event) {
+        final cityId = event['city_id'] as int?;
+        final categoryId = event['category_id'] as int?;
+        
+        final enriched = Map<String, dynamic>.from(event);
+        if (cityId != null && citiesMap.containsKey(cityId)) {
+          enriched['city_name'] = citiesMap[cityId]!['name'];
+        }
+        if (categoryId != null && categoriesMap.containsKey(categoryId)) {
+          enriched['category_name'] = categoriesMap[categoryId]!['name'];
+          enriched['category_icon'] = categoriesMap[categoryId]!['icon'];
+          enriched['category_color'] = categoriesMap[categoryId]!['color'];
+        }
+        return enriched;
+      }).toList();
+
+      // Obtener información de venues por separado solo para eventos que tengan venue_id
+      final venueIds = events
+          .where((e) => e['venue_id'] != null)
+          .map((e) => e['venue_id'] as String)
+          .toSet()
+          .toList();
+
+      Map<String, Map<String, dynamic>> venuesMap = {};
+      if (venueIds.isNotEmpty) {
+        try {
+          // Construir query con múltiples IDs usando or()
+          dynamic venuesQuery = supa
+              .from('venues')
+              .select('id, name, status, address');
+          
+          if (venueIds.length == 1) {
+            venuesQuery = venuesQuery.eq('id', venueIds.first);
+          } else if (venueIds.length > 1) {
+            // Construir condición OR: id=id1,id=id2,id=id3
+            final orCondition = venueIds.map((id) => 'id.eq.$id').join(',');
+            venuesQuery = venuesQuery.or(orCondition);
+          }
+          
+          final venuesRes = await venuesQuery;
+          
+          for (var venue in venuesRes as List) {
+            venuesMap[venue['id'] as String] = venue as Map<String, dynamic>;
+          }
+        } catch (e) {
+          debugPrint('⚠️ Error al cargar venues: $e');
+          // Continuar sin información de venues si hay error
+        }
+      }
+
+      // Añadir información de venues a los eventos
+      for (var event in events) {
+        final venueId = event['venue_id'] as String?;
+        if (venueId != null && venuesMap.containsKey(venueId)) {
+          event['venues'] = venuesMap[venueId];
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          if (_currentFilter == AdminEventFilter.pending) {
+            _pendingEvents = events;
+          } else {
+            _publishedEvents = events;
+          }
+          _isLoading = false;
+        });
       }
     } catch (e) {
       if (mounted) {

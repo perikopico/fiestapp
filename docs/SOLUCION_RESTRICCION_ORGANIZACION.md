@@ -53,3 +53,8 @@ En lugar de enviar notificaciones desde Flutter, podemos:
 **¿Quieres contactar al administrador o prefieres dejar las notificaciones automáticas para más adelante?**
 
 
+
+
+
+
+

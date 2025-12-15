@@ -54,6 +54,7 @@ class _PopularCarouselState extends State<PopularCarousel> {
             height: height,
             fit: BoxFit.cover,
             errorBuilder: (context, error, stackTrace) {
+              debugPrint('❌ Error al cargar imagen del evento ${event.id}: $error');
               return Container(
                 width: width,
                 height: height,
@@ -65,6 +66,23 @@ class _PopularCarouselState extends State<PopularCarousel> {
                     color: event.isPast
                         ? Theme.of(context).disabledColor
                         : Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              );
+            },
+            loadingBuilder: (context, child, loadingProgress) {
+              if (loadingProgress == null) return child;
+              return Container(
+                width: width,
+                height: height,
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                child: Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                    strokeWidth: 2,
                   ),
                 ),
               );

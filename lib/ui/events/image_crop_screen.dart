@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:crop_your_image/crop_your_image.dart';
 
 class ImageCropScreen extends StatefulWidget {
@@ -33,16 +34,38 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
 
   Future<void> _loadImage() async {
     try {
+      debugPrint('📸 Cargando imagen desde: ${widget.imageFile.path}');
+      
+      // Verificar que el archivo existe
+      if (!await widget.imageFile.exists()) {
+        throw Exception('El archivo de imagen no existe');
+      }
+
+      // Verificar el tamaño del archivo (evitar cargar archivos muy grandes)
+      final fileSize = await widget.imageFile.length();
+      debugPrint('📸 Tamaño del archivo: ${fileSize} bytes (${(fileSize / 1024 / 1024).toStringAsFixed(2)} MB)');
+      
+      if (fileSize > 50 * 1024 * 1024) { // 50 MB
+        throw Exception('La imagen es demasiado grande (máximo 50 MB)');
+      }
+
       final bytes = await widget.imageFile.readAsBytes();
-      setState(() {
-        _imageBytes = bytes;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _isLoading = false;
-      });
+      debugPrint('✅ Imagen cargada: ${bytes.length} bytes');
+      
       if (mounted) {
+        setState(() {
+          _imageBytes = bytes;
+          _isLoading = false;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al cargar la imagen: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error al cargar la imagen: ${e.toString()}'),
@@ -54,7 +77,12 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
   }
 
   Future<void> _confirmCrop() async {
-    if (_imageBytes == null || _isCropping) return;
+    if (_imageBytes == null || _isCropping) {
+      debugPrint('⚠️ No se puede recortar: imagen nula o ya recortando');
+      return;
+    }
+    
+    debugPrint('✂️ Iniciando recorte de imagen...');
     
     setState(() {
       _isCropping = true;
@@ -65,9 +93,19 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
     try {
       // Iniciar el crop
       _cropController.crop();
+      debugPrint('✂️ Crop iniciado, esperando resultado...');
       
       // Esperar a que el crop termine (el callback onCropped completará el Future)
-      final croppedBytes = await _cropCompleter!.future;
+      // Agregar timeout para evitar que se quede colgado
+      final croppedBytes = await _cropCompleter!.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () {
+          debugPrint('❌ Timeout al recortar imagen');
+          throw TimeoutException('El recorte de imagen tardó demasiado');
+        },
+      );
+      
+      debugPrint('✅ Imagen recortada: ${croppedBytes.length} bytes');
       
       // Hacer pop después de un pequeño delay para asegurar que el Navigator no esté bloqueado
       await Future.delayed(const Duration(milliseconds: 100));
@@ -75,7 +113,9 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
       if (mounted) {
         Navigator.of(context).pop(croppedBytes);
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al recortar imagen: $e');
+      debugPrint('Stack trace: $stackTrace');
       if (mounted) {
         setState(() {
           _isCropping = false;
@@ -83,7 +123,7 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: const Text('No se pudo procesar la imagen. Inténtalo de nuevo.'),
+            content: Text('No se pudo procesar la imagen: ${e.toString()}'),
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
@@ -141,15 +181,24 @@ class _ImageCropScreenState extends State<ImageCropScreen> {
                   image: _imageBytes!,
                   controller: _cropController,
                   aspectRatio: widget.aspectRatio,
-                  onCropped: (image) {
-                    // Completar el Future con el resultado del crop
-                    // CropResult es una clase sealed con CropSuccess y CropFailure
+                  onCropped: (result) {
+                    debugPrint('📸 Callback onCropped llamado con resultado: ${result.runtimeType}');
+                    // En crop_your_image 2.0.0, onCropped devuelve CropResult
                     if (_cropCompleter != null && !_cropCompleter!.isCompleted) {
-                      if (image is CropSuccess) {
-                        _cropCompleter!.complete(image.croppedImage);
-                      } else if (image is CropFailure) {
-                        _cropCompleter!.completeError(image.cause, image.stackTrace);
+                      // Usar pattern matching para manejar CropResult
+                      switch (result) {
+                        case CropSuccess(:final croppedImage):
+                          debugPrint('✅ Crop exitoso: ${croppedImage.length} bytes');
+                          _cropCompleter!.complete(croppedImage);
+                        case CropFailure(:final cause, :final stackTrace):
+                          debugPrint('❌ Crop falló: $cause');
+                          _cropCompleter!.completeError(
+                            cause,
+                            stackTrace ?? StackTrace.current,
+                          );
                       }
+                    } else {
+                      debugPrint('⚠️ Completer no disponible o ya completado');
                     }
                   },
                 ),

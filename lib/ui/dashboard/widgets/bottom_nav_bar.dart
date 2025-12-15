@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../events/favorites_screen.dart';
-import '../../events/event_submit_screen.dart';
+import '../../events/event_wizard_screen.dart';
 import '../../notifications/notifications_screen.dart';
 import '../../../main.dart' show appThemeMode;
 
@@ -74,7 +74,7 @@ class BottomNavBar extends StatelessWidget {
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
-                      builder: (_) => const EventSubmitScreen(),
+                      builder: (_) => const EventWizardScreen(),
                     ),
                   );
                 },

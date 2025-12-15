@@ -1072,6 +1072,10 @@ $dayProgram''';
                         if (venue.lat != null && venue.lng != null) {
                           _lat = venue.lat;
                           _lng = venue.lng;
+                          debugPrint('📍 Coordenadas del lugar "${venue.name}": Lat: ${venue.lat}, Lng: ${venue.lng}');
+                          debugPrint('   Dirección: ${venue.address ?? "No disponible"}');
+                        } else {
+                          debugPrint('⚠️ El lugar "${venue.name}" no tiene coordenadas. Debes marcarlo en el mapa.');
                         }
                       } else {
                         // Si se deselecciona el venue, limpiar coordenadas también
@@ -1212,10 +1216,78 @@ $dayProgram''';
               // === SECCIÓN: Ubicación en el mapa ===
               _buildSectionTitle('Ubicación en el mapa'),
               const SizedBox(height: 12),
+              
+              // Preview del mapa si hay coordenadas
+              if (_lat != null && _lng != null) ...[
+                Container(
+                  height: 180,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                    ),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: GoogleMap(
+                      initialCameraPosition: CameraPosition(
+                        target: LatLng(_lat!, _lng!),
+                        zoom: 15.0,
+                      ),
+                      markers: {
+                        Marker(
+                          markerId: const MarkerId('selected_location'),
+                          position: LatLng(_lat!, _lng!),
+                          infoWindow: InfoWindow(
+                            title: _selectedVenue?.name ?? 
+                                (_placeController.text.trim().isNotEmpty
+                                    ? _placeController.text.trim()
+                                    : 'Ubicación seleccionada'),
+                          ),
+                        ),
+                      },
+                      zoomControlsEnabled: false,
+                      myLocationButtonEnabled: false,
+                      mapToolbarEnabled: false,
+                      scrollGesturesEnabled: false,
+                      zoomGesturesEnabled: false,
+                      tiltGesturesEnabled: false,
+                      rotateGesturesEnabled: false,
+                      onMapCreated: (GoogleMapController controller) {
+                        debugPrint('✅ Preview del mapa creado');
+                      },
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedVenue != null
+                            ? 'Ubicación del lugar "${_selectedVenue!.name}" marcada en el mapa'
+                            : 'Ubicación marcada en el mapa',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+              ],
+              
               OutlinedButton.icon(
                 onPressed: _canOpenMapPicker() ? _openMapPicker : null,
-                icon: const Icon(Icons.map),
-                label: const Text('Elegir en el mapa'),
+                icon: Icon(_lat != null && _lng != null ? Icons.edit_location : Icons.map),
+                label: Text(_lat != null && _lng != null ? 'Cambiar ubicación' : 'Elegir en el mapa'),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                 ),
@@ -1230,17 +1302,27 @@ $dayProgram''';
                     ),
                   ),
                 ),
-              const SizedBox(height: 8),
-              Text(
-                _lat != null && _lng != null
-                    ? 'Lat: ${_lat!.toStringAsFixed(4)}, Lng: ${_lng!.toStringAsFixed(4)}'
-                    : 'Ninguna ubicación seleccionada',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: _lat != null && _lng != null
-                      ? Theme.of(context).colorScheme.primary
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
+              if (_lat == null || _lng == null) ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Ninguna ubicación seleccionada',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
+              ],
               const SizedBox(height: 32),
 
               // === SECCIÓN: Envío ===
@@ -1785,7 +1867,11 @@ $dayProgram''';
       // Usar la API de Geocoding de Google Maps
       // Nota: En producción, deberías usar una API key de servidor para geocoding
       // Por ahora usamos la misma key, pero idealmente debería estar en el backend
-      final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? 'AIzaSyDCE_o8jBruKq0__AJRL7SA8ztMCJrsK04';
+      final apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'];
+      if (apiKey == null || apiKey.isEmpty) {
+        debugPrint('❌ GOOGLE_MAPS_API_KEY no configurada en .env');
+        return null;
+      }
       final encodedAddress = Uri.encodeComponent(address);
       final url = 'https://maps.googleapis.com/maps/api/geocode/json?address=$encodedAddress&key=$apiKey';
       
@@ -1836,33 +1922,44 @@ $dayProgram''';
     // Buscar la ubicación del lugar/ciudad antes de abrir el mapa
     LatLng? initialLocation;
     
-    // Si hay un venue seleccionado con coordenadas, usarlas
-    if (_selectedVenue != null && _selectedVenue!.lat != null && _selectedVenue!.lng != null) {
+    // PRIORIDAD 1: Si ya hay coordenadas seleccionadas (_lat y _lng), usarlas directamente
+    if (_lat != null && _lng != null) {
+      initialLocation = LatLng(_lat!, _lng!);
+      debugPrint('📍 Usando coordenadas ya seleccionadas: $_lat, $_lng');
+    }
+    // PRIORIDAD 2: Si hay un venue seleccionado con coordenadas, usarlas
+    else if (_selectedVenue != null && _selectedVenue!.lat != null && _selectedVenue!.lng != null) {
       initialLocation = LatLng(_selectedVenue!.lat!, _selectedVenue!.lng!);
+      debugPrint('📍 Usando coordenadas del venue: ${_selectedVenue!.name}');
     } 
-    // Si hay un venue pero sin coordenadas, buscar por nombre + ciudad
+    // PRIORIDAD 3: Si hay un venue pero sin coordenadas, buscar por nombre + ciudad
     else if (_selectedVenue != null) {
       final searchQuery = '${_selectedVenue!.name}, ${_selectedCity!.name}';
+      debugPrint('🔍 Buscando coordenadas para venue: $searchQuery');
       initialLocation = await _geocodeLocation(searchQuery);
     }
-    // Si no hay venue pero hay texto en el campo de lugar, buscar por lugar + ciudad
+    // PRIORIDAD 4: Si no hay venue pero hay texto en el campo de lugar, buscar por lugar + ciudad
     else if (_placeController.text.trim().isNotEmpty) {
       final searchQuery = '${_placeController.text.trim()}, ${_selectedCity!.name}';
+      debugPrint('🔍 Buscando coordenadas para lugar: $searchQuery');
       initialLocation = await _geocodeLocation(searchQuery);
     }
     
-    // Si no se encontró el lugar, usar las coordenadas de la ciudad
+    // PRIORIDAD 5: Si no se encontró el lugar, usar las coordenadas de la ciudad
     if (initialLocation == null && _selectedCity != null) {
       if (_selectedCity!.lat != null && _selectedCity!.lng != null) {
         initialLocation = LatLng(_selectedCity!.lat!, _selectedCity!.lng!);
+        debugPrint('📍 Usando coordenadas de la ciudad: ${_selectedCity!.name}');
       } else {
         // Si la ciudad no tiene coordenadas, buscar por nombre
+        debugPrint('🔍 Buscando coordenadas de la ciudad: ${_selectedCity!.name}');
         initialLocation = await _geocodeLocation(_selectedCity!.name);
       }
     }
     
-    // Si aún no hay ubicación, usar Barbate por defecto
+    // PRIORIDAD 6: Si aún no hay ubicación, usar Barbate por defecto
     final finalLocation = initialLocation ?? const LatLng(36.1927, -5.9219);
+    debugPrint('📍 Ubicación final para el mapa: ${finalLocation.latitude}, ${finalLocation.longitude}');
     
     // Cerrar el diálogo de carga
     if (mounted) {
@@ -1900,8 +1997,10 @@ $dayProgram''';
 
     return StatefulBuilder(
       builder: (context, setModalState) {
-        // Estado local del marcador en el mapa (inicializado con la posición existente si hay)
-        LatLng? pickedLatLng = initialMarkerPosition;
+        // Estado local del marcador en el mapa
+        // SIEMPRE inicializar con una posición (initialMarkerPosition o initialCenter)
+        // Esto asegura que siempre haya un marcador visible
+        LatLng currentMarkerPosition = initialMarkerPosition ?? initialCenter;
 
         return SizedBox(
           height: MediaQuery.of(context).size.height * 0.9,
@@ -1915,6 +2014,28 @@ $dayProgram''';
                   onPressed: () => Navigator.of(context).pop(),
                 ),
                 elevation: 0,
+              ),
+              // Instrucciones
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 20,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Toca el mapa o arrastra el marcador rojo para seleccionar la ubicación',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
               // Mapa interactivo o mensaje para web
               Expanded(
@@ -1955,28 +2076,56 @@ $dayProgram''';
                       )
                     : _MapWidget(
                         initialCenter: initialCenter,
-                        initialMarkerPosition: initialMarkerPosition,
+                        initialMarkerPosition: currentMarkerPosition,
                         onMarkerUpdated: (LatLng position) {
+                          debugPrint('📍 Marcador actualizado a: ${position.latitude}, ${position.longitude}');
                           setModalState(() {
-                            pickedLatLng = position;
+                            currentMarkerPosition = position;
                           });
                         },
-                        pickedLatLng: pickedLatLng,
+                        pickedLatLng: currentMarkerPosition,
                       ),
               ),
+              // Mostrar coordenadas actuales
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12.0),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.location_on,
+                          size: 20,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Lat: ${currentMarkerPosition.latitude.toStringAsFixed(6)}, '
+                            'Lng: ${currentMarkerPosition.longitude.toStringAsFixed(6)}',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontFamily: 'monospace',
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
               // Botón de confirmar
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: ElevatedButton(
                   onPressed: () {
-                    // Usar las coordenadas seleccionadas o las actuales/existentes
-                    final finalLatLng = pickedLatLng ?? initialMarkerPosition;
-                    if (finalLatLng != null) {
-                      setState(() {
-                        _lat = finalLatLng.latitude;
-                        _lng = finalLatLng.longitude;
-                      });
-                    }
+                    // Usar las coordenadas del marcador actual
+                    setState(() {
+                      _lat = currentMarkerPosition.latitude;
+                      _lng = currentMarkerPosition.longitude;
+                    });
+                    debugPrint('✅ Ubicación confirmada: $_lat, $_lng');
                     Navigator.of(context).pop();
                   },
                   style: ElevatedButton.styleFrom(
@@ -2023,27 +2172,36 @@ class _MapWidgetState extends State<_MapWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Mostrar el mapa directamente - Google Maps mostrará su propio error si hay problema con la API key
+    // Asegurar que siempre haya un marcador visible
+    // Si no hay pickedLatLng, usar initialCenter o initialMarkerPosition
+    final markerPosition = widget.pickedLatLng ?? 
+                          widget.initialMarkerPosition ?? 
+                          widget.initialCenter;
+    
     return GoogleMap(
       initialCameraPosition: CameraPosition(
         target: widget.initialCenter,
         zoom: 14.0,
       ),
       onTap: (LatLng position) {
+        debugPrint('📍 Mapa tocado en: ${position.latitude}, ${position.longitude}');
         widget.onMarkerUpdated(position);
       },
-      markers: widget.pickedLatLng != null
-          ? {
-              Marker(
-                markerId: const MarkerId('picked'),
-                position: widget.pickedLatLng!,
-                draggable: true,
-                onDragEnd: (LatLng newPosition) {
-                  widget.onMarkerUpdated(newPosition);
-                },
-              ),
-            }
-          : {},
+      markers: {
+        Marker(
+          markerId: const MarkerId('picked'),
+          position: markerPosition,
+          draggable: true,
+          icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          onDragEnd: (LatLng newPosition) {
+            debugPrint('📍 Marcador arrastrado a: ${newPosition.latitude}, ${newPosition.longitude}');
+            widget.onMarkerUpdated(newPosition);
+          },
+          onDragStart: (LatLng position) {
+            debugPrint('📍 Iniciando arrastre del marcador');
+          },
+        ),
+      },
       myLocationButtonEnabled: false,
       zoomControlsEnabled: true,
       scrollGesturesEnabled: true,
@@ -2054,6 +2212,11 @@ class _MapWidgetState extends State<_MapWidget> {
         debugPrint('✅ Mapa creado correctamente');
         _mapController = controller;
       },
+      // Manejo de errores mejorado
+      onCameraMoveStarted: () {
+        debugPrint('📍 Usuario moviendo el mapa');
+      },
+      // Si hay error, se mostrará en los logs pero el mapa seguirá funcionando
     );
   }
 }

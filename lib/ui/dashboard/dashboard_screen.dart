@@ -333,18 +333,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Precarga la siguiente imagen del hero banner
   Future<void> _preloadNextImage() async {
     if (_heroImageUrls.isEmpty || _heroImageUrls.length <= 1) return;
+    if (!mounted) return;
     
     final nextIndex = (_heroIndex + 1) % _heroImageUrls.length;
     final nextImageUrl = _heroImageUrls[nextIndex];
     
     try {
       await precacheImage(NetworkImage(nextImageUrl), context);
+      debugPrint('✅ Imagen precargada: ${nextImageUrl.substring(0, 50)}...');
     } catch (e) {
-      debugPrint('Error al precargar imagen del hero: $e');
+      debugPrint('⚠️ Error al precargar imagen del hero: $e');
+      debugPrint('   URL: ${nextImageUrl.substring(0, 100)}...');
+      // No hacer nada más, la imagen se cargará cuando se muestre
     }
   }
 
-  /// Carga el hero banner desde Supabase Storage
+  /// Imágenes de fallback si Supabase Storage no tiene imágenes
+  List<String> _getFallbackHeroImages() {
+    return [
+      'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=800&q=80',
+      'https://images.unsplash.com/photo-1482517967863-00e15c9b44be?w=800&q=80',
+      'https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=800&q=80',
+      'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&q=80',
+    ];
+  }
+
+  /// Carga el hero banner desde Supabase Storage con fallback
   Future<void> _loadHeroBanner() async {
     setState(() {
       _isHeroLoading = true;
@@ -363,22 +377,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
             name.endsWith('.png');
       }).toList();
 
-      if (imageFiles.isEmpty) {
-        setState(() {
-          _heroImageUrls = [];
-          _heroTaglines = _getMonthlyTaglines(DateTime.now());
-          _heroIndex = 0;
-          _isHeroLoading = false;
-          _textVisible = true;
-        });
-        _heroTimer?.cancel();
-        return;
-      }
+      List<String> imageUrls;
 
-      // Construir todas las URLs públicas
-      final imageUrls = imageFiles.map((file) {
-        return storage.getPublicUrl('$monthFolder/${file.name}');
-      }).toList();
+      if (imageFiles.isEmpty) {
+        // Si no hay imágenes en Supabase para este mes, intentar cargar desde la raíz
+        debugPrint('⚠️ No se encontraron imágenes en $monthFolder, buscando en la raíz...');
+        try {
+          final rootFiles = await storage.list(path: '');
+          final rootImageFiles = rootFiles.where((file) {
+            final name = file.name.toLowerCase();
+            return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+          }).toList();
+          
+          if (rootImageFiles.isNotEmpty) {
+            debugPrint('✅ Encontradas ${rootImageFiles.length} imágenes en la raíz');
+            imageUrls = rootImageFiles.map((file) {
+              return storage.getPublicUrl(file.name);
+            }).toList();
+          } else {
+            debugPrint('⚠️ No se encontraron imágenes en Supabase Storage, usando fallback');
+            imageUrls = _getFallbackHeroImages();
+          }
+        } catch (e) {
+          debugPrint('❌ Error al buscar imágenes en la raíz: $e');
+          debugPrint('   Usando imágenes de fallback');
+          imageUrls = _getFallbackHeroImages();
+        }
+      } else {
+        // Construir todas las URLs públicas
+        imageUrls = imageFiles.map((file) {
+          return storage.getPublicUrl('$monthFolder/${file.name}');
+        }).toList();
+        debugPrint('✅ Encontradas ${imageUrls.length} imágenes en $monthFolder');
+      }
 
       // Mezclar las URLs para tener un orden aleatorio
       imageUrls.shuffle(Random());
@@ -426,15 +457,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error al cargar hero banner: $e');
+      debugPrint('❌ Error al cargar hero banner desde Supabase: $e');
+      debugPrint('   Usando imágenes de fallback');
+      
+      // En caso de error, usar imágenes de fallback
+      final fallbackImages = _getFallbackHeroImages();
+      fallbackImages.shuffle(Random());
+      
       setState(() {
-        _heroImageUrls = [];
+        _heroImageUrls = fallbackImages;
         _heroTaglines = _getMonthlyTaglines(DateTime.now());
         _heroIndex = 0;
         _isHeroLoading = false;
         _textVisible = true;
       });
       _heroTimer?.cancel();
+      
+      // Inicializar timer con imágenes de fallback
+      if (_heroImageUrls.length > 1) {
+        _preloadNextImage();
+        _heroTimer = Timer.periodic(const Duration(seconds: 7), (_) async {
+          if (!mounted || _heroImageUrls.isEmpty) return;
+          await _preloadNextImage();
+          if (mounted) {
+            setState(() {
+              _textVisible = false;
+              _heroIndex = (_heroIndex + 1) % _heroImageUrls.length;
+            });
+            await Future.delayed(const Duration(milliseconds: 600));
+            if (mounted) {
+              setState(() {
+                _textVisible = true;
+              });
+            }
+          }
+        });
+      }
     }
   }
 
@@ -682,11 +740,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudieron cargar eventos del rango seleccionado'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('No se pudieron cargar eventos del rango seleccionado'),
+                ),
+              ],
+            ),
+            backgroundColor: Theme.of(context).colorScheme.error,
+            action: SnackBarAction(
+              label: 'Reintentar',
+              textColor: Colors.white,
+              onPressed: () => _reloadWithDateRange(from: _fromDate, to: _toDate),
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -1878,32 +1953,64 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return Scaffold(
         appBar: AppBar(title: const Text('QuePlan')),
         body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, size: 64, color: Colors.red),
-              const SizedBox(height: 16),
-              Text(
-                'Error al cargar datos',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.error_outline,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Error al cargar eventos',
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _reloadEvents,
-                child: const Text('Reintentar'),
-              ),
-            ],
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _error = null;
+                    });
+                    _reloadEvents();
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      _error = null;
+                      _clearFilters();
+                    });
+                  },
+                  icon: const Icon(Icons.clear_all),
+                  label: const Text('Limpiar filtros y reintentar'),
+                ),
+              ],
+            ),
           ),
         ),
       );

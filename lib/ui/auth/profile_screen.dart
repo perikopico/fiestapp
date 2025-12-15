@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import '../../services/favorites_service.dart';
+import '../../services/account_deletion_service.dart';
+import '../../services/data_export_service.dart';
 import '../admin/pending_events_screen.dart';
 import '../admin/pending_venues_screen.dart';
 import '../events/favorites_screen.dart';
 import '../events/my_events_screen.dart';
+import '../legal/gdpr_consent_screen.dart';
+import '../legal/about_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -230,6 +235,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
+                  // Legal y Privacidad
+                  _buildSection(
+                    context,
+                    'Legal y Privacidad',
+                    [
+                      _buildListItem(
+                        context,
+                        icon: Icons.privacy_tip,
+                        title: 'Política de Privacidad',
+                        subtitle: 'Cómo protegemos tus datos',
+                        onTap: () => _openPrivacyPolicy(),
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.description,
+                        title: 'Términos y Condiciones',
+                        subtitle: 'Términos de uso de la app',
+                        onTap: () => _openTerms(),
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.settings,
+                        title: 'Gestionar consentimientos',
+                        subtitle: 'Modificar tus preferencias de privacidad',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const GDPRConsentScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.download,
+                        title: 'Exportar mis datos',
+                        subtitle: 'Descargar todos tus datos (RGPD)',
+                        onTap: _exportUserData,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
                   // Información
                   _buildSection(
                     context,
@@ -238,6 +285,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       _buildListItem(
                         context,
                         icon: Icons.info_outline,
+                        title: 'Sobre QuePlan',
+                        subtitle: 'Información de la app',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AboutScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.badge,
                         title: 'ID de usuario',
                         subtitle: user?.id ?? 'N/A',
                         onTap: () {
@@ -259,6 +319,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: const Text('Cerrar sesión'),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: Theme.of(context).colorScheme.error,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Eliminar cuenta
+                  OutlinedButton.icon(
+                    onPressed: _showDeleteAccountDialog,
+                    icon: const Icon(Icons.delete_forever),
+                    label: const Text('Eliminar cuenta'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
@@ -308,6 +379,147 @@ class _ProfileScreenState extends State<ProfileScreen> {
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
     );
+  }
+
+  Future<void> _openPrivacyPolicy() async {
+    const url = 'https://queplan-app.com/privacy';
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace')),
+      );
+    }
+  }
+
+  Future<void> _openTerms() async {
+    const url = 'https://queplan-app.com/terms';
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace')),
+      );
+    }
+  }
+
+  Future<void> _exportUserData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      await DataExportService.instance.exportUserData();
+      
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Datos exportados correctamente'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al exportar datos: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _showDeleteAccountDialog() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ Eliminar cuenta'),
+        content: const Text(
+          'Esta acción no se puede deshacer. Se eliminarán:\n\n'
+          '• Tu cuenta y perfil\n'
+          '• Todos tus favoritos\n'
+          '• Tus eventos creados (se mantendrán pero sin tu nombre)\n'
+          '• Todas tus preferencias y datos\n\n'
+          '¿Estás seguro de que quieres eliminar tu cuenta?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Eliminar cuenta'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    // Confirmación final
+    final finalConfirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('⚠️ Última confirmación'),
+        content: const Text(
+          'Esta es tu última oportunidad. ¿Realmente quieres eliminar tu cuenta permanentemente?\n\n'
+          'Todos tus datos serán eliminados y no podrás recuperarlos.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('SÍ, ELIMINAR'),
+          ),
+        ],
+      ),
+    );
+
+    if (finalConfirm != true) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      await AccountDeletionService.instance.deleteAccount();
+      
+      if (!mounted) return;
+      
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cuenta eliminada correctamente'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al eliminar cuenta: $e'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+    }
   }
 }
 

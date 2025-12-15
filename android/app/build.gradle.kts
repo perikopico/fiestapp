@@ -6,6 +6,18 @@ plugins {
     id("com.google.gms.google-services")
 }
 
+// Leer API key desde local.properties
+val googleMapsApiKey = run {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        val lines = localPropertiesFile.readLines()
+        val apiKeyLine = lines.find { it.startsWith("GOOGLE_MAPS_API_KEY=") }
+        apiKeyLine?.substringAfter("=")?.trim() ?: ""
+    } else {
+        ""
+    }
+}
+
 android {
     namespace = "com.perikopico.fiestapp"
     compileSdk = flutter.compileSdkVersion
@@ -28,6 +40,10 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        
+        // Inyectar API key de Google Maps desde local.properties
+        // Si no está definida, usar una cadena vacía (la app fallará si no está configurada)
+        manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsApiKey
     }
 
     buildTypes {

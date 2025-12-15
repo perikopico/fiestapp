@@ -16,4 +16,8 @@ class CategoryService {
       throw Exception('Error al obtener categorías: ${e.toString()}');
     }
   }
+
+  Future<List<Category>> getCategories() async {
+    return await fetchAll();
+  }
 }

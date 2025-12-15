@@ -12,6 +12,8 @@ import '../common/theme_mode_toggle.dart';
 import 'fullscreen_image_screen.dart';
 import '../../services/favorites_local_service.dart';
 import '../../services/event_service.dart';
+import '../../services/report_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -153,6 +155,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               }
             },
             tooltip: _isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos',
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              if (value == 'report') {
+                _showReportDialog();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'report',
+                child: Row(
+                  children: [
+                    Icon(Icons.flag, color: Colors.red, size: 20),
+                    SizedBox(width: 8),
+                    Text('Reportar evento'),
+                  ],
+                ),
+              ),
+            ],
           ),
           const ThemeModeToggleAction(),
         ],
@@ -713,5 +735,103 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         );
       }).toList(),
     );
+  }
+
+  Future<void> _showReportDialog() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar sesión para reportar contenido'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    ReportReason? selectedReason;
+    final descriptionController = TextEditingController();
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: const Text('Reportar evento'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('¿Por qué quieres reportar este evento?'),
+                const SizedBox(height: 16),
+                ...ReportReason.values.map((reason) => RadioListTile<ReportReason>(
+                  title: Text(ReportService.getReasonText(reason)),
+                  value: reason,
+                  groupValue: selectedReason,
+                  onChanged: (value) => setState(() => selectedReason = value),
+                )),
+                if (selectedReason == ReportReason.other || selectedReason != null) ...[
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: descriptionController,
+                    decoration: InputDecoration(
+                      labelText: selectedReason == ReportReason.other
+                          ? 'Describe el problema'
+                          : 'Información adicional (opcional)',
+                      hintText: 'Explica por qué reportas este evento...',
+                      border: const OutlineInputBorder(),
+                    ),
+                    maxLines: 3,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: selectedReason == null
+                  ? null
+                  : () => Navigator.of(context).pop(true),
+              child: const Text('Reportar'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true && selectedReason != null) {
+      try {
+        await ReportService.instance.reportContent(
+          contentType: 'event',
+          contentId: widget.event.id,
+          reason: selectedReason,
+          description: descriptionController.text.trim().isEmpty
+              ? null
+              : descriptionController.text.trim(),
+        );
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Evento reportado. Gracias por tu ayuda.'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al reportar: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
   }
 }

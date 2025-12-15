@@ -1,5 +1,6 @@
 // lib/ui/admin/pending_venues_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:intl/intl.dart';
 import '../../models/venue.dart';
 import '../../services/venue_service.dart';
@@ -16,6 +17,9 @@ class _PendingVenuesScreenState extends State<PendingVenuesScreen> {
   bool _isLoading = true;
   String? _error;
   List<Venue> _pendingVenues = [];
+  // Cache de lugares similares por venue ID (optimización: cargar todos de una vez)
+  final Map<String, List<Venue>> _similarVenuesCache = {};
+  bool _isLoadingSimilarVenues = false;
   final DateFormat _dateFormat = DateFormat('d MMM yyyy, HH:mm');
 
   @override
@@ -28,6 +32,7 @@ class _PendingVenuesScreenState extends State<PendingVenuesScreen> {
     setState(() {
       _isLoading = true;
       _error = null;
+      _similarVenuesCache.clear(); // Limpiar cache al recargar
     });
 
     try {
@@ -37,12 +42,66 @@ class _PendingVenuesScreenState extends State<PendingVenuesScreen> {
           _pendingVenues = venues;
           _isLoading = false;
         });
+        
+        // Cargar lugares similares en paralelo para todos los venues
+        _loadAllSimilarVenues(venues);
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _error = e.toString();
           _isLoading = false;
+        });
+      }
+    }
+  }
+
+  /// Carga todos los lugares similares en paralelo (optimización)
+  /// En lugar de hacer N llamadas individuales, hace todas de una vez
+  Future<void> _loadAllSimilarVenues(List<Venue> venues) async {
+    if (venues.isEmpty) return;
+    
+    setState(() {
+      _isLoadingSimilarVenues = true;
+    });
+
+    try {
+      // Crear todas las llamadas en paralelo
+      final futures = venues.map((venue) async {
+        try {
+          final similar = await _venueService.findSimilarVenues(
+            name: venue.name,
+            cityId: venue.cityId,
+          );
+          // Filtrar el lugar actual de los similares
+          return MapEntry(
+            venue.id,
+            similar.where((v) => v.id != venue.id).toList(),
+          );
+        } catch (e) {
+          debugPrint('⚠️ Error al buscar similares para ${venue.name}: $e');
+          return MapEntry(venue.id, <Venue>[]);
+        }
+      });
+
+      // Esperar todas las llamadas en paralelo
+      final results = await Future.wait(futures);
+      
+      if (mounted) {
+        setState(() {
+          // Convertir resultados a Map
+          _similarVenuesCache.clear();
+          for (final entry in results) {
+            _similarVenuesCache[entry.key] = entry.value;
+          }
+          _isLoadingSimilarVenues = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('❌ Error al cargar lugares similares: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingSimilarVenues = false;
         });
       }
     }
@@ -352,191 +411,178 @@ class _PendingVenuesScreenState extends State<PendingVenuesScreen> {
   }
 
   Widget _buildSimilarVenuesSection(Venue venue) {
-    return FutureBuilder<List<Venue>>(
-      future: _venueService.findSimilarVenues(
-        name: venue.name,
-        cityId: venue.cityId,
-      ),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 40,
-            child: Center(
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2),
+    // Usar datos precargados en lugar de FutureBuilder
+    // Si aún no están cargados, mostrar indicador de carga
+    if (_isLoadingSimilarVenues) {
+      return const SizedBox(
+        height: 40,
+        child: Center(
+          child: SizedBox(
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    // Obtener lugares similares del cache
+    final otherSimilarVenues = _similarVenuesCache[venue.id] ?? [];
+
+    if (otherSimilarVenues.isEmpty) {
+      return Card(
+        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.check_circle_outline,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
               ),
-            ),
-          );
-        }
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'No se encontraron lugares similares',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return const SizedBox.shrink();
-        }
-
-        final similarVenues = snapshot.data ?? [];
-        
-        // Filtrar el lugar actual de los similares
-        final otherSimilarVenues = similarVenues
-            .where((v) => v.id != venue.id)
-            .toList();
-
-        if (otherSimilarVenues.isEmpty) {
-          return Card(
-            color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
+    return Card(
+      color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Lugares similares encontrados (${otherSimilarVenues.length})',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Se encontraron lugares similares en la misma ciudad. Revisa antes de aprobar para evitar duplicados:',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                ...otherSimilarVenues.take(3).map((similarVenue) {
+                  final statusColor = similarVenue.isApproved
+                      ? Colors.green
+                      : similarVenue.isPending
+                          ? Colors.orange
+                          : Colors.red;
+                  final statusText = similarVenue.isApproved
+                      ? 'Aprobado'
+                      : similarVenue.isPending
+                          ? 'Pendiente'
+                          : 'Rechazado';
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                similarVenue.name,
+                                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                              ),
+                              if (similarVenue.address != null &&
+                                  similarVenue.address!.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  similarVenue.address!,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurfaceVariant,
+                                      ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            statusText,
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: statusColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+                if (otherSimilarVenues.length > 3)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
                     child: Text(
-                      'No se encontraron lugares similares',
+                      '... y ${otherSimilarVenues.length - 3} más',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontStyle: FontStyle.italic,
                           ),
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        }
-
-        return Card(
-          color: Theme.of(context).colorScheme.errorContainer.withOpacity(0.2),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.warning_amber_rounded,
-                      size: 18,
-                      color: Theme.of(context).colorScheme.error,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Lugares similares encontrados (${otherSimilarVenues.length})',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Divider(height: 1),
-              Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Se encontraron lugares similares en la misma ciudad. Revisa antes de aprobar para evitar duplicados:',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...otherSimilarVenues.take(3).map((similarVenue) {
-                      final statusColor = similarVenue.isApproved
-                          ? Colors.green
-                          : similarVenue.isPending
-                              ? Colors.orange
-                              : Colors.red;
-                      final statusText = similarVenue.isApproved
-                          ? 'Aprobado'
-                          : similarVenue.isPending
-                              ? 'Pendiente'
-                              : 'Rechazado';
-
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    similarVenue.name,
-                                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                  ),
-                                  if (similarVenue.address != null &&
-                                      similarVenue.address!.isNotEmpty) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      similarVenue.address!,
-                                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant,
-                                          ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 4,
-                              ),
-                              decoration: BoxDecoration(
-                                color: statusColor.withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                statusText,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: statusColor,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    if (otherSimilarVenues.length > 3)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Text(
-                          '... y ${otherSimilarVenues.length - 3} más',
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                fontStyle: FontStyle.italic,
-                              ),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
+

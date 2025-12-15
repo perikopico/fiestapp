@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:fiestapp/services/auth_service.dart';
+import '../legal/gdpr_consent_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -18,6 +20,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
+  bool _acceptedTerms = false;
+  bool _acceptedPrivacy = false;
   String? _errorMessage;
 
   @override
@@ -30,6 +34,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    
+    if (!_acceptedTerms || !_acceptedPrivacy) {
+      setState(() {
+        _errorMessage = 'Debes aceptar los Términos y la Política de Privacidad';
+      });
+      return;
+    }
 
     setState(() {
       _isLoading = true;
@@ -42,6 +53,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
         password: _passwordController.text,
       );
 
+      if (!mounted) return;
+      
+      // Navegar a pantalla de consentimiento GDPR
+      final consentResult = await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => const GDPRConsentScreen(isFirstTime: true),
+        ),
+      );
+      
       if (!mounted) return;
       
       // Mostrar mensaje de confirmación
@@ -253,6 +273,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   },
                 ),
                 const SizedBox(height: 24),
+                // Checkboxes de términos y privacidad
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      children: [
+                        CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Row(
+                            children: [
+                              const Text('Acepto los '),
+                              TextButton(
+                                onPressed: () => _openTerms(),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('Términos y Condiciones'),
+                              ),
+                            ],
+                          ),
+                          value: _acceptedTerms,
+                          onChanged: (value) => setState(() => _acceptedTerms = value ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                        CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Row(
+                            children: [
+                              const Text('Acepto la '),
+                              TextButton(
+                                onPressed: () => _openPrivacy(),
+                                style: TextButton.styleFrom(
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                child: const Text('Política de Privacidad'),
+                              ),
+                            ],
+                          ),
+                          value: _acceptedPrivacy,
+                          onChanged: (value) => setState(() => _acceptedPrivacy = value ?? false),
+                          controlAffinity: ListTileControlAffinity.leading,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _handleRegister,
                   style: ElevatedButton.styleFrom(
@@ -309,6 +382,36 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _openTerms() async {
+    const url = 'https://queplan-app.com/terms';
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace')),
+      );
+    }
+  }
+
+  Future<void> _openPrivacy() async {
+    const url = 'https://queplan-app.com/privacy';
+    final uri = Uri.parse(url);
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el enlace')),
+      );
+    }
   }
 }
 
