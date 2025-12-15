@@ -61,6 +61,7 @@ class AuthService {
   String? get currentUserId => currentUser?.id;
   
   /// Inicia sesión con email y contraseña
+  /// Verifica que el usuario no esté marcado como eliminado
   Future<void> signInWithEmail({
     required String email,
     required String password,
@@ -78,6 +79,35 @@ class AuthService {
       
       if (response.user == null) {
         throw Exception('Error al iniciar sesión: usuario no encontrado');
+      }
+      
+      // Verificar si el usuario está marcado como eliminado
+      // IMPORTANTE: Hacer esto ANTES de que el listener de authStateChange procese el login
+      try {
+        final deletedCheck = await client
+            .from('deleted_users')
+            .select('user_id, deleted_at')
+            .eq('user_id', response.user!.id)
+            .maybeSingle();
+        
+        if (deletedCheck != null) {
+          // Usuario está marcado como eliminado, cerrar sesión inmediatamente
+          debugPrint('⚠️ Usuario marcado como eliminado, cerrando sesión: ${response.user!.email}');
+          // Cerrar sesión ANTES de lanzar el error
+          await client.auth.signOut();
+          // Lanzar error con mensaje claro
+          throw Exception('Esta cuenta ha sido eliminada. No puedes iniciar sesión.');
+        }
+      } catch (e) {
+        // Si hay error al verificar (tabla no existe, etc.), continuar normalmente
+        // pero loggear el error
+        final errorStr = e.toString();
+        if (errorStr.contains('eliminada') || errorStr.contains('eliminado')) {
+          // Re-lanzar si es nuestro error de cuenta eliminada
+          rethrow;
+        }
+        debugPrint('⚠️ No se pudo verificar si el usuario está eliminado: $e');
+        // Continuar con el login si no es nuestro error
       }
       
       debugPrint('✅ Usuario autenticado: ${response.user!.email}');
@@ -99,11 +129,13 @@ class AuthService {
     
     try {
       // URL a la que se redirige después de confirmar el email.
-      // Aquí usamos una página web sencilla que muestra un mensaje tipo
-      // "Email confirmado, ya puedes volver a la app".
-      // Asegúrate de que esta URL existe en tu web y está añadida en
+      // En móvil usamos un deep link que abre la app directamente.
+      // En web usamos una página HTML que muestra un mensaje de confirmación.
+      // Asegúrate de que estas URLs estén añadidas en
       // Supabase → Authentication → URL configuration → Redirect URLs.
-      const redirectUrl = 'https://queplan-app.com/auth/confirmed';
+      const redirectUrl = kIsWeb
+          ? 'https://queplan-app.com/auth/confirmed'
+          : 'io.supabase.fiestapp://auth/confirmed';
       
       final response = await client.auth.signUp(
         email: email,

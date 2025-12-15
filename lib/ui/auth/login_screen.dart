@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'register_screen.dart';
@@ -101,12 +102,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   String _getErrorMessage(String error) {
-    if (error.contains('Invalid login credentials')) {
+    if (error.contains('Invalid login credentials') || error.contains('Invalid email or password')) {
       return 'Email o contraseña incorrectos';
     } else if (error.contains('Email not confirmed')) {
       return 'Por favor, confirma tu email antes de iniciar sesión';
     } else if (error.contains('Too many requests')) {
       return 'Demasiados intentos. Por favor, espera un momento';
+    } else if (error.contains('eliminada') || error.contains('eliminado') || error.contains('deleted')) {
+      return 'Esta cuenta ha sido eliminada. No puedes iniciar sesión.';
     }
     return 'Error al iniciar sesión. Por favor, inténtalo de nuevo';
   }

@@ -28,6 +28,7 @@ import '../../services/auth_service.dart';
 import '../auth/login_screen.dart';
 import '../auth/profile_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
+import 'widgets/auth_banner.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -2036,13 +2037,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     stream: AuthService.instance.authStateChanges,
                     builder: (context, snapshot) {
                       final isAuthenticated = AuthService.instance.isAuthenticated;
-                      return IconButton(
-                        icon: Icon(
-                          isAuthenticated ? Icons.person : Icons.login,
-                        ),
-                        tooltip: isAuthenticated ? 'Mi perfil' : 'Iniciar sesión',
-                        onPressed: () async {
-                          if (isAuthenticated) {
+                      if (isAuthenticated) {
+                        // Si está autenticado, mostrar icono de persona
+                        return IconButton(
+                          icon: const Icon(Icons.person),
+                          tooltip: 'Mi perfil',
+                          onPressed: () async {
                             // Abrir perfil
                             await Navigator.of(context).push(
                               MaterialPageRoute(
@@ -2051,7 +2051,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             );
                             // Refrescar favoritos después de volver
                             setState(() {});
-                          } else {
+                          },
+                        );
+                      } else {
+                        // Si NO está autenticado, mostrar texto "Login"
+                        return TextButton(
+                          onPressed: () async {
                             // Abrir login
                             final result = await Navigator.of(context).push(
                               MaterialPageRoute(
@@ -2063,12 +2068,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               await FavoritesService.instance.syncLocalToSupabase();
                               setState(() {});
                             }
-                          }
-                        },
-                      );
+                          },
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Login',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ],
+              ),
+              // Banner de autenticación (solo si no está autenticado)
+              SliverToBoxAdapter(
+                child: AuthBanner(
+                  onDismiss: () {
+                    setState(() {});
+                  },
+                ),
               ),
               SliverToBoxAdapter(
                 child: Column(
