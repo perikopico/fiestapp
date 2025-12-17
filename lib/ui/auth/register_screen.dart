@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import '../legal/gdpr_consent_screen.dart';
 
@@ -16,6 +18,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
   final _authService = AuthService.instance;
+  StreamSubscription<AuthState>? _authSub;
   
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -25,7 +28,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _errorMessage;
 
   @override
+  void initState() {
+    super.initState();
+
+    // Si ya hay sesión activa, cerrar automáticamente la pantalla de registro
+    if (_authService.isAuthenticated) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).pop(true);
+        }
+      });
+    }
+
+    // Escuchar cambios de autenticación: si durante el registro con Google
+    // llega un evento de "signedIn", cerrar esta pantalla para llevar al usuario al dashboard
+    _authSub = _authService.authStateChanges.listen((state) {
+      if (!mounted) return;
+      if (state.event == AuthChangeEvent.signedIn) {
+        setState(() {
+          _isLoading = false; // Detener el loading
+        });
+        Navigator.of(context).pop(true); // Cerrar pantalla de registro
+      }
+    });
+  }
+
+  @override
   void dispose() {
+    _authSub?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -103,6 +133,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     try {
       await _authService.signInWithGoogle();
+      // La navegación se manejará automáticamente cuando se complete el OAuth
+      // a través del listener _authSub que escucha AuthChangeEvent.signedIn
+      // No cerramos el loading aquí porque el OAuth puede tardar unos segundos
+      // El listener se encargará de cerrar el loading y navegar cuando se complete
     } catch (e) {
       if (!mounted) return;
       setState(() {

@@ -21,7 +21,8 @@ serve(async (req) => {
     // Crear cliente con Service Role Key para usar Admin API
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      // Usamos SERVICE_ROLE_KEY como nombre de secret permitido en Supabase
+      Deno.env.get('SERVICE_ROLE_KEY') ?? '',
       {
         auth: {
           autoRefreshToken: false,
@@ -30,11 +31,11 @@ serve(async (req) => {
       }
     )
 
-    if (!Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
+    if (!Deno.env.get('SERVICE_ROLE_KEY')) {
       return new Response(
         JSON.stringify({ 
           error: 'Service Role Key not configured',
-          hint: 'Configure SUPABASE_SERVICE_ROLE_KEY in Supabase Edge Function secrets'
+          hint: 'Configure SERVICE_ROLE_KEY in Supabase Edge Function secrets'
         }),
         { 
           status: 500, 
