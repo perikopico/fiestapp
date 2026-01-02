@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:fiestapp/models/event.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -10,7 +11,7 @@ class EventsRepository {
     double radiusKm = 25,
     DateTime? from,
   }) async {
-    print('fetchNearby(): lat=$lat, lng=$lng, radiusKm=$radiusKm, from=$from');
+    debugPrint('fetchNearby(): lat=$lat, lng=$lng, radiusKm=$radiusKm, from=$from');
 
     final res = await _client.rpc(
       'events_within_radius',
@@ -18,12 +19,12 @@ class EventsRepository {
     );
 
     if (res is! List) {
-      print('fetchNearby(): respuesta no es List -> $res');
+      debugPrint('fetchNearby(): respuesta no es List -> $res');
       return [];
     }
 
     final data = (res as List).cast<Map<String, dynamic>>();
-    print('fetchNearby(): radiusKm=$radiusKm -> ${data.length} eventos');
+    debugPrint('fetchNearby(): radiusKm=$radiusKm -> ${data.length} eventos');
 
     // Convertir a eventos
     List<Event> events = data.map((m) => Event.fromMap(m)).toList();
@@ -43,7 +44,7 @@ class EventsRepository {
           .toList();
     }
 
-    print('fetchNearby(): después de filtrar por fecha -> ${events.length} eventos');
+    debugPrint('fetchNearby(): después de filtrar por fecha -> ${events.length} eventos');
 
     return events;
   }

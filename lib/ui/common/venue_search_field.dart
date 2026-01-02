@@ -7,6 +7,9 @@ import '../../config/venue_config.dart';
 import '../../services/venue_service.dart';
 import '../../services/venue_exceptions.dart';
 import '../../services/google_places_service.dart';
+import '../../services/venue_ownership_service.dart';
+import '../../services/auth_service.dart';
+import '../venues/claim_venue_screen.dart';
 
 class VenueSearchField extends StatefulWidget {
   const VenueSearchField({
@@ -894,14 +897,50 @@ class _VenueSearchFieldState extends State<VenueSearchField> {
                 // Primero mostrar lugares de la BD
                 if (index < _suggestions.length) {
                   final venue = _suggestions[index];
+                  final isAuthenticated = AuthService.instance.isAuthenticated;
+                  final hasOwner = venue.hasOwner;
+                  
                   return ListTile(
                     dense: true,
                     leading: const Icon(Icons.place, size: 20),
                     title: Text(venue.name),
-                    subtitle: venue.address != null && venue.address!.isNotEmpty
-                        ? Text(
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (venue.address != null && venue.address!.isNotEmpty)
+                          Text(
                             venue.address!,
                             style: const TextStyle(fontSize: 11),
+                          ),
+                        if (hasOwner)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.verified_user,
+                                  size: 12,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'Tiene dueño verificado',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    color: Theme.of(context).colorScheme.primary,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    trailing: isAuthenticated && !hasOwner
+                        ? IconButton(
+                            icon: const Icon(Icons.person_add, size: 18),
+                            tooltip: 'Solicitar ser propietario',
+                            onPressed: () => _claimVenue(venue),
                           )
                         : null,
                     onTap: () => _selectVenue(venue),
@@ -1053,6 +1092,44 @@ class _VenueSearchFieldState extends State<VenueSearchField> {
         ),
       ],
     );
+  }
+
+  Future<void> _claimVenue(Venue venue) async {
+    // Verificar si el venue ya tiene dueño
+    final hasOwner = await VenueOwnershipService.instance.venueHasOwner(venue.id);
+    if (hasOwner) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Este venue ya tiene un dueño verificado'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Verificar autenticación
+    if (!AuthService.instance.isAuthenticated) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Debes iniciar sesión para solicitar ser propietario'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Navegar a la pantalla de reclamar venue
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => ClaimVenueScreen(venue: venue),
+      ),
+    );
+    
+    // Recargar el venue para actualizar el estado
+    _onChanged(_query);
   }
 }
 

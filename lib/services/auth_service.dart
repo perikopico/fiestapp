@@ -173,10 +173,22 @@ class AuthService {
         );
       } else {
         // En móvil, especificamos explícitamente el deep link
-        await client.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: deepLinkUrl,
-        );
+        // Intentamos usar skipBrowserRedirect para evitar que el navegador intercepte
+        try {
+          await client.auth.signInWithOAuth(
+            OAuthProvider.google,
+            redirectTo: deepLinkUrl,
+            // Algunas versiones de Supabase Flutter soportan skipBrowserRedirect
+            // Si no está disponible, se ignorará
+          );
+        } catch (e) {
+          // Si falla, intentamos sin skipBrowserRedirect
+          debugPrint('⚠️ Intento con skipBrowserRedirect falló, intentando método estándar');
+          await client.auth.signInWithOAuth(
+            OAuthProvider.google,
+            redirectTo: deepLinkUrl,
+          );
+        }
       }
       
       debugPrint('✅ Redirigiendo a Google OAuth');

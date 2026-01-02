@@ -18,6 +18,10 @@ class Event {
   final String? description;
   final String? imageAlignment;
   final String? status; // 'pending', 'published', 'rejected'
+  final String? venueId; // ID del venue asociado
+  final bool? ownerApproved; // NULL = no requiere aprobación, true = aprobado, false = rechazado
+  final DateTime? ownerApprovedAt;
+  final String? ownerRejectedReason;
   
   /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
@@ -53,6 +57,10 @@ class Event {
     this.description,
     this.imageAlignment,
     this.status,
+    this.venueId,
+    this.ownerApproved,
+    this.ownerApprovedAt,
+    this.ownerRejectedReason,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -73,8 +81,23 @@ class Event {
       description: m['description'] as String?,
       imageAlignment: m['image_alignment'] as String? ?? 'center',
       status: m['status'] as String?,
+      venueId: m['venue_id'] as String?,
+      ownerApproved: m['owner_approved'] as bool?,
+      ownerApprovedAt: m['owner_approved_at'] != null 
+          ? DateTime.parse(m['owner_approved_at'] as String) 
+          : null,
+      ownerRejectedReason: m['owner_rejected_reason'] as String?,
     );
   }
+  
+  /// Indica si el evento requiere aprobación del dueño del venue
+  bool get requiresOwnerApproval => venueId != null && ownerApproved == null;
+  
+  /// Indica si el evento fue aprobado por el dueño
+  bool get isOwnerApproved => ownerApproved == true;
+  
+  /// Indica si el evento fue rechazado por el dueño
+  bool get isOwnerRejected => ownerApproved == false;
 }
 
 extension EventFormatting on Event {

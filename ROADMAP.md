@@ -2,16 +2,16 @@
 
 Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamos en el desarrollo.
 
-**Última actualización**: Enero 2025 (actualizado con estado de eliminación de cuentas y checklist de publicación)
+**Última actualización**: Enero 2025 (sistema de ownership implementado y verificado)
 
 **✨ Nuevo**: 
+- **Sistema de ownership de venues con verificación** - Enero 2025
 - Sistema de moderación completo (eventos y lugares pendientes) - Diciembre 2024
 - Validación de duplicados implementada - Diciembre 2024
 - 61 lugares de interés de Barbate añadidos a la base de datos - Diciembre 2024
 - Integración Google Places API mejorada - Diciembre 2024
 - **Funcionalidades legales completas (RGPD) implementadas** - Diciembre 2024
 - **Firebase Hosting configurado para documentos legales** - Diciembre 2024
-- **Edge Functions de eliminación de cuentas desplegadas** - Enero 2025
 
 ---
 
@@ -57,6 +57,8 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
   - ✅ Autocompletado de lugares al crear eventos
   - ✅ Panel admin para aprobar lugares pendientes
   - ✅ "Mis Eventos Creados" - ver eventos propios
+  - ✅ **Sistema de ownership de venues** - Enero 2025
+  - ✅ **Aprobación de eventos por dueños de venues** - Enero 2025
 
 - **Favoritos**
   - ✅ Sistema de favoritos local
@@ -87,96 +89,6 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
   - ✅ Enlaces a documentos legales en perfil y registro
   - ✅ Firebase Hosting configurado para documentos legales
   - ✅ Migraciones SQL para funcionalidades legales
-  - ✅ Edge Functions de eliminación desplegadas (`delete_user_account`, `send_deletion_email`, `cleanup_deleted_users`)
-  - ✅ Secrets configurados en Supabase (`SERVICE_ROLE_KEY`)
-  - ⚠️ Cron automático para limpieza pendiente (opcional, se puede hacer manual)
-
----
-
-## 🚀 Checklist para Publicar la App
-
-### ✅ Funcionalidades Core (Completadas)
-- [x] Autenticación (email/password + Google OAuth)
-- [x] Gestión de eventos (crear, editar, aprobar)
-- [x] Sistema de favoritos
-- [x] Búsqueda y filtros
-- [x] Panel de administración
-- [x] Sistema de eliminación de cuentas (RGPD)
-- [x] Edge Functions desplegadas
-
-### 🔴 Crítico para Publicación
-
-#### 1. Verificar y Aplicar Migraciones SQL
-- [x] **Ejecutar migración `008_add_legal_functions.sql`** en Supabase SQL Editor - Enero 2025
-- [x] **Ejecutar migración `009_add_deleted_users_table.sql`** en Supabase SQL Editor - Enero 2025
-- [x] **Ejecutar migración `010_fix_delete_user_data_robust.sql`** - Enero 2025
-- [x] **Ejecutar migración `007_fix_security_issues.sql`** - Enero 2025
-- [x] Verificar que existe la tabla `deleted_users` en Table Editor - Enero 2025
-- [x] Verificar que existe la función `delete_user_data(user_uuid uuid)` en Database → Functions - Enero 2025
-- **Tiempo estimado**: 10 minutos
-- **Prioridad**: 🔴 CRÍTICA
-- **Estado**: ✅ COMPLETADO
-
-#### 2. Verificar Edge Functions Desplegadas
-- [x] Verificar que `delete_user_account` está desplegada - Enero 2025
-- [x] Verificar que `send_deletion_email` está desplegada - Enero 2025
-- [x] Verificar que `cleanup_deleted_users` está desplegada - Enero 2025
-- [x] Verificar que el secret `SERVICE_ROLE_KEY` está configurado en Supabase - Enero 2025
-- **Tiempo estimado**: 5 minutos
-- **Prioridad**: 🔴 CRÍTICA
-- **Estado**: ✅ COMPLETADO
-
-#### 3. Verificar Configuración Legal
-- [ ] Verificar que `https://queplan-app.com/privacy` funciona
-- [ ] Verificar que `https://queplan-app.com/terms` funciona
-- [ ] Personalizar documentos legales con información real (si no está hecho)
-- [ ] Verificar email de contacto en `about_screen.dart`
-- **Tiempo estimado**: 15 minutos
-- **Prioridad**: 🔴 CRÍTICA (requisito legal)
-
-#### 4. Testing de Flujos Críticos
-- [ ] Probar registro con Google OAuth
-- [ ] Probar login con email/password
-- [ ] Probar creación de evento
-- [ ] Probar eliminación de cuenta completa
-- [ ] Verificar que usuario eliminado no puede volver a iniciar sesión
-- **Tiempo estimado**: 30 minutos
-- **Prioridad**: 🔴 CRÍTICA
-- **Estado**: 🟡 EN PROGRESO (pendiente probar con usuario)
-
-#### 5. Corregir Errores de Seguridad
-- [x] Ejecutar script `docs/migrations/007_fix_security_issues.sql` en Supabase - Enero 2025
-- [ ] Verificar que no hay tablas sin RLS en Security Advisor (revisar Security Advisor en Dashboard)
-- **Tiempo estimado**: 5 minutos
-- **Prioridad**: 🔴 CRÍTICA
-- **Estado**: ✅ Migración ejecutada, pendiente verificar Security Advisor
-
-### 🟡 Importante (pero no bloqueante)
-
-#### 6. Verificar Google Maps
-- [ ] Probar que los mapas cargan correctamente
-- [ ] Verificar API Key de Google Maps configurada
-- [ ] Probar selección de ubicación al crear evento
-- **Tiempo estimado**: 15 minutos
-- **Prioridad**: 🟡 IMPORTANTE (afecta UX)
-
-#### 7. Verificar Notificaciones Push
-- [ ] Verificar que Edge Function `send_fcm_notification` está desplegada
-- [ ] Probar envío de notificación de prueba
-- **Tiempo estimado**: 10 minutos
-- **Prioridad**: 🟡 IMPORTANTE (pero no bloqueante)
-
-### 🟢 Opcional (mejoras post-lanzamiento)
-
-#### 8. Automatización de Limpieza
-- [ ] Configurar cron externo para `cleanup_deleted_users` (opcional)
-- **Nota**: Se puede hacer manualmente desde Dashboard cuando sea necesario
-- **Prioridad**: 🟢 OPCIONAL
-
-#### 9. Configuración SMTP
-- [ ] Configurar SMTP para emails de confirmación (opcional)
-- **Nota**: Decidido dejarlo para más adelante
-- **Prioridad**: 🟢 OPCIONAL
 
 ---
 
@@ -184,12 +96,17 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 
 ### 🔴 Alta Prioridad
 
-#### 1. Verificar y Completar Configuración Legal
-- [x] Edge Functions de eliminación desplegadas - Enero 2025
-- [x] Secrets configurados (`SERVICE_ROLE_KEY`) - Enero 2025
-- [x] Ejecutar migración SQL de funcionalidades legales (`docs/migrations/008_add_legal_functions.sql`) - Enero 2025
-- [x] Ejecutar migración SQL de tabla deleted_users (`docs/migrations/009_add_deleted_users_table.sql`) - Enero 2025
-- [x] Ejecutar migración SQL de seguridad (`docs/migrations/007_fix_security_issues.sql`) - Enero 2025
+#### 1. Ejecutar Migraciones SQL Pendientes ⚠️ CRÍTICO
+- [x] Ejecutar migración de ownership de venues (`docs/migrations/011_create_venue_ownership_system.sql`) - **Enero 2025** ✅
+- [x] Ejecutar migración de seguridad (`docs/migrations/007_fix_security_issues.sql`) - **Ya estaba ejecutada** ✅
+- [x] Ejecutar migración de funcionalidades legales (`docs/migrations/008_add_legal_functions.sql`) - **Ya estaba ejecutada** ✅
+- [x] Verificar migración 011 con script de verificación - **Enero 2025** ✅ **TODAS LAS VERIFICACIONES PASARON**
+- [x] Verificar Security Advisor en Supabase después de ejecutar migraciones - **Enero 2025** ✅ **TODO EN VERDE**
+- **Estado**: ✅ **Todas las migraciones críticas ejecutadas**
+- **Tiempo estimado**: 2 minutos (solo verificación)
+- **Ver checklist completo**: `docs/CHECKLIST_LANZAMIENTO.md`
+
+#### 2. Verificar y Completar Configuración Legal
 - [ ] Verificar propagación DNS para dominio `queplan-app.com`
 - [ ] Completar verificación de dominio en Firebase Hosting
 - [ ] Verificar que SSL esté activo en `https://queplan-app.com`
@@ -198,20 +115,12 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
   - [ ] `https://queplan-app.com/terms`
 - [ ] Personalizar documentos legales (Política de Privacidad y Términos) con información específica
 - [ ] Actualizar email de contacto en `about_screen.dart` si es necesario
-- **Estado**: Edge Functions desplegadas, pendiente ejecutar migraciones SQL y verificar DNS
+- **Estado**: Implementación completa, pendiente verificación DNS y personalización
 - **Notas**: 
   - Dominio configurado en Firebase Hosting
   - Registros DNS añadidos en Squarespace
   - Esperando propagación DNS (puede tardar 24-48 horas)
   - Documentos legales en `docs/legal/` listos para personalizar
-  - Cron automático para limpieza pendiente (opcional, se puede hacer manual)
-
-#### 2. Corregir Errores de Seguridad en Supabase
-- [ ] Ejecutar script de seguridad (`docs/migrations/007_fix_security_issues.sql`)
-- **Estado**: Script creado, pendiente ejecutar
-- **Archivo**: `docs/migrations/007_fix_security_issues.sql`
-- **Tiempo estimado**: 5 minutos
-- **Notas**: Supabase Security Advisor detectó 3 errores (probablemente tablas sin RLS)
 
 #### 3. Configuración de Emails SMTP
 - [ ] Configurar SMTP para emails de confirmación
@@ -355,33 +264,9 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 
 ## 📅 Próximos Pasos Inmediatos
 
-### 🔴 ANTES DE PUBLICAR (Checklist Crítico)
-
-1. **Ejecutar migraciones SQL en Supabase:**
-   - [x] `docs/migrations/008_add_legal_functions.sql` - Enero 2025
-   - [x] `docs/migrations/009_add_deleted_users_table.sql` - Enero 2025
-   - [x] `docs/migrations/010_fix_delete_user_data_robust.sql` - Enero 2025
-   - [x] `docs/migrations/007_fix_security_issues.sql` - Enero 2025
-
-2. **Verificar Edge Functions:**
-   - [x] `delete_user_account` desplegada - Enero 2025
-   - [x] `send_deletion_email` desplegada - Enero 2025
-   - [x] `cleanup_deleted_users` desplegada - Enero 2025
-   - [x] Secret `SERVICE_ROLE_KEY` configurado - Enero 2025
-
-3. **Testing crítico:**
-   - [ ] Probar registro/login con Google OAuth
-   - [ ] Probar eliminación completa de cuenta
-   - [ ] Verificar que usuario eliminado no puede iniciar sesión
-
-4. **Verificar configuración legal:**
-   - [ ] Verificar URLs de documentos legales funcionan
-   - [ ] Personalizar documentos si es necesario
-
-### 🟡 Después de Publicar
-
 1. **Esta semana:**
    - [ ] Verificar propagación DNS y completar configuración de dominio legal
+   - [ ] Ejecutar migraciones SQL pendientes (007 y 008)
    - [ ] Verificar/Reparar Google Maps
    - [x] Completar handlers de notificaciones push - Diciembre 2024
    - [x] Guardar tokens FCM en Supabase - Diciembre 2024
@@ -429,14 +314,13 @@ Este documento contiene el roadmap del proyecto y se actualiza conforme avanzamo
 
 ## 📊 Métricas de Progreso
 
-- **Funcionalidades Core**: 90% ✅
+- **Funcionalidades Core**: 85% ✅
 - **UI/UX**: 75% ✅
-- **Backend/Base de Datos**: 98% ✅ (migraciones SQL ejecutadas)
+- **Backend/Base de Datos**: 90% ✅
 - **Notificaciones**: 85% ✅
-- **Cumplimiento Legal/RGPD**: 99% ✅ (Edge Functions desplegadas, migraciones SQL ejecutadas)
+- **Cumplimiento Legal/RGPD**: 95% ✅ (pendiente verificación DNS)
 - **Testing**: 30% 🟡
-- **Documentación**: 80% ✅
-- **Listo para Publicar**: 90% 🟡 (pendiente verificar Edge Functions y testing crítico)
+- **Documentación**: 75% ✅
 
 ---
 

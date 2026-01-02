@@ -82,6 +82,7 @@ Future<void> main() async {
         debugPrint("✅ Supabase inicializado con éxito");
         
         // Configurar listener para cambios de autenticación
+        // Los deep links de OAuth serán manejados automáticamente por Supabase
         Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
           final event = data.event;
           final session = data.session;

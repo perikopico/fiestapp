@@ -85,7 +85,7 @@ class EventService {
     String? searchTerm, // término libre para título/descr
     int limit = 50,
   }) async {
-    print(
+    debugPrint(
       'fetchEvents(): '
       'cityIds=$cityIds, '
       'categoryId=$categoryId, '
@@ -149,7 +149,7 @@ class EventService {
           .map((m) => Event.fromMap(m))
           .toList();
 
-      print(
+      debugPrint(
         'fetchEvents() [RPC]: '
         'radiusKm=$radiusKm, '
         'searchTerm=$searchTerm -> ${events.length} eventos',
@@ -190,7 +190,7 @@ class EventService {
     final res = await qb.order('starts_at', ascending: true).limit(limit);
 
     if (res is List) {
-      print(
+      debugPrint(
         'fetchEvents() [QUERY]: '
         'searchTerm=$searchTerm -> ${res.length} eventos',
       );
@@ -528,9 +528,16 @@ class EventService {
       'submitted_by_name': submittedByName?.trim(),
       'submitted_by_email': submittedByEmail?.trim(),
       'image_alignment': imageAlignment ?? 'center',
-      'created_by': userId, // Guardar el ID del usuario que crea el evento
       'venue_id': venueId, // ID del lugar si se seleccionó uno
     };
+
+    // Añadir created_by solo si el usuario está autenticado
+    if (userId != null) {
+      payload['created_by'] = userId;
+      debugPrint('✅ Evento creado por usuario autenticado: $userId');
+    } else {
+      debugPrint('⚠️ Evento creado sin usuario autenticado (created_by será null)');
+    }
 
     // Eliminar claves con null para no pisar defaults
     payload.removeWhere((key, value) => value == null);

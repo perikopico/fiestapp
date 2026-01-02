@@ -1,218 +1,162 @@
-# 🗺️ Verificar y Reparar Google Maps - Plan de Acción
+# 🗺️ Verificar Google Maps
 
-**Fecha**: Diciembre 2024
-
----
-
-## 📋 Situación Actual
-
-### ✅ Lo que sabemos:
-
-1. **Dónde se usa Google Maps:**
-   - `lib/ui/events/event_submit_screen.dart` - Crear eventos (seleccionar ubicación)
-   - `lib/ui/admin/admin_event_edit_screen.dart` - Editar eventos (ajustar ubicación)
-   - `lib/ui/event/event_detail_screen.dart` - Ver detalles de evento (mapa estático)
-
-2. **Configuración actual:**
-   - Package: `com.perikopico.fiestapp`
-   - API Key en AndroidManifest.xml: `AIzaSyB3QZYmsSb1GmIewWnDS-KewupE3Ths_dY`
-   - SHA-1 mencionado en docs: `12:FE:47:5B:A4:14:D7:44:D0:C4:F8:C2:C3:68:F2:6A:63:8A:AD:7A`
-
-3. **Plugin instalado:**
-   - `google_maps_flutter: ^2.9.0` ✅
+**Fecha**: Enero 2025  
+**Tiempo estimado**: 15 minutos
 
 ---
 
-## 🔍 Plan de Diagnóstico (Paso a Paso)
+## 📋 Checklist de Verificación
 
-### **PASO 1: Obtener el SHA-1 actual de la app**
+### 1. Verificar API Key Configurada
 
-**Ejecuta:**
-```bash
-cd android
-./gradlew signingReport
+#### Android
+**Archivo**: `android/app/src/main/AndroidManifest.xml`
+
+**Verificar**:
+- [ ] Existe la etiqueta `<meta-data>` con `com.google.android.geo.API_KEY`
+- [ ] El valor de la API Key está configurado
+- [ ] No está vacío o con placeholder
+
+**Ejemplo esperado**:
+```xml
+<meta-data
+    android:name="com.google.android.geo.API_KEY"
+    android:value="TU_API_KEY_AQUI"/>
 ```
 
-**O si usas Windows:**
-```bash
-cd android
-gradlew.bat signingReport
-```
+#### iOS
+**Archivo**: `ios/Runner/AppDelegate.swift`
 
-**Busca en la salida:**
-```
-Variant: debug
-SHA1: XX:XX:XX:XX:XX:XX:...
-```
+**Verificar**:
+- [ ] Existe `GMSServices.provideAPIKey("TU_API_KEY")`
+- [ ] El valor de la API Key está configurado
+- [ ] No está vacío o con placeholder
 
-**📝 Anota el SHA-1 que obtengas aquí:**
-```
-SHA-1 Debug: ____________________________
-```
+**Tiempo**: 5 minutos
 
 ---
 
-### **PASO 2: Verificar API Key en AndroidManifest.xml**
+### 2. Verificar Restricciones de API Key
 
-**Archivo:** `android/app/src/main/AndroidManifest.xml`
+**Pasos**:
+1. Ir a Google Cloud Console: https://console.cloud.google.com/
+2. Seleccionar el proyecto
+3. Ir a **APIs & Services** > **Credentials**
+4. Buscar la API Key de Google Maps
+5. Verificar restricciones:
+   - [ ] Restricciones de aplicación (Android/iOS) configuradas
+   - [ ] Restricciones de API (Maps SDK) configuradas
+   - [ ] No está sin restricciones (riesgo de seguridad)
 
-**API Key actual:**
-- `AIzaSyB3QZYmsSb1GmIewWnDS-KewupE3Ths_dY`
+**Resultado esperado**: ✅ API Key con restricciones apropiadas
 
-**Verifica:**
-- [ ] La API key está dentro de `<application>...</application>`
-- [ ] El nombre es exacto: `com.google.android.geo.API_KEY`
-- [ ] No tiene espacios extra
-
----
-
-### **PASO 3: Verificar en Google Cloud Console**
-
-**Ve a:** https://console.cloud.google.com/
-
-#### A) Verificar que la API Key existe
-
-1. Ve a **APIs & Services > Credentials**
-2. Busca la API key: `AIzaSyB3QZYmsSb1GmIewWnDS-KewupE3Ths_dY`
-3. [ ] ¿Existe? ✅ / ❌
-4. [ ] ¿Está habilitada? ✅ / ❌
-
-#### B) Verificar APIs habilitadas
-
-1. Ve a **APIs & Services > Enabled APIs**
-2. Busca y verifica:
-   - [ ] **Maps SDK for Android** - ✅ Habilitada / ❌ No habilitada
-   - [ ] **Maps SDK for iOS** - ✅ Habilitada / ❌ No habilitada (opcional)
-   - [ ] **Places API** - ✅ Habilitada / ❌ No habilitada (opcional)
-
-**Si no está habilitada "Maps SDK for Android":**
-- Haz clic en **+ ENABLE APIS AND SERVICES**
-- Busca "Maps SDK for Android"
-- Haz clic en **ENABLE**
-
-#### C) Verificar restricciones de la API Key
-
-En la página de detalles de tu API key:
-
-**Application restrictions:**
-- [ ] ¿Hay restricciones? Sí / No
-- Si sí, verifica:
-  - [ ] Package name: `com.perikopico.fiestapp` ✅ / ❌
-  - [ ] SHA-1 coincide con el del PASO 1 ✅ / ❌
-
-**API restrictions:**
-- [ ] ¿Está restringida? Sí / No
-- Si sí, verifica:
-  - [ ] Incluye "Maps SDK for Android" ✅ / ❌
+**Tiempo**: 5 minutos
 
 ---
 
-### **PASO 4: Probar la app**
+### 3. Probar Funcionalidad de Mapas
 
-**Ejecuta:**
-```bash
-flutter clean
-flutter pub get
-flutter run -d android
-```
+#### Test 3.1: Crear Evento con Mapa
+**Pasos**:
+1. [ ] Abrir la app
+2. [ ] Ir a crear evento
+3. [ ] Completar información básica
+4. [ ] En el paso de ubicación, tocar "Seleccionar en mapa"
+5. [ ] Verificar que se abre el mapa
+6. [ ] Verificar que el mapa carga correctamente
+7. [ ] Tocar en el mapa para seleccionar ubicación
+8. [ ] Verificar que aparece un marcador
+9. [ ] Arrastrar el marcador (si es posible)
+10. [ ] Confirmar la ubicación
+11. [ ] Verificar que las coordenadas se guardan
 
-**Acciones a probar:**
-1. Crear un evento → Ir a seleccionar ubicación en mapa
-   - [ ] ¿Se muestra el mapa? ✅ / ❌
-   - [ ] ¿Aparece error? Sí / No
-   - [ ] ¿Qué error ves? _______________________
+**Resultado esperado**: ✅ Mapa funciona correctamente al crear evento
 
-2. Ver detalle de evento que tenga ubicación
-   - [ ] ¿Se muestra el mapa? ✅ / ❌
-   - [ ] ¿Aparece error? Sí / No
+#### Test 3.2: Ver Mapa en Detalle de Evento
+**Pasos**:
+1. [ ] Abrir un evento que tenga ubicación
+2. [ ] Verificar que hay un botón o sección de mapa
+3. [ ] Tocar para ver el mapa
+4. [ ] Verificar que el mapa carga
+5. [ ] Verificar que muestra el marcador en la ubicación correcta
+6. [ ] Verificar que se puede interactuar con el mapa (zoom, pan)
 
-3. Editar evento (como admin) → Ir a ubicación en mapa
-   - [ ] ¿Se muestra el mapa? ✅ / ❌
-   - [ ] ¿Aparece error? Sí / No
+**Resultado esperado**: ✅ Mapa funciona correctamente en detalle
 
-**Logs a revisar:**
-- Busca en los logs: `flutter logs` o en la consola
-- [ ] ¿Aparece "✅ Mapa creado correctamente"? ✅ / ❌
-- [ ] ¿Aparecen errores de Google Maps? Sí / No
-- [ ] Copia cualquier error aquí: _______________________
+#### Test 3.3: Verificar en Android
+**Pasos**:
+1. [ ] Compilar y ejecutar en dispositivo Android
+2. [ ] Probar crear evento con mapa
+3. [ ] Probar ver mapa en detalle
+4. [ ] Verificar que no hay errores en consola
 
----
+**Resultado esperado**: ✅ Funciona en Android
 
-### **PASO 5: Diagnosticar problemas comunes**
+#### Test 3.4: Verificar en iOS
+**Pasos**:
+1. [ ] Compilar y ejecutar en dispositivo iOS
+2. [ ] Probar crear evento con mapa
+3. [ ] Probar ver mapa en detalle
+4. [ ] Verificar que no hay errores en consola
 
-#### Problema A: Mapa en blanco / no se renderiza
+**Resultado esperado**: ✅ Funciona en iOS
 
-**Causas posibles:**
-- API key no válida
-- API no habilitada
-- SHA-1 no coincide
-- Restricciones muy estrictas
-
-**Solución:**
-1. Verifica PASO 3 completo
-2. Prueba con API key sin restricciones temporalmente
-3. Espera 5-10 minutos después de cambiar configuraciones
-
-#### Problema B: Error "API key not authorized"
-
-**Causas posibles:**
-- Maps SDK for Android no habilitada
-- Restricciones incorrectas
-- Package name incorrecto
-
-**Solución:**
-1. Habilita "Maps SDK for Android" en Google Cloud Console
-2. Verifica package name: `com.perikopico.fiestapp`
-3. Verifica SHA-1
-
-#### Problema C: Error "Google Play Services not available"
-
-**Causas posibles:**
-- Emulador sin Google Play Services
-- Dispositivo sin Google Play Services actualizado
-
-**Solución:**
-- Prueba en dispositivo físico
-- Actualiza Google Play Services
-- Usa emulador con Google Play Services
+**Tiempo**: 15 minutos
 
 ---
 
-## 🛠️ Herramientas de Verificación
+## 🐛 Problemas Comunes y Soluciones
 
-### Script para obtener SHA-1 automáticamente
+### Problema: Mapa no carga / Pantalla en blanco
+**Posibles causas**:
+1. API Key no configurada
+2. API Key incorrecta
+3. Restricciones de API Key muy estrictas
+4. Permisos de ubicación no concedidos
 
-Crearemos un script que obtenga el SHA-1 fácilmente.
+**Soluciones**:
+- Verificar que la API Key está en los archivos de configuración
+- Verificar que la API Key es válida en Google Cloud Console
+- Verificar restricciones de API Key
+- Verificar permisos de ubicación en la app
 
-### Verificar configuración completa
+### Problema: Error "API key not valid"
+**Solución**:
+- Verificar que la API Key es correcta
+- Verificar que está habilitada la API de Maps SDK
+- Verificar restricciones de aplicación (package name, SHA-1)
 
-Podemos crear una función en la app que verifique la configuración al iniciar.
+### Problema: Mapa carga pero no muestra nada
+**Solución**:
+- Verificar que las coordenadas son válidas
+- Verificar que el zoom es apropiado
+- Verificar que la región del mapa es correcta
+
+### Problema: Mapa funciona en Android pero no en iOS (o viceversa)
+**Solución**:
+- Verificar configuración específica de cada plataforma
+- Verificar que la API Key tiene restricciones para ambas plataformas
+- Verificar permisos específicos de cada plataforma
 
 ---
 
-## 📝 Resultados del Diagnóstico
+## ✅ Resultado Esperado
 
-**Rellena según lo que encuentres:**
-
-- **SHA-1 obtenido:** _______________________
-- **API Key en manifest:** `AIzaSyB3QZYmsSb1GmIewWnDS-KewupE3Ths_dY`
-- **API Key existe en Google Cloud:** ✅ / ❌
-- **Maps SDK for Android habilitada:** ✅ / ❌
-- **Restricciones configuradas:** Sí / No
-- **Mapa funciona:** ✅ / ❌
-- **Errores encontrados:** _______________________
+- ✅ API Key configurada en Android e iOS
+- ✅ Restricciones de API Key apropiadas
+- ✅ Mapa funciona al crear eventos
+- ✅ Mapa funciona en detalle de eventos
+- ✅ Funciona en Android
+- ✅ Funciona en iOS
 
 ---
 
-## 🎯 Próximos Pasos
+## 📝 Notas
 
-1. **Ejecutar PASO 1** - Obtener SHA-1
-2. **Ejecutar PASO 2 y 3** - Verificar configuración
-3. **Ejecutar PASO 4** - Probar en la app
-4. **Compartir resultados** - Para ayudar a diagnosticar
+- Si no tienes acceso a iOS, puedes probar solo Android por ahora
+- Los errores de Google Maps suelen aparecer en la consola de Flutter
+- Si hay problemas, revisa los logs de la app
 
 ---
 
-**¿Listo para empezar?** 🚀
-
-Ejecuta el PASO 1 primero y comparte los resultados.
+**Tiempo total**: 15 minutos (más tiempo si hay que corregir problemas)

@@ -10,6 +10,8 @@ class Venue {
   final String status; // 'pending', 'approved', 'rejected'
   final String? createdBy;
   final String? rejectedReason;
+  final String? ownerId; // ID del usuario dueño del venue
+  final DateTime? verifiedAt; // Cuando se verificó el ownership
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -24,6 +26,8 @@ class Venue {
     required this.status,
     this.createdBy,
     this.rejectedReason,
+    this.ownerId,
+    this.verifiedAt,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -40,6 +44,10 @@ class Venue {
       status: map['status'] as String? ?? 'pending',
       createdBy: map['created_by'] as String?,
       rejectedReason: map['rejected_reason'] as String?,
+      ownerId: map['owner_id'] as String?,
+      verifiedAt: map['verified_at'] != null 
+          ? DateTime.parse(map['verified_at'] as String) 
+          : null,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: DateTime.parse(map['updated_at'] as String),
     );
@@ -64,4 +72,10 @@ class Venue {
   bool get isApproved => status == 'approved';
   bool get isPending => status == 'pending';
   bool get isRejected => status == 'rejected';
+  
+  /// Indica si el venue tiene un dueño verificado
+  bool get hasOwner => ownerId != null && verifiedAt != null;
+  
+  /// Indica si el usuario actual es el dueño del venue
+  bool isOwner(String? userId) => ownerId != null && ownerId == userId;
 }

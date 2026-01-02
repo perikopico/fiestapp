@@ -48,8 +48,15 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // ⚠️ CRÍTICO: Configurar signing para release antes de publicar en Play Store
+            // Pasos:
+            // 1. Crear keystore: keytool -genkey -v -keystore ~/upload-keystore.jks -keyalg RSA -keysize 2048 -validity 10000 -alias upload
+            // 2. Crear key.properties en android/ con las credenciales
+            // 3. Configurar signingConfigs en este archivo
+            // 4. Cambiar esta línea para usar el signing config de release
+            // 
+            // Por ahora usa debug keys solo para desarrollo/testing
+            // TODO: Configurar signing para release antes de publicar
             signingConfig = signingConfigs.getByName("debug")
         }
     }

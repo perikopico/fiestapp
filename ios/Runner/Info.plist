@@ -49,5 +49,11 @@
 <dict>
   <key>NSAllowsArbitraryLoads</key><true/>
 </dict>
+	<!-- Google Maps API Key para iOS -->
+	<!-- NOTA: Esta debe ser una API Key DIFERENTE a la de Android -->
+	<!-- Crea una nueva API Key en Google Cloud Console con restricciones solo para iOS -->
+	<!-- Ver guía: docs/CONFIGURAR_API_KEYS_SEPARADAS.md -->
+	<key>GMSApiKey</key>
+	<string>AIzaSyB-LWdftqdYCjv3QgsUJNI2TeyA1ALCPsc</string>
 </dict>
 </plist>

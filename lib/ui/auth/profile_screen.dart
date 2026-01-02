@@ -6,10 +6,16 @@ import '../../services/account_deletion_service.dart';
 import '../../services/data_export_service.dart';
 import '../admin/pending_events_screen.dart';
 import '../admin/pending_venues_screen.dart';
+import '../admin/venue_ownership_requests_screen.dart';
 import '../events/favorites_screen.dart';
 import '../events/my_events_screen.dart';
+import '../venues/owner_events_screen.dart';
+import '../venues/request_venue_ownership_screen.dart';
+import '../venues/enter_verification_code_screen.dart';
+import '../venues/my_venues_screen.dart';
 import '../legal/gdpr_consent_screen.dart';
 import '../legal/about_screen.dart';
+import '../../services/venue_ownership_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -22,11 +28,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final _authService = AuthService.instance;
   bool _isLoading = false;
   bool _isAdmin = false;
+  bool _isVenueOwner = false;
 
   @override
   void initState() {
     super.initState();
     _checkAdminStatus();
+    _checkVenueOwnerStatus();
   }
 
   Future<void> _checkAdminStatus() async {
@@ -35,6 +43,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       setState(() {
         _isAdmin = admin;
       });
+    }
+  }
+
+  Future<void> _checkVenueOwnerStatus() async {
+    if (!_authService.isAuthenticated) return;
+    
+    try {
+      final myVenues = await VenueOwnershipService.instance.getMyVenues();
+      if (mounted) {
+        setState(() {
+          _isVenueOwner = myVenues.isNotEmpty;
+        });
+      }
+    } catch (e) {
+      // Silenciar errores, solo no mostrar la opción
     }
   }
 
@@ -205,6 +228,47 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           },
                         ),
+                        _buildListItem(
+                          context,
+                          icon: Icons.verified_user,
+                        title: 'Solicitudes de propiedad',
+                        subtitle: 'Gestionar solicitudes de locales',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const VenueOwnershipRequestsScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                      if (_isVenueOwner) ...[
+                        _buildListItem(
+                          context,
+                          icon: Icons.store,
+                          title: 'Mis locales',
+                          subtitle: 'Ver y gestionar mis locales',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const MyVenuesScreen(),
+                              ),
+                            );
+                          },
+                        ),
+                        _buildListItem(
+                          context,
+                          icon: Icons.business,
+                          title: 'Mis eventos de venues',
+                          subtitle: 'Aprobar eventos de mis locales',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const OwnerEventsScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                       _buildListItem(
                         context,
@@ -228,6 +292,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const MyEventsScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.business_center,
+                        title: 'Solicitar ser propietario',
+                        subtitle: 'Solicitar ser propietario de tu negocio',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const RequestVenueOwnershipScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.vpn_key,
+                        title: 'Verificar código de propiedad',
+                        subtitle: 'Introduce el código que recibiste del admin',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const EnterVerificationCodeScreen(),
                             ),
                           );
                         },
