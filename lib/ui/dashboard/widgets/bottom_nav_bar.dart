@@ -1,7 +1,8 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../events/favorites_screen.dart';
 import '../../events/event_wizard_screen.dart';
-import '../../notifications/notifications_screen.dart';
+import '../../auth/profile_screen.dart';
 import '../../../main.dart' show appThemeMode;
 
 class BottomNavBar extends StatelessWidget {
@@ -27,89 +28,97 @@ class BottomNavBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final currentRoute = _getCurrentRoute(context);
+    final theme = Theme.of(context);
     
     return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 10,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: SafeArea(
+      // Contenedor transparente para permitir que el contenido se vea
+      color: Colors.transparent,
+      height: 90, // Altura suficiente para la galleta flotante
+      child: Center(
         child: Container(
-          height: 50,
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              // Botón Casa (Dashboard)
-              _NavBarButton(
-                icon: Icons.home,
-                isActive: currentRoute == 'home' || currentRoute == '',
-                onTap: () {
-                  // Navegar al dashboard principal
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                },
-              ),
-              // Botón Favoritos
-              _NavBarButton(
-                icon: Icons.favorite_border,
-                isActive: currentRoute == 'favorites',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const FavoritesScreen(),
-                    ),
-                  );
-                },
-              ),
-              // Botón Crear Evento
-              _NavBarButton(
-                icon: Icons.add_circle,
-                isActive: currentRoute == 'submit',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const EventWizardScreen(),
-                    ),
-                  );
-                },
-              ),
-              // Botón Modo Oscuro
-              ValueListenableBuilder<ThemeMode>(
-                valueListenable: appThemeMode,
-                builder: (context, mode, _) {
-                  return _NavBarButton(
-                    icon: mode == ThemeMode.dark
-                        ? Icons.dark_mode
-                        : Icons.light_mode,
-                    isActive: false, // El tema no es una pantalla activa
-                    onTap: () {
-                      // Toggle entre claro y oscuro
-                      appThemeMode.value = mode == ThemeMode.dark
-                          ? ThemeMode.light
-                          : ThemeMode.dark;
-                    },
-                  );
-                },
-              ),
-              // Botón Notificaciones
-              _NavBarButton(
-                icon: Icons.notifications_outlined,
-                isActive: currentRoute == 'notifications',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const NotificationsScreen(),
-                    ),
-                  );
-                },
+          height: 70,
+          constraints: const BoxConstraints(maxWidth: 320), // Ancho máximo de la galleta
+          decoration: BoxDecoration(
+            // Fondo con 75% de transparencia (25% opacidad = 75% transparencia)
+            color: theme.colorScheme.surface.withOpacity(0.25),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(
+              color: theme.colorScheme.outline.withOpacity(0.2),
+              width: 1,
+            ),
+            // Efecto glassmorphism (blur)
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+                spreadRadius: 0,
               ),
             ],
+          ),
+          // BackdropFilter para el efecto de vidrio (glassmorphism)
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    // Botón Casa (Inicio)
+                    _NavBarButton(
+                      icon: Icons.home,
+                      label: 'Inicio',
+                      isActive: currentRoute == 'home' || currentRoute == '',
+                      onTap: () {
+                        Navigator.of(context).popUntil((route) => route.isFirst);
+                      },
+                    ),
+                    // Botón Favoritos
+                    _NavBarButton(
+                      icon: Icons.favorite_border,
+                      label: 'Fav',
+                      isActive: currentRoute == 'favorites',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const FavoritesScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    // Botón Crear Evento (más grande y destacado)
+                    _NavBarButton(
+                      icon: Icons.add_circle,
+                      label: 'Crear',
+                      isActive: currentRoute == 'submit',
+                      isAddButton: true,
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const EventWizardScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    // Botón Cuenta (integrado en la barra)
+                    _NavBarButton(
+                      icon: Icons.person,
+                      label: 'Cuenta',
+                      isActive: currentRoute == 'profile',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ProfileScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -119,15 +128,19 @@ class BottomNavBar extends StatelessWidget {
 
 class _NavBarButton extends StatelessWidget {
   final IconData icon;
+  final String label;
   final VoidCallback onTap;
   final bool isActive;
   final bool isDisabled;
+  final bool isAddButton;
 
   const _NavBarButton({
     required this.icon,
+    required this.label,
     required this.onTap,
     this.isActive = false,
     this.isDisabled = false,
+    this.isAddButton = false,
   });
 
   @override
@@ -144,26 +157,44 @@ class _NavBarButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           onTap: isDisabled ? null : onTap,
-          borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              decoration: isActive
-                  ? BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-                      borderRadius: BorderRadius.circular(12),
-                    )
-                  : null,
-              child: Center(
-                child: Icon(
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            decoration: isActive
+                ? BoxDecoration(
+                    color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+                    borderRadius: BorderRadius.circular(20),
+                  )
+                : null,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
                   icon,
-                  size: 24,
-                  color: color,
+                  size: isAddButton ? 28 : 24,
+                  color: isAddButton && !isActive
+                      ? theme.colorScheme.primary
+                      : color,
                 ),
-              ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+                    color: isDisabled
+                        ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
+                        : (isActive
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.onSurfaceVariant),
+                  ),
+                ),
+              ],
             ),
+          ),
         ),
       ),
     );
   }
 }
-

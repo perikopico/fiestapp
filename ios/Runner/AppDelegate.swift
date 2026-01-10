@@ -8,15 +8,53 @@ import GoogleMaps
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
-    // Configurar Google Maps API Key
-    // La API Key se lee desde Info.plist (ver Info.plist para configurarla)
-    // Alternativamente, puedes configurarla aquí directamente:
-    // GMSServices.provideAPIKey("TU_API_KEY_AQUI")
-    
-    // NOTA: La API Key debe ser la misma que usas para Android
-    // Configúrala en Info.plist con la clave GMSApiKey
+    // Inicializar Google Maps explícitamente
+    // Primero intentar leer desde Info.plist
+    if let path = Bundle.main.path(forResource: "Info", ofType: "plist"),
+       let dict = NSDictionary(contentsOfFile: path),
+       let apiKey = dict["GMSApiKey"] as? String, !apiKey.isEmpty {
+      GMSServices.provideAPIKey(apiKey)
+      print("✅ Google Maps API Key configurada desde Info.plist")
+    } else {
+      // Si no se encuentra en Info.plist, intentar la key hardcodeada (fallback)
+      let apiKey = "AIzaSyB-LWdftqdYCjv3QgsUJNI2TeyA1ALCPsc"
+      GMSServices.provideAPIKey(apiKey)
+      print("⚠️ Google Maps API Key configurada desde código (fallback)")
+    }
     
     GeneratedPluginRegistrant.register(with: self)
     return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+  }
+  
+  // Manejar deep links cuando la app está abierta
+  override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+  ) -> Bool {
+    // Asegurar que la app vuelva al primer plano después del OAuth
+    if url.scheme == "io.supabase.fiestapp" {
+      // Forzar que la app esté activa y traerla al frente
+      DispatchQueue.main.async {
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+           let window = windowScene.windows.first {
+          window.makeKeyAndVisible()
+          // Asegurar que la app esté en primer plano
+          window.rootViewController?.viewDidAppear(false)
+        }
+      }
+    }
+    // Pasar el deep link a Flutter
+    return super.application(app, open: url, options: options)
+  }
+  
+  // Manejar deep links cuando la app está cerrada
+  override func application(
+    _ application: UIApplication,
+    continue userActivity: NSUserActivity,
+    restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void
+  ) -> Bool {
+    // Manejar Universal Links si los usas en el futuro
+    return super.application(application, continue: userActivity, restorationHandler: restorationHandler)
   }
 }

@@ -46,14 +46,41 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSAppTransportSecurity</key>
-<dict>
-  <key>NSAllowsArbitraryLoads</key><true/>
-</dict>
+	<dict>
+		<key>NSAllowsArbitraryLoads</key>
+		<true/>
+	</dict>
 	<!-- Google Maps API Key para iOS -->
 	<!-- NOTA: Esta debe ser una API Key DIFERENTE a la de Android -->
 	<!-- Crea una nueva API Key en Google Cloud Console con restricciones solo para iOS -->
 	<!-- Ver guía: docs/CONFIGURAR_API_KEYS_SEPARADAS.md -->
 	<key>GMSApiKey</key>
 	<string>AIzaSyB-LWdftqdYCjv3QgsUJNI2TeyA1ALCPsc</string>
+	<!-- Deep Links para OAuth (Supabase) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>io.supabase.fiestapp</string>
+			</array>
+		</dict>
+	</array>
+	<!-- Permisos de ubicación -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Necesitamos tu ubicación para mostrarte eventos cercanos y permitirte buscar por radio de distancia.</string>
+	<key>NSLocationAlwaysUsageDescription</key>
+	<string>Necesitamos tu ubicación para mostrarte eventos cercanos y permitirte buscar por radio de distancia.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Necesitamos tu ubicación para mostrarte eventos cercanos y permitirte buscar por radio de distancia.</string>
+	<!-- Permisos de cámara y galería -->
+	<key>NSCameraUsageDescription</key>
+	<string>Necesitamos acceso a tu cámara para tomar fotos para los eventos que crees.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Necesitamos acceso a tu galería para seleccionar imágenes para los eventos que crees.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Necesitamos permiso para guardar imágenes en tu galería.</string>
 </dict>
 </plist>

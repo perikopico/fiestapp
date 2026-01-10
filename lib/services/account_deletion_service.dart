@@ -7,7 +7,13 @@ class AccountDeletionService {
   static final AccountDeletionService instance = AccountDeletionService._();
   AccountDeletionService._();
 
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
 
   /// Elimina todos los datos personales del usuario
   /// Esto elimina datos de tablas relacionadas y marca al usuario como eliminado

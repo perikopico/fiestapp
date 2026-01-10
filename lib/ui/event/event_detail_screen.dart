@@ -585,7 +585,43 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           child: OutlinedButton.icon(
             onPressed: () {
               if (shareText.isNotEmpty) {
-                Share.share(shareText);
+                // Obtener sharePositionOrigin para iOS
+                Rect sharePositionOrigin = Rect.zero;
+                try {
+                  final RenderBox? box = context.findRenderObject() as RenderBox?;
+                  if (box != null && box.hasSize) {
+                    final position = box.localToGlobal(Offset.zero);
+                    sharePositionOrigin = Rect.fromLTWH(
+                      position.dx,
+                      position.dy,
+                      box.size.width,
+                      box.size.height,
+                    );
+                  } else {
+                    // Fallback: usar el centro de la pantalla
+                    final screenSize = MediaQuery.of(context).size;
+                    sharePositionOrigin = Rect.fromLTWH(
+                      screenSize.width / 2,
+                      screenSize.height / 2,
+                      0,
+                      0,
+                    );
+                  }
+                } catch (e) {
+                  debugPrint('Error al obtener sharePositionOrigin: $e');
+                  // Fallback: usar el centro de la pantalla
+                  final screenSize = MediaQuery.of(context).size;
+                  sharePositionOrigin = Rect.fromLTWH(
+                    screenSize.width / 2,
+                    screenSize.height / 2,
+                    0,
+                    0,
+                  );
+                }
+                Share.share(
+                  shareText,
+                  sharePositionOrigin: sharePositionOrigin,
+                );
               }
             },
             icon: const Icon(Icons.ios_share),

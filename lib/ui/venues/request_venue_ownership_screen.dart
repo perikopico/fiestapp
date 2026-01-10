@@ -154,11 +154,13 @@ class _RequestVenueOwnershipScreenState extends State<RequestVenueOwnershipScree
                           color: Theme.of(context).colorScheme.primary,
                         ),
                         const SizedBox(width: 8),
-                          Text(
+                        Expanded(
+                          child: Text(
                             '¿Qué es ser propietario de un lugar?',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).colorScheme.primary,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
                           ),
                         ),
                       ],

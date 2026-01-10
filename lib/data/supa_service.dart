@@ -6,7 +6,13 @@ import '../models.dart';
 /// Servicio de datos: conecta con Supabase si hay .env válido,
 /// o usa datos de prueba locales para desarrollo sin conexión.
 class SupaService {
-  final _client = Supabase.instance.client;
+  SupabaseClient get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
 
   bool get _useSupabase {
     final url = dotenv.env['SUPABASE_URL'] ?? '';

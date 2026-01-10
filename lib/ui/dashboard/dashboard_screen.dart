@@ -181,6 +181,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _loadCities();
     _loadNearbyCities();
     _loadHeroBanner();
+    // Mostrar diálogo de autenticación después de que la UI cargue
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AuthBanner.showAuthDialog(context);
+      }
+    });
   }
 
   @override
@@ -194,8 +200,71 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.dispose();
   }
 
-  void _switchMode(LocationMode mode) {
+  Future<void> _switchMode(LocationMode mode) async {
     if (_mode == mode) return;
+    
+    // Si se está cambiando a modo Radio, verificar y solicitar permisos si es necesario
+    if (mode == LocationMode.radius) {
+      // Verificar servicios de ubicación
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Por favor, activa los servicios de ubicación en Configuración para usar el modo Radio.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        return;
+      }
+      
+      // Verificar permisos actuales
+      var permission = await Geolocator.checkPermission();
+      
+      // Si no hay permisos, solicitarlos
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      
+      // Si el permiso fue denegado permanentemente, mostrar mensaje
+      if (permission == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Los permisos de ubicación están deshabilitados. Por favor, habilítalos en Configuración para usar el modo Radio.'),
+              duration: const Duration(seconds: 4),
+              action: SnackBarAction(
+                label: 'Configuración',
+                onPressed: () => Geolocator.openLocationSettings(),
+              ),
+            ),
+          );
+        }
+        await _checkLocationPermission();
+        return;
+      }
+      
+      // Si el permiso fue denegado (pero no permanentemente), no cambiar de modo
+      if (permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Se necesitan permisos de ubicación para usar el modo Radio.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+        await _checkLocationPermission();
+        return;
+      }
+      
+      // Si tenemos permisos, obtener la ubicación actual
+      if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+        await _getUserLocation();
+      }
+    }
+    
     setState(() {
       _mode = mode;
       // Abrir desplegable automáticamente al cambiar de modo
@@ -366,16 +435,48 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
+      // Verificar si Supabase está inicializado - esperar un poco si no está listo
+      SupabaseClient? client;
+      int attempts = 0;
+      while (attempts < 5 && client == null) {
+        try {
+          client = Supabase.instance.client;
+        } catch (e) {
+          attempts++;
+          if (attempts < 5) {
+            debugPrint('⚠️ Supabase no está inicializado aún, esperando... (intento $attempts/5)');
+            await Future.delayed(Duration(milliseconds: 500));
+          } else {
+            debugPrint('⚠️ Supabase no está inicializado después de 5 intentos, usando imágenes de fallback');
+            setState(() {
+              _heroImageUrls = _getFallbackHeroImages();
+              _isHeroLoading = false;
+            });
+            return;
+          }
+        }
+      }
+      
+      if (client == null) {
+        setState(() {
+          _heroImageUrls = _getFallbackHeroImages();
+          _isHeroLoading = false;
+        });
+        return;
+      }
+      
       final monthFolder = _currentMonthFolder();
-      final storage = Supabase.instance.client.storage.from('hero_banners');
+      debugPrint('📁 Buscando imágenes en hero_banners/$monthFolder');
+      final storage = client.storage.from('hero_banners');
       final result = await storage.list(path: monthFolder);
 
-      // Filtrar solo imágenes (jpg, jpeg, png)
+      // Filtrar solo imágenes (jpg, jpeg, png, webp)
       final imageFiles = result.where((file) {
         final name = file.name.toLowerCase();
         return name.endsWith('.jpg') ||
             name.endsWith('.jpeg') ||
-            name.endsWith('.png');
+            name.endsWith('.png') ||
+            name.endsWith('.webp');
       }).toList();
 
       List<String> imageUrls;
@@ -387,7 +488,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
           final rootFiles = await storage.list(path: '');
           final rootImageFiles = rootFiles.where((file) {
             final name = file.name.toLowerCase();
-            return name.endsWith('.jpg') || name.endsWith('.jpeg') || name.endsWith('.png');
+            return name.endsWith('.jpg') || 
+                name.endsWith('.jpeg') || 
+                name.endsWith('.png') || 
+                name.endsWith('.webp');
           }).toList();
           
           if (rootImageFiles.isNotEmpty) {
@@ -1139,7 +1243,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     // Si no hay permisos y estamos en modo Radio, cambiar a modo Ciudad
     if (!hasPermission && _mode == LocationMode.radius) {
-      _switchMode(LocationMode.city);
+      await _switchMode(LocationMode.city);
     }
   }
 
@@ -1166,7 +1270,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
         // Si estamos en modo Radio, cambiar a modo Ciudad
         if (_mode == LocationMode.radius) {
-          _switchMode(LocationMode.city);
+          await _switchMode(LocationMode.city);
         }
         return;
       }
@@ -1179,7 +1283,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       });
       // Si estamos en modo Radio, cambiar a modo Ciudad
       if (_mode == LocationMode.radius) {
-        _switchMode(LocationMode.city);
+        await _switchMode(LocationMode.city);
       }
       return;
     }
@@ -1321,9 +1425,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   CityRadioToggle(
                     selectedMode: _mode,
-                    onModeChanged: (mode) {
+                    onModeChanged: (mode) async {
                       if (mode != _mode) {
-                        _switchMode(mode);
+                        await _switchMode(mode);
                       }
                     },
                     selectedCityName: _selectedCityName,
@@ -2031,68 +2135,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 toolbarHeight: 48,
                 collapsedHeight: 48,
                 expandedHeight: 48,
-                actions: [
-                  // Botón de perfil/login
-                  StreamBuilder(
-                    stream: AuthService.instance.authStateChanges,
-                    builder: (context, snapshot) {
-                      final isAuthenticated = AuthService.instance.isAuthenticated;
-                      if (isAuthenticated) {
-                        // Si está autenticado, mostrar icono de persona
-                        return IconButton(
-                          icon: const Icon(Icons.person),
-                          tooltip: 'Mi perfil',
-                          onPressed: () async {
-                            // Abrir perfil
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const ProfileScreen(),
-                              ),
-                            );
-                            // Refrescar favoritos después de volver
-                            setState(() {});
-                          },
-                        );
-                      } else {
-                        // Si NO está autenticado, mostrar texto "Login"
-                        return TextButton(
-                          onPressed: () async {
-                            // Abrir login
-                            final result = await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const LoginScreen(),
-                              ),
-                            );
-                            // Si el login fue exitoso, sincronizar favoritos
-                            if (result == true) {
-                              await FavoritesService.instance.syncLocalToSupabase();
-                              setState(() {});
-                            }
-                          },
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
-                          child: const Text(
-                            'Login',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-              // Banner de autenticación (solo si no está autenticado)
-              SliverToBoxAdapter(
-                child: AuthBanner(
-                  onDismiss: () {
-                    setState(() {});
-                  },
-                ),
+                actions: const [],
               ),
               SliverToBoxAdapter(
                 child: Column(

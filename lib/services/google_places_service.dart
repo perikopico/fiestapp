@@ -58,6 +58,7 @@ class GooglePlacesService {
   static void resetApiKeyStatus() {
     _isApiKeyBlocked = null;
     _isApiNotEnabled = null;
+    _errorMessageShown = false;
     debugPrint('🔄 Estado de API key reseteado - se intentará de nuevo en la próxima búsqueda');
   }
   
@@ -84,6 +85,9 @@ class GooglePlacesService {
   
   // Variable estática para cachear si la API no está habilitada
   static bool? _isApiNotEnabled;
+  
+  // Variable para controlar si ya mostramos el mensaje de error (evitar spam en logs)
+  static bool _errorMessageShown = false;
 
   /// Busca lugares usando Google Places API (New) - Text Search
   /// Filtra por ciudad para obtener resultados más relevantes
@@ -101,25 +105,20 @@ class GooglePlacesService {
         return [];
       }
       
-      // Si ya sabemos que la API key está bloqueada o la API no está habilitada, 
-      // intentar de nuevo después de un tiempo (por si se configuró correctamente)
-      // Resetear el estado después de 5 minutos para permitir reintentos
-      if (_isApiKeyBlocked == true) {
-        debugPrint('⚠️ API Key previamente bloqueada - intentando de nuevo...');
-        // Permitir un intento para ver si se solucionó el problema
-        _isApiKeyBlocked = null;
+      // Si ya sabemos que ambas APIs están bloqueadas, retornar vacío inmediatamente
+      // (evitar hacer llamadas innecesarias)
+      if (_isApiKeyBlocked == true && _isApiNotEnabled == true) {
+        if (!_errorMessageShown) {
+          debugPrint('❌ Google Places API no disponible - API key bloqueada y APIs no habilitadas');
+          debugPrint('   Solución: Habilitar Places API (New) y Places API (Legacy) en Google Cloud Console');
+          debugPrint('   https://console.cloud.google.com/apis/library');
+          _errorMessageShown = true;
+        }
+        return [];
       }
       
-      if (_isApiNotEnabled == true) {
-        debugPrint('⚠️ Places API previamente no habilitada - intentando de nuevo...');
-        // Permitir un intento para ver si se habilitó
-        _isApiNotEnabled = null;
-      }
-      
-      // Si la nueva API está marcada como no disponible (por formato incorrecto u otro problema),
-      // saltar directamente a legacy
-      if (_isApiNotEnabled == true || _isApiKeyBlocked == true) {
-        debugPrint('⚠️ Nueva API no disponible, usando legacy directamente...');
+      // Si solo la nueva API está bloqueada, saltar directamente a legacy
+      if (_isApiKeyBlocked == true || _isApiNotEnabled == true) {
         return await _searchPlacesLegacy(query, cityName, limit, apiKey);
       }
       
@@ -291,12 +290,34 @@ class GooglePlacesService {
               return [];
             }
             
-            // Otros errores de permisos (no marcar como permanente, podría ser temporal)
+            // Detectar si la API key está bloqueada (API_KEY_SERVICE_BLOCKED)
+            if (reason == 'API_KEY_SERVICE_BLOCKED') {
+              GooglePlacesService._isApiKeyBlocked = true;
+              if (!_errorMessageShown) {
+                debugPrint('❌ API Key bloqueada para Places API (New)');
+                debugPrint('   Status: $status');
+                debugPrint('   Mensaje: $message');
+                debugPrint('   Solución: Habilitar Places API (New) en Google Cloud Console:');
+                debugPrint('   https://console.cloud.google.com/apis/library/places.googleapis.com');
+                _errorMessageShown = true;
+              }
+              return [];
+            }
+            
+            // Otros errores de permisos
             if (status == 'PERMISSION_DENIED' || status == 'REQUEST_DENIED') {
-              debugPrint('⚠️ Permiso denegado para la API key');
-              debugPrint('   Status: $status');
-              debugPrint('   Mensaje: $message');
-              // No marcar como bloqueada permanentemente, podría ser otro problema
+              // Marcar como bloqueada si el mensaje indica que está bloqueada
+              if (message != null && (message.contains('blocked') || message.contains('not authorized'))) {
+                GooglePlacesService._isApiKeyBlocked = true;
+                if (!_errorMessageShown) {
+                  debugPrint('❌ Permiso denegado para Places API (New) - API key bloqueada');
+                  debugPrint('   Status: $status');
+                  debugPrint('   Mensaje: $message');
+                  debugPrint('   Solución: Habilitar Places API (New) en Google Cloud Console');
+                  _errorMessageShown = true;
+                }
+                return [];
+              }
             }
           }
         } catch (e) {
@@ -385,17 +406,28 @@ class GooglePlacesService {
                     .toList();
               }
             }
-        } else {
-          final status = data['status'] as String?;
-          final errorMessage = data['error_message'] as String?;
-          debugPrint('⚠️ Places API (Legacy): $status - ${errorMessage ?? ''}');
-          
-          // Si es REQUEST_DENIED, podría ser problema de API key
-          if (status == 'REQUEST_DENIED' && errorMessage?.contains('not authorized') == true) {
-            debugPrint('⚠️ API key no autorizada para Places API (Legacy)');
-            // No marcar como bloqueada permanentemente, pero registrar el problema
+          } else {
+            final status = data['status'] as String?;
+            final errorMessage = data['error_message'] as String?;
+            debugPrint('⚠️ Places API (Legacy): $status - ${errorMessage ?? ''}');
+            
+            // Si es REQUEST_DENIED, marcar como bloqueada
+            if (status == 'REQUEST_DENIED') {
+              GooglePlacesService._isApiKeyBlocked = true;
+              if (errorMessage?.contains('not authorized') == true || errorMessage?.contains('blocked') == true) {
+                if (!_errorMessageShown) {
+                  debugPrint('❌ API key no autorizada para Places API (Legacy)');
+                  debugPrint('   Status: $status');
+                  debugPrint('   Mensaje: $errorMessage');
+                  debugPrint('   Solución: Habilitar Places API en Google Cloud Console:');
+                  debugPrint('   https://console.cloud.google.com/apis/library/places-backend.googleapis.com');
+                  _errorMessageShown = true;
+                }
+                // Retornar vacío para no probar más variaciones
+                return [];
+              }
+            }
           }
-        }
         } else {
           debugPrint('❌ Error HTTP en Places API (Legacy): ${response.statusCode}');
           if (response.body.length < 300) {

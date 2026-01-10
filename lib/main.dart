@@ -30,6 +30,10 @@ Future<void> main() async {
     return true;
   };
   
+  // Inicializar lo mínimo necesario antes de mostrar la UI
+  // El resto se inicializa en background después de que la app arranque
+  
+  // 1. Formato de fecha (rápido, necesario para la UI)
   try {
     await initializeDateFormatting('es');
     debugPrint("✅ Formato de fecha inicializado");
@@ -37,27 +41,7 @@ Future<void> main() async {
     debugPrint("⚠️ Error al inicializar formato de fecha: $e");
   }
   
-  // Inicializar Firebase
-  try {
-    await Firebase.initializeApp();
-    debugPrint("✅ Firebase inicializado con éxito");
-    
-    // Inicializar servicio de tokens FCM y handlers de notificaciones
-    await FCMTokenService.instance.initialize();
-    await NotificationHandler.instance.initialize();
-  } catch (e) {
-    debugPrint("⚠️ Error al inicializar Firebase: $e");
-  }
-  
-  // Inicializar servicio de favoritos
-  try {
-    await FavoritesService.instance.init();
-    debugPrint("✅ FavoritesService inicializado");
-  } catch (e) {
-    debugPrint("⚠️ Error al inicializar FavoritesService: $e");
-  }
-
-  // Cargar .env
+  // 2. Cargar .env (necesario para Supabase, pero rápido)
   bool dotenvLoaded = false;
   try {
     await dotenv.load(fileName: ".env");
@@ -68,36 +52,80 @@ Future<void> main() async {
     debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
   }
 
-  // Inicializar Supabase si hay credenciales
+  // 3. Inicializar Supabase (necesario para la UI, pero puede ser rápido)
   if (dotenvLoaded) {
     try {
       final url = dotenv.env['SUPABASE_URL'];
       final key = dotenv.env['SUPABASE_ANON_KEY'];
 
-      if (url == null || key == null || url.isEmpty || key.isEmpty) {
-        debugPrint("❌ Variables de entorno no encontradas o vacías");
-        debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
-      } else {
+      if (url != null && key != null && url.isNotEmpty && key.isNotEmpty) {
         await Supabase.initialize(url: url, anonKey: key);
         debugPrint("✅ Supabase inicializado con éxito");
+      }
+    } catch (e) {
+      debugPrint("⚠️ Error al inicializar Supabase: $e");
+      debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+    }
+  }
+
+  // 4. Inicializar servicio de favoritos (rápido, necesario para la UI)
+  try {
+    await FavoritesService.instance.init();
+    debugPrint("✅ FavoritesService inicializado");
+  } catch (e) {
+    debugPrint("⚠️ Error al inicializar FavoritesService: $e");
+  }
+
+  // Ejecutar la app inmediatamente - el resto se inicializa en background
+  runApp(const QuePlan());
+  
+  // Inicializar servicios pesados en background después de que la app arranque
+  _initializeBackgroundServices();
+}
+
+/// Inicializa servicios pesados en background para no bloquear el arranque
+Future<void> _initializeBackgroundServices() async {
+  // Firebase y FCM (pueden tardar, no son críticos para mostrar la UI)
+  try {
+    await Firebase.initializeApp();
+    debugPrint("✅ Firebase inicializado con éxito");
+    
+    // Inicializar FCM de forma asíncrona (puede tardar en iOS)
+    FCMTokenService.instance.initialize().then((_) {
+      debugPrint("✅ FCMTokenService inicializado");
+    }).catchError((e) {
+      debugPrint("⚠️ Error al inicializar FCMTokenService: $e");
+    });
+    
+    NotificationHandler.instance.initialize().then((_) {
+      debugPrint("✅ NotificationHandler inicializado");
+    }).catchError((e) {
+      debugPrint("⚠️ Error al inicializar NotificationHandler: $e");
+    });
+  } catch (e) {
+    debugPrint("⚠️ Error al inicializar Firebase: $e");
+    debugPrint("⚠️ La app funcionará sin notificaciones push");
+  }
+  
+  // Configurar listener de autenticación de Supabase (si está inicializado)
+  try {
+    if (Supabase.instance.client != null) {
+      Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
+        final event = data.event;
+        final session = data.session;
         
-        // Configurar listener para cambios de autenticación
-        // Los deep links de OAuth serán manejados automáticamente por Supabase
-        Supabase.instance.client.auth.onAuthStateChange.listen((data) async {
-          final event = data.event;
-          final session = data.session;
+        if (event == AuthChangeEvent.signedIn && session != null) {
+          debugPrint("✅ Usuario autenticado: ${session.user.email}");
           
-          if (event == AuthChangeEvent.signedIn && session != null) {
-            debugPrint("✅ Usuario autenticado: ${session.user.email}");
-            
-            // Sincronizar favoritos locales con Supabase cuando el usuario inicia sesión
-            FavoritesService.instance.syncLocalToSupabase().then((_) {
-              debugPrint("✅ Favoritos sincronizados");
-            }).catchError((e) {
-              debugPrint("⚠️ Error al sincronizar favoritos: $e");
-            });
-            
-            // Guardar token FCM cuando el usuario inicia sesión
+          // Sincronizar favoritos locales con Supabase cuando el usuario inicia sesión
+          FavoritesService.instance.syncLocalToSupabase().then((_) {
+            debugPrint("✅ Favoritos sincronizados");
+          }).catchError((e) {
+            debugPrint("⚠️ Error al sincronizar favoritos: $e");
+          });
+          
+          // Guardar token FCM cuando el usuario inicia sesión
+          try {
             final token = await FCMTokenService.instance.getCurrentToken();
             if (token != null) {
               FCMTokenService.instance.saveTokenToSupabase(token).then((_) {
@@ -106,38 +134,40 @@ Future<void> main() async {
                 debugPrint("⚠️ Error al guardar token FCM: $e");
               });
             }
-          } else if (event == AuthChangeEvent.signedOut) {
-            debugPrint("👋 Usuario cerró sesión");
-            
-            // Eliminar token FCM cuando el usuario cierra sesión
+          } catch (e) {
+            debugPrint("⚠️ Error al obtener token FCM: $e");
+          }
+        } else if (event == AuthChangeEvent.signedOut) {
+          debugPrint("👋 Usuario cerró sesión");
+          
+          // Eliminar token FCM cuando el usuario cierra sesión
+          try {
             final token = await FCMTokenService.instance.getCurrentToken();
             if (token != null) {
               FCMTokenService.instance.deleteTokenFromSupabase(token).catchError((e) {
                 debugPrint("⚠️ Error al eliminar token FCM: $e");
               });
             }
-            
-            // Recargar favoritos desde local
-            FavoritesService.instance.init();
+          } catch (e) {
+            debugPrint("⚠️ Error al obtener token FCM para eliminar: $e");
           }
-        });
-      }
-    } catch (e, stackTrace) {
-      debugPrint("❌ Error al inicializar Supabase: $e");
-      debugPrint("Stack trace: $stackTrace");
-      debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+          
+          // Recargar favoritos desde local
+          FavoritesService.instance.init();
+        }
+      });
     }
-  } else {
-    debugPrint("⚠️ Supabase no inicializado (archivo .env no encontrado)");
-    debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+  } catch (e) {
+    debugPrint("⚠️ Error al configurar listener de autenticación: $e");
   }
-
-  runApp(const QuePlan());
 }
 
 // La función _initializeFCMToken() ha sido reemplazada por FCMTokenService
 // que gestiona todo el ciclo de vida de los tokens FCM de forma más completa
 
+// Inicializar el tema en modo system para que siga el brightness del sistema
+// ThemeMode.system detecta automáticamente si el sistema está en modo claro u oscuro
+// y cambia según la hora del día si el sistema tiene esa configuración
 final ValueNotifier<ThemeMode> appThemeMode = ValueNotifier(ThemeMode.system);
 
 class QuePlan extends StatefulWidget {

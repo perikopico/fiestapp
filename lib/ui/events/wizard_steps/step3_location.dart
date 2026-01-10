@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -62,7 +63,7 @@ class _Step3LocationState extends State<Step3Location> {
     }
   }
 
-  void _openMapPicker() {
+  Future<void> _openMapPicker() async {
     if (widget.wizardData.city == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -73,112 +74,67 @@ class _Step3LocationState extends State<Step3Location> {
       return;
     }
 
-    final cityLocation = LatLng(
-      widget.wizardData.city!.lat ?? 36.1927,
-      widget.wizardData.city!.lng ?? -5.9219,
-    );
+    if (!mounted) return;
 
-    final initialLocation = widget.wizardData.lat != null && widget.wizardData.lng != null
-        ? LatLng(widget.wizardData.lat!, widget.wizardData.lng!)
-        : cityLocation;
+    try {
+      final cityLocation = LatLng(
+        widget.wizardData.city!.lat ?? 36.1927,
+        widget.wizardData.city!.lng ?? -5.9219,
+      );
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => _buildMapBottomSheet(initialLocation: initialLocation),
-    );
-  }
+      final initialLocation = widget.wizardData.lat != null && widget.wizardData.lng != null
+          ? LatLng(widget.wizardData.lat!, widget.wizardData.lng!)
+          : cityLocation;
 
-  Widget _buildMapBottomSheet({required LatLng initialLocation}) {
-    LatLng currentMarkerPosition = widget.wizardData.lat != null && widget.wizardData.lng != null
-        ? LatLng(widget.wizardData.lat!, widget.wizardData.lng!)
-        : initialLocation;
+      // Permitir que el framework procese antes de abrir el modal
+      // Esperar varios frames para asegurar que el UI esté listo
+      await Future.delayed(const Duration(milliseconds: 200));
 
-    return StatefulBuilder(
-      builder: (context, setModalState) {
-        return SizedBox(
-          height: MediaQuery.of(context).size.height * 0.9,
-          child: Column(
-            children: [
-              AppBar(
-                title: const Text('Seleccionar ubicación'),
-                leading: IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.of(context).pop(),
-                ),
-                elevation: 0,
-              ),
-              Expanded(
-                child: GoogleMap(
-                  initialCameraPosition: CameraPosition(
-                    target: currentMarkerPosition,
-                    zoom: 14.0,
-                  ),
-                  onTap: (LatLng position) {
-                    setModalState(() {
-                      currentMarkerPosition = position;
-                    });
-                  },
-                  markers: {
-                    Marker(
-                      markerId: const MarkerId('picked'),
-                      position: currentMarkerPosition,
-                      draggable: true,
-                      onDragEnd: (LatLng newPosition) {
-                        setModalState(() {
-                          currentMarkerPosition = newPosition;
-                        });
-                      },
-                    ),
-                  },
-                  myLocationButtonEnabled: false,
-                  zoomControlsEnabled: true,
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    Text(
-                      'Toca el mapa o arrastra el marcador rojo para seleccionar la ubicación.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Lat: ${currentMarkerPosition.latitude.toStringAsFixed(4)}, Lng: ${currentMarkerPosition.longitude.toStringAsFixed(4)}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        setState(() {
-                          widget.wizardData.lat = currentMarkerPosition.latitude;
-                          widget.wizardData.lng = currentMarkerPosition.longitude;
-                        });
-                        Navigator.of(context).pop();
-                      },
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        minimumSize: const Size(double.infinity, 48),
-                      ),
-                      child: const Text('Usar esta ubicación'),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+      if (!mounted) return;
+
+      // Usar uncompleter y esperar al siguiente frame antes de construir el mapa
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      if (!mounted) return;
+
+      // Usar Navigator.push con una ruta que no bloquea
+      final result = await Navigator.of(context).push<Map<String, double>?>(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, secondaryAnimation) => _MapPickerScreen(
+            initialLocation: initialLocation,
+            currentLocation: widget.wizardData.lat != null && widget.wizardData.lng != null
+                ? LatLng(widget.wizardData.lat!, widget.wizardData.lng!)
+                : initialLocation,
+          ),
+          transitionDuration: const Duration(milliseconds: 200),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+            return FadeTransition(opacity: animation, child: child);
+          },
+        ),
+      );
+
+      if (result != null && mounted) {
+        setState(() {
+          widget.wizardData.lat = result['lat'];
+          widget.wizardData.lng = result['lng'];
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al abrir el selector de mapa: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al abrir el mapa: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
           ),
         );
-      },
-    );
+      }
+    }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -388,6 +344,401 @@ class _Step3LocationState extends State<Step3Location> {
         ),
       ),
     );
+  }
+}
+
+/// Pantalla completa para el selector de mapa (carga diferida para evitar bloqueos)
+class _MapPickerScreen extends StatefulWidget {
+  final LatLng initialLocation;
+  final LatLng currentLocation;
+
+  const _MapPickerScreen({
+    required this.initialLocation,
+    required this.currentLocation,
+  });
+
+  @override
+  State<_MapPickerScreen> createState() => _MapPickerScreenState();
+}
+
+class _MapPickerScreenState extends State<_MapPickerScreen> {
+  late LatLng _currentMarkerPosition;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMarkerPosition = widget.currentLocation;
+  }
+
+  void _updateMarkerPosition(LatLng position) {
+    if (mounted) {
+      setState(() {
+        _currentMarkerPosition = position;
+      });
+    }
+  }
+
+  void _handleConfirm() {
+    Navigator.of(context).pop({
+      'lat': _currentMarkerPosition.latitude,
+      'lng': _currentMarkerPosition.longitude,
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Seleccionar ubicación'),
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: _MapPickerWidget(
+              key: const ValueKey('map_picker_screen'), // Key estable para evitar rebuilds
+              initialCenter: widget.initialLocation,
+              initialMarkerPosition: widget.currentLocation,
+              onMarkerUpdated: _updateMarkerPosition,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.all(16.0),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, -2),
+                ),
+              ],
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Toca el mapa o arrastra el marcador rojo para seleccionar la ubicación.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Lat: ${_currentMarkerPosition.latitude.toStringAsFixed(4)}, Lng: ${_currentMarkerPosition.longitude.toStringAsFixed(4)}',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _handleConfirm,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Usar esta ubicación'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Widget simplificado para el mapa (carga asíncrona para evitar bloqueos)
+class _MapPickerWidget extends StatefulWidget {
+  final LatLng initialCenter;
+  final LatLng initialMarkerPosition;
+  final Function(LatLng) onMarkerUpdated;
+
+  const _MapPickerWidget({
+    super.key,
+    required this.initialCenter,
+    required this.initialMarkerPosition,
+    required this.onMarkerUpdated,
+  });
+
+  @override
+  State<_MapPickerWidget> createState() => _MapPickerWidgetState();
+}
+
+class _MapPickerWidgetState extends State<_MapPickerWidget> {
+  GoogleMapController? _mapController;
+  late LatLng _currentMarkerPosition;
+  bool _mapInitialized = false;
+  bool _hasError = false;
+  String? _errorMessage;
+  DateTime? _loadStartTime;
+  GoogleMapController? _lastController; // Para verificar que no se use un controller desmontado
+
+  @override
+  void initState() {
+    super.initState();
+    _currentMarkerPosition = widget.initialMarkerPosition;
+    _loadStartTime = DateTime.now();
+    
+    // Configurar timeout una sola vez
+    Future.delayed(const Duration(seconds: 8), () {
+      if (mounted && !_mapInitialized && !_hasError) {
+        setState(() {
+          _hasError = true;
+          _errorMessage = 'El mapa está tardando demasiado en cargar.\n\n'
+              'Posibles causas:\n'
+              '• API key de Google Maps no configurada correctamente\n'
+              '• Maps SDK for iOS no habilitada en Google Cloud Console\n'
+              '• Problema de conexión a internet\n\n'
+              'Verifica la configuración en: docs/VERIFICAR_GOOGLE_MAPS_IOS.md';
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    // Solo disponer si es el controller actual
+    if (_mapController == _lastController) {
+      _mapController?.dispose();
+    }
+    _mapController = null;
+    _lastController = null;
+    super.dispose();
+  }
+
+  void _updateMarkerPosition(LatLng position) {
+    if (mounted) {
+      setState(() {
+        _currentMarkerPosition = position;
+      });
+      widget.onMarkerUpdated(position);
+    }
+  }
+
+  void _handleMapCreated(GoogleMapController controller) {
+    debugPrint('✅ GoogleMap onMapCreated llamado');
+    
+    if (!mounted) {
+      controller.dispose();
+      return;
+    }
+    
+    // Guardar referencia al controller
+    _mapController = controller;
+    _lastController = controller;
+    
+    if (mounted) {
+      setState(() {
+        _mapInitialized = true;
+      });
+      
+      if (_loadStartTime != null) {
+        final loadTime = DateTime.now().difference(_loadStartTime!);
+        debugPrint('⏱️ Mapa cargado en ${loadTime.inMilliseconds}ms');
+      }
+      
+      // Mover la cámara después de un breve delay, pero verificar que el controller sigue siendo válido
+      Future.delayed(const Duration(milliseconds: 200), () {
+        // Verificar que el widget sigue montado y el controller sigue siendo el mismo
+        if (mounted && 
+            _mapController != null && 
+            _mapController == _lastController &&
+            _mapController == controller) {
+          try {
+            _mapController!.animateCamera(
+              CameraUpdate.newLatLngZoom(
+                widget.initialMarkerPosition,
+                14.0,
+              ),
+            );
+            debugPrint('✅ Cámara movida a posición inicial');
+          } catch (e) {
+            // Solo loggear si el widget sigue montado
+            if (mounted) {
+              debugPrint('⚠️ Error al mover la cámara (ignorado): $e');
+            }
+          }
+        } else {
+          debugPrint('⚠️ Controller ya no es válido, no se mueve la cámara');
+        }
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Si hay error, mostrar mensaje de error
+    if (_hasError) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error al cargar el mapa',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (_errorMessage != null)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                  child: Text(
+                    _errorMessage!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _hasError = false;
+                    _mapInitialized = false;
+                    _errorMessage = null;
+                    _loadStartTime = DateTime.now();
+                    _mapController?.dispose();
+                    _mapController = null;
+                  });
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Configurar timeout una sola vez en initState, no en build
+
+    // Construir el mapa directamente sin FutureBuilder para evitar rebuilds
+    try {
+      return Stack(
+        children: [
+          GoogleMap(
+            key: const ValueKey('map_picker'), // Key estable para evitar rebuilds
+            initialCameraPosition: CameraPosition(
+              target: widget.initialCenter,
+              zoom: 14.0,
+            ),
+            onTap: (LatLng position) {
+              debugPrint('📍 Mapa tocado: ${position.latitude}, ${position.longitude}');
+              _updateMarkerPosition(position);
+            },
+            markers: {
+              Marker(
+                markerId: const MarkerId('picked'),
+                position: _currentMarkerPosition,
+                draggable: true,
+                icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                onDragEnd: (LatLng newPosition) {
+                  debugPrint('📍 Marcador arrastrado: ${newPosition.latitude}, ${newPosition.longitude}');
+                  _updateMarkerPosition(newPosition);
+                },
+              ),
+            },
+            myLocationButtonEnabled: false,
+            zoomControlsEnabled: true,
+            scrollGesturesEnabled: true,
+            zoomGesturesEnabled: true,
+            tiltGesturesEnabled: false,
+            rotateGesturesEnabled: true,
+            onMapCreated: _handleMapCreated,
+            onCameraMoveStarted: () {
+              debugPrint('📍 Usuario moviendo el mapa');
+            },
+          ),
+          // Mostrar indicador mientras el mapa se inicializa
+          if (!_mapInitialized)
+            Container(
+              color: Theme.of(context).scaffoldBackgroundColor.withOpacity(0.9),
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Inicializando mapa...',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    if (_loadStartTime != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Tiempo: ${DateTime.now().difference(_loadStartTime!).inSeconds}s',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+        ],
+      );
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al construir GoogleMap: $e');
+      debugPrint('Stack trace: $stackTrace');
+      
+      // Actualizar estado de error de forma segura
+      if (mounted) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            setState(() {
+              _hasError = true;
+              _errorMessage = 'Error al inicializar el mapa:\n$e\n\n'
+                  'Posibles causas:\n'
+                  '- API key de Google Maps no configurada o inválida\n'
+                  '- Problema de conexión a internet\n'
+                  '- APIs de Google Maps no habilitadas en Google Cloud Console';
+            });
+          }
+        });
+      }
+      
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.error_outline,
+                size: 48,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Error al inicializar el mapa',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                e.toString(),
+                style: Theme.of(context).textTheme.bodySmall,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
   }
 }
 

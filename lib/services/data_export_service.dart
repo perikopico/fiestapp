@@ -1,6 +1,7 @@
 // lib/services/data_export_service.dart
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -11,7 +12,8 @@ class DataExportService {
   DataExportService._();
 
   /// Exporta todos los datos del usuario en formato JSON
-  Future<void> exportUserData() async {
+  /// [sharePositionOrigin] es opcional pero requerido en iOS para el sheet de compartir
+  Future<void> exportUserData({Rect? sharePositionOrigin}) async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) {
       throw Exception('No hay usuario autenticado');
@@ -39,6 +41,7 @@ class DataExportService {
         [XFile(file.path)],
         text: 'Mis datos de QuePlan - Exportación RGPD',
         subject: 'Exportación de datos personales - QuePlan',
+        sharePositionOrigin: sharePositionOrigin ?? Rect.zero,
       );
     } catch (e) {
       throw Exception('Error al exportar datos: $e');

@@ -9,7 +9,13 @@ class VenueEventApprovalService {
   
   static final VenueEventApprovalService instance = VenueEventApprovalService._();
   
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
   
   /// Aprueba un evento por parte del dueño del venue
   /// 

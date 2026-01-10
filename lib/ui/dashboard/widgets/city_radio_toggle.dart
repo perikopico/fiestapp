@@ -3,7 +3,7 @@ import '../../../utils/dashboard_utils.dart';
 
 class CityRadioToggle extends StatelessWidget {
   final LocationMode selectedMode;
-  final ValueChanged<LocationMode> onModeChanged;
+  final Future<void> Function(LocationMode) onModeChanged;
   final String? selectedCityName;
   final double radiusKm;
   final bool hasLocationPermission;
@@ -27,12 +27,10 @@ class CityRadioToggle extends StatelessWidget {
           // Botón Radio
           Expanded(
             child: InkWell(
-              onTap: hasLocationPermission
-                  ? () => onModeChanged(LocationMode.radius)
-                  : null,
+              onTap: () => onModeChanged(LocationMode.radius),
               borderRadius: BorderRadius.circular(8),
               child: Opacity(
-                opacity: hasLocationPermission ? 1.0 : 0.5,
+                opacity: hasLocationPermission ? 1.0 : 0.6,
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     vertical: 8,

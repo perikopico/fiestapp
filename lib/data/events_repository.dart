@@ -3,7 +3,13 @@ import 'package:fiestapp/models/event.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EventsRepository {
-  final _client = Supabase.instance.client;
+  SupabaseClient get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
 
   Future<List<Event>> fetchNearby({
     required double lat,

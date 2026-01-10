@@ -9,7 +9,13 @@ class VenueOwnershipService {
   
   static final VenueOwnershipService instance = VenueOwnershipService._();
   
-  final _supabase = Supabase.instance.client;
+  SupabaseClient get _supabase {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
   
   /// Crea una solicitud de ownership para un venue
   /// 

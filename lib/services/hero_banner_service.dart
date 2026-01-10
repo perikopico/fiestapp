@@ -146,12 +146,13 @@ class HeroBannerService {
         return null;
       }
 
-      // Filtrar solo imágenes (jpg, jpeg, png)
+      // Filtrar solo imágenes (jpg, jpeg, png, webp)
       final imageFiles = files.where((file) {
         final name = file.name.toLowerCase();
         return name.endsWith('.jpg') ||
             name.endsWith('.jpeg') ||
-            name.endsWith('.png');
+            name.endsWith('.png') ||
+            name.endsWith('.webp');
       }).toList();
 
       if (imageFiles.isEmpty) {

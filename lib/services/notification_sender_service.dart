@@ -15,7 +15,13 @@ class NotificationSenderService {
   
   static final NotificationSenderService instance = NotificationSenderService._();
   
-  final SupabaseClient _client = Supabase.instance.client;
+  SupabaseClient get _client {
+    try {
+      return Supabase.instance.client;
+    } catch (e) {
+      throw Exception('Supabase no está inicializado. Asegúrate de que el archivo .env esté configurado correctamente.');
+    }
+  }
   
   /// Obtiene todos los tokens FCM de un usuario
   Future<List<String>> getUserTokens(String userId) async {

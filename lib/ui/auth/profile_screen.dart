@@ -16,6 +16,10 @@ import '../venues/my_venues_screen.dart';
 import '../legal/gdpr_consent_screen.dart';
 import '../legal/about_screen.dart';
 import '../../services/venue_ownership_service.dart';
+import '../notifications/notifications_screen.dart';
+import '../../main.dart' show appThemeMode;
+import 'login_screen.dart';
+import 'register_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -129,7 +133,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = _authService.currentUser;
-    final email = user?.email ?? 'Usuario';
+    final isAuthenticated = _authService.isAuthenticated;
 
     return Scaffold(
       appBar: AppBar(
@@ -143,70 +147,183 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 24),
-                  // Avatar y email
-                  Center(
-                    child: Column(
-                      children: [
-                        CircleAvatar(
-                          radius: 48,
-                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                          child: Icon(
-                            Icons.person,
-                            size: 48,
-                            color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  // Si no está autenticado, mostrar opciones de login/registro
+                  if (!isAuthenticated) ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 48,
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            child: Icon(
+                              Icons.person,
+                              size: 48,
+                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          email,
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                        if (user?.emailConfirmedAt == null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'Inicia sesión o regístrate',
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                          ),
                           const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.errorContainer,
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.warning_amber_rounded,
-                                  size: 16,
-                                  color: Theme.of(context).colorScheme.onErrorContainer,
+                          Text(
+                            'Crea una cuenta para guardar tus favoritos y crear eventos',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  'Email no verificado',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .bodySmall
-                                      ?.copyWith(
-                                        color: Theme.of(context)
-                                            .colorScheme
-                                            .onErrorContainer,
-                                      ),
-                                ),
-                              ],
-                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
-                      ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
+                    // Botones de registro e inicio de sesión
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const RegisterScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Registrarse'),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const LoginScreen(),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.login),
+                      label: const Text('Iniciar sesión'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    ),
+                  ] else ...[
+                    // Contenido cuando está autenticado
+                    Builder(
+                      builder: (context) {
+                        final email = user?.email ?? 'Usuario';
+                        return Column(
+                          children: [
+                            // Avatar y email
+                            Center(
+                              child: Column(
+                                children: [
+                                  CircleAvatar(
+                                    radius: 48,
+                                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                    child: Icon(
+                                      Icons.person,
+                                      size: 48,
+                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    email,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                  ),
+                                  if (user?.emailConfirmedAt == null) ...[
+                                    const SizedBox(height: 8),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Theme.of(context).colorScheme.errorContainer,
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.warning_amber_rounded,
+                                            size: 16,
+                                            color: Theme.of(context).colorScheme.onErrorContainer,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            'Email no verificado',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color: Theme.of(context)
+                                                      .colorScheme
+                                                      .onErrorContainer,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 32),
                   // Sección de acciones
                   _buildSection(
                     context,
                     'Cuenta',
                     [
+                      // Toggle de tema oscuro/claro
+                      ValueListenableBuilder<ThemeMode>(
+                        valueListenable: appThemeMode,
+                        builder: (context, mode, _) {
+                          final isDark = mode == ThemeMode.dark || 
+                              (mode == ThemeMode.system && 
+                               MediaQuery.of(context).platformBrightness == Brightness.dark);
+                          final modeText = mode == ThemeMode.system
+                              ? 'Automático'
+                              : (mode == ThemeMode.dark ? 'Oscuro' : 'Claro');
+                          
+                          return _buildListItem(
+                            context,
+                            icon: isDark ? Icons.dark_mode : Icons.light_mode,
+                            title: 'Tema',
+                            subtitle: modeText,
+                            onTap: () {
+                              // Si está en system, cambiar a dark. Si está en dark, cambiar a light. Si está en light, cambiar a system
+                              if (mode == ThemeMode.system) {
+                                appThemeMode.value = ThemeMode.dark;
+                              } else if (mode == ThemeMode.dark) {
+                                appThemeMode.value = ThemeMode.light;
+                              } else {
+                                appThemeMode.value = ThemeMode.system;
+                              }
+                            },
+                          );
+                        },
+                      ),
+                      // Botón Notificaciones
+                      _buildListItem(
+                        context,
+                        icon: Icons.notifications_outlined,
+                        title: 'Notificaciones',
+                        subtitle: 'Gestionar tus notificaciones',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const NotificationsScreen(),
+                            ),
+                          );
+                        },
+                      ),
                       if (_isAdmin) ...[
                         _buildListItem(
                           context,
@@ -399,6 +516,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           );
                         },
                       ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 32),
@@ -423,7 +543,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                        ],
+                      );
+                      },
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -505,7 +629,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await DataExportService.instance.exportUserData();
+      // Obtener sharePositionOrigin para iOS
+      Rect? sharePositionOrigin;
+      if (mounted) {
+        final RenderBox? box = context.findRenderObject() as RenderBox?;
+        if (box != null && box.hasSize) {
+          final screenSize = MediaQuery.of(context).size;
+          // Usar el centro de la pantalla como posición de origen
+          sharePositionOrigin = Rect.fromLTWH(
+            screenSize.width / 2,
+            screenSize.height / 2,
+            0,
+            0,
+          );
+        }
+      }
+
+      await DataExportService.instance.exportUserData(
+        sharePositionOrigin: sharePositionOrigin ?? Rect.zero,
+      );
       
       if (!mounted) return;
       

@@ -1,8 +1,9 @@
-import 'dart:io' show File, Directory;
+import 'dart:io' show File, Directory, Platform;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../image_crop_screen.dart';
 import '../event_wizard_screen.dart';
 
@@ -78,16 +79,132 @@ class _Step5ImageState extends State<Step5Image> {
 
       debugPrint('📸 Fuente seleccionada: ${source == ImageSource.gallery ? "galería" : "cámara"}');
 
+      // Verificar permisos en iOS
+      if (!kIsWeb && Platform.isIOS) {
+        if (source == ImageSource.camera) {
+          // Verificar permiso de cámara
+          final cameraStatus = await Permission.camera.status;
+          debugPrint('📸 Estado del permiso de cámara: $cameraStatus');
+          
+          if (!cameraStatus.isGranted) {
+            debugPrint('📸 Solicitando permiso de cámara...');
+            final result = await Permission.camera.request();
+            debugPrint('📸 Resultado de la solicitud de permiso: $result');
+            
+            if (result.isPermanentlyDenied) {
+              debugPrint('❌ Permiso de cámara denegado permanentemente');
+              if (mounted) {
+                setState(() {
+                  _isUploadingImage = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('El permiso de cámara está deshabilitado. Por favor, habilítalo en Configuración > QuePlan > Cámara'),
+                    duration: const Duration(seconds: 5),
+                    action: SnackBarAction(
+                      label: 'Abrir Configuración',
+                      onPressed: () => openAppSettings(),
+                    ),
+                  ),
+                );
+              }
+              return;
+            } else if (result.isDenied) {
+              debugPrint('❌ Permiso de cámara denegado (puede solicitarse de nuevo)');
+              if (mounted) {
+                setState(() {
+                  _isUploadingImage = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Se necesita permiso de cámara para tomar fotos. Intenta de nuevo.'),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+              return;
+            }
+          }
+        } else {
+          // Verificar permiso de galería
+          final photosStatus = await Permission.photos.status;
+          debugPrint('📸 Estado del permiso de galería: $photosStatus');
+          
+          if (!photosStatus.isGranted) {
+            debugPrint('📸 Solicitando permiso de galería...');
+            final result = await Permission.photos.request();
+            debugPrint('📸 Resultado de la solicitud de permiso: $result');
+            
+            if (result.isPermanentlyDenied) {
+              debugPrint('❌ Permiso de galería denegado permanentemente');
+              if (mounted) {
+                setState(() {
+                  _isUploadingImage = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('El permiso de galería está deshabilitado. Por favor, habilítalo en Configuración > QuePlan > Fotos'),
+                    duration: const Duration(seconds: 5),
+                    action: SnackBarAction(
+                      label: 'Abrir Configuración',
+                      onPressed: () => openAppSettings(),
+                    ),
+                  ),
+                );
+              }
+              return;
+            } else if (result.isDenied) {
+              debugPrint('❌ Permiso de galería denegado (puede solicitarse de nuevo)');
+              if (mounted) {
+                setState(() {
+                  _isUploadingImage = false;
+                });
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Se necesita permiso de galería para seleccionar imágenes. Intenta de nuevo.'),
+                    duration: Duration(seconds: 3),
+                  ),
+                );
+              }
+              return;
+            }
+          }
+        }
+      }
+
       // Seleccionar imagen
-      final XFile? pickedFile = await picker.pickImage(
-        source: source,
-        imageQuality: 90, // Calidad alta para luego comprimir a WebP
-      );
+      XFile? pickedFile;
+      try {
+        pickedFile = await picker.pickImage(
+          source: source,
+          imageQuality: 90, // Calidad alta para luego comprimir a WebP
+        );
+      } catch (e, stackTrace) {
+        debugPrint('❌ Error al seleccionar imagen con ImagePicker: $e');
+        debugPrint('Stack trace: $stackTrace');
+        if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error al ${source == ImageSource.camera ? "tomar la foto" : "seleccionar la imagen"}: ${e.toString()}'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+        return;
+      }
 
       debugPrint('📸 Resultado del ImagePicker: ${pickedFile != null ? "archivo seleccionado" : "cancelado"}');
 
       if (pickedFile == null) {
         debugPrint('📸 No se seleccionó ningún archivo');
+        if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
+        }
         return;
       }
 
@@ -98,6 +215,9 @@ class _Step5ImageState extends State<Step5Image> {
       if (!await file.exists()) {
         debugPrint('❌ El archivo no existe: ${pickedFile.path}');
         if (mounted) {
+          setState(() {
+            _isUploadingImage = false;
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('El archivo seleccionado no existe'),
