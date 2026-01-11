@@ -1,4 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart' show debugPrint;
 
 class City {
   final int id;
@@ -7,6 +8,12 @@ class City {
   final int? provinceId;
   final double? lat;
   final double? lng;
+  final String? region;
+  // Límites geográficos para restringir el mapa a esta ciudad
+  final double? latMin;
+  final double? latMax;
+  final double? lngMin;
+  final double? lngMax;
 
   City({
     required this.id,
@@ -15,6 +22,11 @@ class City {
     this.provinceId,
     this.lat,
     this.lng,
+    this.region,
+    this.latMin,
+    this.latMax,
+    this.lngMin,
+    this.lngMax,
   });
 
   factory City.fromMap(Map<String, dynamic> m) => City(
@@ -24,7 +36,20 @@ class City {
     provinceId: m['province_id'] as int?,
     lat: (m['lat'] as num?)?.toDouble(),
     lng: (m['lng'] as num?)?.toDouble(),
+    region: m['region'] as String?,
+    latMin: (m['lat_min'] as num?)?.toDouble(),
+    latMax: (m['lat_max'] as num?)?.toDouble(),
+    lngMin: (m['lng_min'] as num?)?.toDouble(),
+    lngMax: (m['lng_max'] as num?)?.toDouble(),
   );
+  
+  /// Verifica si una coordenada está dentro de los límites de la ciudad
+  bool isWithinBounds(double lat, double lng) {
+    if (latMin == null || latMax == null || lngMin == null || lngMax == null) {
+      return true; // Si no hay límites definidos, permitir cualquier ubicación
+    }
+    return lat >= latMin! && lat <= latMax! && lng >= lngMin! && lng <= lngMax!;
+  }
 }
 
 class CityService {
@@ -34,24 +59,50 @@ class CityService {
 
   final supa = Supabase.instance.client;
 
+  /// Obtiene ciudades, por defecto solo de Cádiz (province_id = 1)
+  /// Para obtener todas las ciudades de todas las provincias, pasa null explícitamente
   Future<List<City>> fetchCities({int? provinceId}) async {
     dynamic res;
 
-    if (provinceId != null) {
+    // Si no se especifica provincia, obtener solo Cádiz (por defecto)
+    final provinceIdToUse = provinceId ?? await _getCadizProvinceId();
+
+    if (provinceIdToUse != null) {
       res = await supa
           .from('cities')
-          .select('id, name, slug, province_id, lat, lng')
-          .eq('province_id', provinceId)
+          .select('id, name, slug, province_id, lat, lng, region, lat_min, lat_max, lng_min, lng_max')
+          .eq('province_id', provinceIdToUse)
+          .order('region')
           .order('name');
     } else {
+      // Si no existe provincia Cádiz o hay error, obtener todas (fallback)
       res = await supa
           .from('cities')
-          .select('id, name, slug, province_id, lat, lng')
+          .select('id, name, slug, province_id, lat, lng, region, lat_min, lat_max, lng_min, lng_max')
           .order('name');
     }
 
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((e) => City.fromMap(e)).toList();
+  }
+
+  /// Obtiene el ID de la provincia de Cádiz
+  Future<int?> _getCadizProvinceId() async {
+    try {
+      final res = await supa
+          .from('provinces')
+          .select('id')
+          .eq('slug', 'cadiz')
+          .maybeSingle();
+      
+      if (res != null) {
+        return (res['id'] as num).toInt();
+      }
+      return null;
+    } catch (e) {
+      debugPrint('Error al obtener ID de provincia Cádiz: $e');
+      return null;
+    }
   }
 
   Future<int?> getProvinceIdBySlug(String slug) async {
@@ -80,16 +131,31 @@ class CityService {
     return list.map((m) => City.fromMap(m)).toList();
   }
 
-  Future<List<City>> searchCities(String query) async {
+  /// Busca ciudades, filtrando solo por Cádiz
+  Future<List<City>> searchCities(String query, {int? provinceId}) async {
     final q = query.trim();
 
     if (q.isEmpty) return [];
 
-    final dynamic res = await supa
-        .from('cities')
-        .select('id, name, slug, province_id, lat, lng')
-        .ilike('name', '%$q%')
-        .order('name');
+    // Filtrar solo por Cádiz por defecto
+    final provinceIdToUse = provinceId ?? await _getCadizProvinceId();
+
+    dynamic res;
+    if (provinceIdToUse != null) {
+      res = await supa
+          .from('cities')
+          .select('id, name, slug, province_id, lat, lng, region, lat_min, lat_max, lng_min, lng_max')
+          .eq('province_id', provinceIdToUse)
+          .ilike('name', '%$q%')
+          .order('name');
+    } else {
+      // Fallback si no hay provincia
+      res = await supa
+          .from('cities')
+          .select('id, name, slug, province_id, lat, lng, region, lat_min, lat_max, lng_min, lng_max')
+          .ilike('name', '%$q%')
+          .order('name');
+    }
 
     final list = (res as List).cast<Map<String, dynamic>>();
     return list.map((m) => City.fromMap(m)).toList();

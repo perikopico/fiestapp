@@ -104,4 +104,32 @@ extension EventFormatting on Event {
   String get formattedDate => DateFormat('dd/MM HH:mm').format(startsAt);
   String get formattedDay => DateFormat('dd/MM').format(startsAt);
   String get formattedTime => DateFormat('HH:mm').format(startsAt);
+  
+  /// Formato legible de fecha y hora combinadas para mostrar en chips
+  /// Ejemplo: "15 marzo, 20:30"
+  String get formattedDateTime {
+    try {
+      // Intentar con locale español - mes completo (MMMM)
+      return DateFormat('d MMMM, HH:mm', 'es').format(startsAt);
+    } catch (e) {
+      // Fallback a formato sin locale si hay problemas
+      return DateFormat('d MMMM, HH:mm').format(startsAt);
+    }
+  }
+  
+  /// Solo la fecha en formato legible
+  /// Ejemplo: "15 marzo"
+  String get formattedDateOnly {
+    try {
+      return DateFormat('d MMMM', 'es').format(startsAt);
+    } catch (e) {
+      return DateFormat('d MMMM').format(startsAt);
+    }
+  }
+  
+  /// Solo la hora
+  /// Ejemplo: "20:30"
+  String get formattedTimeOnly {
+    return DateFormat('HH:mm').format(startsAt);
+  }
 }

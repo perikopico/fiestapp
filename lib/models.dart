@@ -61,10 +61,24 @@ const cities = <City>[
   City('vejer', 'Vejer'),
 ];
 
-// Categorías iniciales (id = lo que usaremos en BD)
+// Categorías iniciales (DEPRECADO - ahora se obtienen de Supabase)
+// Mantener solo para compatibilidad con código legacy si existe
+// Las categorías finales se gestionan desde Supabase:
+// 1. Música (musica)
+// 2. Gastronomía (gastronomia)
+// 3. Deportes (deportes)
+// 4. Arte y Cultura (arte-y-cultura)
+// 5. Aire Libre (aire-libre)
+// 6. Tradiciones (tradiciones)
+// 7. Mercadillos (mercadillos)
 const kCategories = <Map<String, String>>[
   {'id': 'all', 'name': 'Todo'},
-  {'id': 'tradicion', 'name': 'Tradición'},
-  {'id': 'motor', 'name': 'Motor'},
-  {'id': 'mercados', 'name': 'Mercados'},
+  // Categorías finales (solo para referencia, la BD es la fuente de verdad)
+  {'id': 'musica', 'name': 'Música'},
+  {'id': 'gastronomia', 'name': 'Gastronomía'},
+  {'id': 'deportes', 'name': 'Deportes'},
+  {'id': 'arte-y-cultura', 'name': 'Arte y Cultura'},
+  {'id': 'aire-libre', 'name': 'Aire Libre'},
+  {'id': 'tradiciones', 'name': 'Tradiciones'},
+  {'id': 'mercadillos', 'name': 'Mercadillos'},
 ];

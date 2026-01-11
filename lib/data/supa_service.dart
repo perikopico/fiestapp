@@ -97,9 +97,19 @@ class SupaService {
   };
 
   static const _catIdToName = {
-    'tradicion': 'Tradición',
-    'motor': 'Motor',
-    'mercados': 'Mercados',
+    // Categorías finales (7 principales)
+    'musica': 'Música',
+    'gastronomia': 'Gastronomía',
+    'deportes': 'Deportes',
+    'arte-y-cultura': 'Arte y Cultura',
+    'aire-libre': 'Aire Libre',
+    'tradiciones': 'Tradiciones',
+    'mercadillos': 'Mercadillos',
+    // Compatibilidad con categorías antiguas
+    'tradicion': 'Tradiciones',
+    'tradiciones': 'Tradiciones',
+    'motor': 'Deportes',
+    'mercados': 'Mercadillos',
   };
 
   static String _townToCityId(String town) {
@@ -117,9 +127,16 @@ class SupaService {
 
   static String _catNameToId(String name) {
     final n = name.toLowerCase();
-    if (n.startsWith('trad')) return 'tradicion';
-    if (n.startsWith('motor')) return 'motor';
-    if (n.startsWith('mercad')) return 'mercados';
+    // Categorías finales
+    if (n.startsWith('mús') || n.startsWith('mus')) return 'musica';
+    if (n.startsWith('gastronom')) return 'gastronomia';
+    if (n.startsWith('deport')) return 'deportes';
+    if (n.contains('arte') && n.contains('cultura')) return 'arte-y-cultura';
+    if (n.contains('aire') && n.contains('libre')) return 'aire-libre';
+    if (n.startsWith('trad')) return 'tradiciones';
+    if (n.startsWith('mercad')) return 'mercadillos';
+    // Compatibilidad con nombres antiguos
+    if (n.contains('motor')) return 'deportes';
     return n;
   }
 

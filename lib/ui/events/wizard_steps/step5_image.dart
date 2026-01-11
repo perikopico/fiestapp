@@ -4,8 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../image_crop_screen.dart';
 import '../event_wizard_screen.dart';
+import '../../../services/sample_image_service.dart';
 
 class Step5Image extends StatefulWidget {
   final EventWizardData wizardData;
@@ -42,9 +45,9 @@ class _Step5ImageState extends State<Step5Image> {
 
       final ImagePicker picker = ImagePicker();
       
-      // Mostrar diálogo para elegir entre galería y cámara
+      // Mostrar diálogo para elegir entre galería, cámara e imágenes de muestra
       if (!mounted) return;
-      final ImageSource? source = await showDialog<ImageSource>(
+      final ImageSelectionOption? option = await showDialog<ImageSelectionOption>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Seleccionar imagen'),
@@ -54,12 +57,25 @@ class _Step5ImageState extends State<Step5Image> {
               ListTile(
                 leading: const Icon(Icons.photo_library),
                 title: const Text('Galería'),
-                onTap: () => Navigator.of(context).pop(ImageSource.gallery),
+                onTap: () => Navigator.of(context).pop(ImageSelectionOption.gallery),
               ),
               ListTile(
                 leading: const Icon(Icons.camera_alt),
                 title: const Text('Cámara'),
-                onTap: () => Navigator.of(context).pop(ImageSource.camera),
+                onTap: () => Navigator.of(context).pop(ImageSelectionOption.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.collections),
+                title: const Text('Imágenes de muestra'),
+                subtitle: Text(
+                  widget.wizardData.category != null
+                      ? 'Ver imágenes de ${widget.wizardData.category!.name}'
+                      : 'Selecciona primero una categoría',
+                ),
+                enabled: widget.wizardData.category != null,
+                onTap: widget.wizardData.category != null
+                    ? () => Navigator.of(context).pop(ImageSelectionOption.sample)
+                    : null,
               ),
             ],
           ),
@@ -72,10 +88,22 @@ class _Step5ImageState extends State<Step5Image> {
         ),
       );
 
-      if (source == null) {
+      if (option == null) {
         debugPrint('📸 Selección cancelada por el usuario');
         return;
       }
+
+      // Si se selecciona imágenes de muestra, mostrar el selector
+      if (option == ImageSelectionOption.sample) {
+        await _pickSampleImage();
+        return;
+      }
+
+      // Para galería y cámara, usar ImageSource
+      // Sabemos que option no es null ni sample en este punto, así que source no será null
+      final ImageSource source = option == ImageSelectionOption.gallery
+          ? ImageSource.gallery
+          : ImageSource.camera;
 
       debugPrint('📸 Fuente seleccionada: ${source == ImageSource.gallery ? "galería" : "cámara"}');
 
@@ -291,6 +319,175 @@ class _Step5ImageState extends State<Step5Image> {
     }
   }
 
+  /// Abre el selector de imágenes de muestra
+  Future<void> _pickSampleImage() async {
+    if (widget.wizardData.category == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Primero debes seleccionar una categoría'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      // Obtener las imágenes de muestra para la categoría seleccionada
+      final sampleImages = await SampleImageService.instance.getSampleImagesForCategory(
+        categorySlug: widget.wizardData.category!.slug,
+        categoryId: widget.wizardData.category!.id,
+      );
+
+      if (!mounted) return;
+
+      if (sampleImages.isEmpty) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No hay imágenes de muestra disponibles para ${widget.wizardData.category!.name}',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Mostrar diálogo para seleccionar una imagen
+      final selectedImageUrl = await showDialog<String>(
+        context: context,
+        builder: (context) => _SampleImagePickerDialog(
+          imageUrls: sampleImages,
+          categoryName: widget.wizardData.category!.name ?? 'categoría',
+        ),
+      );
+
+      if (selectedImageUrl != null && mounted) {
+        // Descargar la imagen y guardarla como archivo local
+        await _downloadAndSaveSampleImage(selectedImageUrl);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al obtener imágenes de muestra: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar imágenes de muestra: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
+  /// Extrae la extensión del archivo desde una URL
+  String _getFileExtensionFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      if (path.isEmpty) return 'webp'; // Por defecto WebP si no se puede determinar
+      
+      final lastDot = path.lastIndexOf('.');
+      if (lastDot == -1 || lastDot == path.length - 1) {
+        return 'webp'; // Por defecto WebP
+      }
+      
+      final extension = path.substring(lastDot + 1).toLowerCase();
+      // Validar que sea una extensión de imagen válida
+      if (['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
+        return extension;
+      }
+      return 'webp'; // Por defecto WebP si la extensión no es reconocida
+    } catch (e) {
+      debugPrint('⚠️ Error al extraer extensión de URL: $e');
+      return 'webp'; // Por defecto WebP
+    }
+  }
+
+  /// Descarga una imagen de muestra y la guarda como archivo local
+  Future<void> _downloadAndSaveSampleImage(String imageUrl) async {
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      debugPrint('📥 Descargando imagen de muestra: $imageUrl');
+
+      // Descargar la imagen
+      final response = await http.get(Uri.parse(imageUrl));
+      
+      if (response.statusCode != 200) {
+        throw Exception('Error al descargar la imagen: ${response.statusCode}');
+      }
+
+      // Detectar la extensión del archivo desde la URL
+      final extension = _getFileExtensionFromUrl(imageUrl);
+      debugPrint('📸 Extensión detectada: $extension');
+
+      // Guardar en un archivo temporal con la extensión correcta
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/sample_${DateTime.now().millisecondsSinceEpoch}.$extension');
+      await tempFile.writeAsBytes(response.bodyBytes);
+
+      debugPrint('✅ Imagen descargada en: ${tempFile.path} (formato: $extension)');
+
+      if (!mounted) return;
+
+      // Navegar a la pantalla de recorte
+      // ImageCropScreen funciona con bytes, por lo que puede manejar WebP sin problemas
+      final croppedBytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(
+          builder: (context) => ImageCropScreen(imageFile: tempFile),
+        ),
+      );
+
+      if (croppedBytes != null && mounted) {
+        // Guardar la imagen recortada
+        // Después del recorte, siempre guardamos como JPG para consistencia
+        // (crop_your_image devuelve bytes que se pueden guardar en cualquier formato)
+        final croppedDir = await Directory.systemTemp.createTemp('fiestapp_images');
+        final croppedFile = File('${croppedDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await croppedFile.writeAsBytes(croppedBytes);
+        
+        debugPrint('✅ Imagen recortada guardada en: ${croppedFile.path}');
+        
+        setState(() {
+          _croppedImageFile = croppedFile;
+          widget.wizardData.imageFile = croppedFile;
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al descargar imagen de muestra: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al descargar la imagen: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
   void _handleNext() {
     // Guardar datos
     widget.wizardData.stepValidated[4] = true;
@@ -441,3 +638,111 @@ class _Step5ImageState extends State<Step5Image> {
   }
 }
 
+/// Enum para las opciones de selección de imagen
+enum ImageSelectionOption {
+  gallery,
+  camera,
+  sample,
+}
+
+/// Diálogo para seleccionar una imagen de muestra
+class _SampleImagePickerDialog extends StatelessWidget {
+  final List<String> imageUrls;
+  final String categoryName;
+
+  const _SampleImagePickerDialog({
+    required this.imageUrls,
+    required this.categoryName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Imágenes de muestra - $categoryName',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Grid de imágenes
+            Flexible(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(16.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16.0,
+                  mainAxisSpacing: 16.0,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: imageUrls.length,
+                itemBuilder: (context, index) {
+                  final imageUrl = imageUrls[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.of(context).pop(imageUrl),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.broken_image,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            // Footer
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

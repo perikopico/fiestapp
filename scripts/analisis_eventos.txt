@@ -1,0 +1,43 @@
+================================================================================
+ANALIZADOR Y NORMALIZADOR DE EVENTOS JSON
+================================================================================
+
+✅ JSON parseado correctamente: 51 eventos encontrados
+
+================================================================================
+ESTADÍSTICAS
+================================================================================
+Total de eventos: 51
+
+Categorías encontradas:
+  ✅ Aire Libre (aire-libre): 2 eventos
+  ✅ Arte y Cultura (arte-y-cultura): 16 eventos
+  ✅ Deportes (deportes): 8 eventos
+  ✅ Gastronomía (gastronomia): 5 eventos
+  ✅ Música (musica): 6 eventos
+  ✅ Tradiciones (tradiciones): 14 eventos
+
+Ciudades encontradas (16):
+  ✅ Cádiz: 18 eventos
+  ✅ Jerez de la Frontera: 10 eventos
+  ✅ San Roque: 5 eventos
+  ✅ Chiclana de la Frontera: 2 eventos
+  ✅ Rota: 2 eventos
+  ✅ Barbate: 2 eventos
+  ✅ Algeciras: 2 eventos
+  ✅ Arcos de la Frontera: 2 eventos
+  ✅ Villaluenga del Rosario: 1 eventos
+  ✅ Benalup-Casas Viejas: 1 eventos
+  ✅ Sanlúcar de Barrameda: 1 eventos
+  ✅ Puerto Real: 1 eventos
+  ✅ El Bosque: 1 eventos
+  ✅ Conil de la Frontera: 1 eventos
+  ✅ Chipiona: 1 eventos
+  ✅ Algodonales: 1 eventos
+
+Eventos gratis: 24
+Eventos de pago: 27
+
+✅ Eventos normalizados correctamente
+
+================================================================================

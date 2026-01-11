@@ -97,6 +97,16 @@ class _Step3LocationState extends State<Step3Location> {
 
       if (!mounted) return;
 
+      // Pasar los límites geográficos de la ciudad al mapa
+      final cityBounds = widget.wizardData.city != null
+          ? _CityBounds(
+              latMin: widget.wizardData.city!.latMin,
+              latMax: widget.wizardData.city!.latMax,
+              lngMin: widget.wizardData.city!.lngMin,
+              lngMax: widget.wizardData.city!.lngMax,
+            )
+          : null;
+
       // Usar Navigator.push con una ruta que no bloquea
       final result = await Navigator.of(context).push<Map<String, double>?>(
         PageRouteBuilder(
@@ -105,6 +115,8 @@ class _Step3LocationState extends State<Step3Location> {
             currentLocation: widget.wizardData.lat != null && widget.wizardData.lng != null
                 ? LatLng(widget.wizardData.lat!, widget.wizardData.lng!)
                 : initialLocation,
+            cityBounds: cityBounds,
+            cityName: widget.wizardData.city?.name,
           ),
           transitionDuration: const Duration(milliseconds: 200),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
@@ -114,10 +126,36 @@ class _Step3LocationState extends State<Step3Location> {
       );
 
       if (result != null && mounted) {
-        setState(() {
-          widget.wizardData.lat = result['lat'];
-          widget.wizardData.lng = result['lng'];
-        });
+        final selectedLat = result['lat'] as double?;
+        final selectedLng = result['lng'] as double?;
+        
+        // Validar que la ubicación seleccionada esté dentro de los límites de la ciudad
+        if (widget.wizardData.city != null && 
+            selectedLat != null && 
+            selectedLng != null &&
+            widget.wizardData.city!.isWithinBounds(selectedLat, selectedLng)) {
+          setState(() {
+            widget.wizardData.lat = selectedLat;
+            widget.wizardData.lng = selectedLng;
+          });
+        } else if (widget.wizardData.city != null && selectedLat != null && selectedLng != null) {
+          // Mostrar advertencia si está fuera de los límites
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                'La ubicación seleccionada está fuera de los límites de ${widget.wizardData.city!.name}. '
+                'Por favor, selecciona una ubicación dentro del municipio.',
+              ),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          setState(() {
+            widget.wizardData.lat = selectedLat;
+            widget.wizardData.lng = selectedLng;
+          });
+        }
       }
     } catch (e, stackTrace) {
       debugPrint('❌ Error al abrir el selector de mapa: $e');
@@ -347,14 +385,40 @@ class _Step3LocationState extends State<Step3Location> {
   }
 }
 
+/// Clase helper para almacenar límites geográficos de la ciudad
+class _CityBounds {
+  final double? latMin;
+  final double? latMax;
+  final double? lngMin;
+  final double? lngMax;
+
+  _CityBounds({
+    this.latMin,
+    this.latMax,
+    this.lngMin,
+    this.lngMax,
+  });
+
+  bool get hasBounds => latMin != null && latMax != null && lngMin != null && lngMax != null;
+
+  bool isWithinBounds(double lat, double lng) {
+    if (!hasBounds) return true;
+    return lat >= latMin! && lat <= latMax! && lng >= lngMin! && lng <= lngMax!;
+  }
+}
+
 /// Pantalla completa para el selector de mapa (carga diferida para evitar bloqueos)
 class _MapPickerScreen extends StatefulWidget {
   final LatLng initialLocation;
   final LatLng currentLocation;
+  final _CityBounds? cityBounds;
+  final String? cityName;
 
   const _MapPickerScreen({
     required this.initialLocation,
     required this.currentLocation,
+    this.cityBounds,
+    this.cityName,
   });
 
   @override
@@ -363,26 +427,70 @@ class _MapPickerScreen extends StatefulWidget {
 
 class _MapPickerScreenState extends State<_MapPickerScreen> {
   late LatLng _currentMarkerPosition;
+  bool _isOutOfBounds = false;
 
   @override
   void initState() {
     super.initState();
     _currentMarkerPosition = widget.currentLocation;
+    _checkBounds();
   }
 
   void _updateMarkerPosition(LatLng position) {
     if (mounted) {
       setState(() {
         _currentMarkerPosition = position;
+        _checkBounds();
       });
     }
   }
 
+  void _checkBounds() {
+    if (widget.cityBounds != null && widget.cityBounds!.hasBounds) {
+      _isOutOfBounds = !widget.cityBounds!.isWithinBounds(
+        _currentMarkerPosition.latitude,
+        _currentMarkerPosition.longitude,
+      );
+    } else {
+      _isOutOfBounds = false;
+    }
+  }
+
   void _handleConfirm() {
-    Navigator.of(context).pop({
-      'lat': _currentMarkerPosition.latitude,
-      'lng': _currentMarkerPosition.longitude,
-    });
+    if (_isOutOfBounds && widget.cityName != null) {
+      // Mostrar advertencia antes de confirmar
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Ubicación fuera de límites'),
+          content: Text(
+            'La ubicación seleccionada está fuera de los límites de ${widget.cityName}.\n\n'
+            '¿Deseas continuar de todas formas?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).pop({
+                  'lat': _currentMarkerPosition.latitude,
+                  'lng': _currentMarkerPosition.longitude,
+                });
+              },
+              child: const Text('Continuar'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      Navigator.of(context).pop({
+        'lat': _currentMarkerPosition.latitude,
+        'lng': _currentMarkerPosition.longitude,
+      });
+    }
   }
 
   @override
@@ -403,6 +511,7 @@ class _MapPickerScreenState extends State<_MapPickerScreen> {
               initialCenter: widget.initialLocation,
               initialMarkerPosition: widget.currentLocation,
               onMarkerUpdated: _updateMarkerPosition,
+              cityBounds: widget.cityBounds,
             ),
           ),
           Container(
@@ -421,6 +530,16 @@ class _MapPickerScreenState extends State<_MapPickerScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (widget.cityName != null) ...[
+                    Text(
+                      'Seleccionando ubicación en ${widget.cityName}',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
                     'Toca el mapa o arrastra el marcador rojo para seleccionar la ubicación.',
                     style: Theme.of(context).textTheme.bodyMedium,
@@ -430,10 +549,40 @@ class _MapPickerScreenState extends State<_MapPickerScreen> {
                   Text(
                     'Lat: ${_currentMarkerPosition.latitude.toStringAsFixed(4)}, Lng: ${_currentMarkerPosition.longitude.toStringAsFixed(4)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
+                      color: _isOutOfBounds
+                          ? Theme.of(context).colorScheme.error
+                          : Theme.of(context).colorScheme.primary,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  if (_isOutOfBounds && widget.cityName != null) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.errorContainer,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.onErrorContainer,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Ubicación fuera de los límites de ${widget.cityName}',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onErrorContainer,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
@@ -441,8 +590,11 @@ class _MapPickerScreenState extends State<_MapPickerScreen> {
                       onPressed: _handleConfirm,
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: _isOutOfBounds
+                            ? Theme.of(context).colorScheme.error
+                            : null,
                       ),
-                      child: const Text('Usar esta ubicación'),
+                      child: Text(_isOutOfBounds ? 'Usar de todas formas' : 'Usar esta ubicación'),
                     ),
                   ),
                 ],
@@ -460,12 +612,14 @@ class _MapPickerWidget extends StatefulWidget {
   final LatLng initialCenter;
   final LatLng initialMarkerPosition;
   final Function(LatLng) onMarkerUpdated;
+  final _CityBounds? cityBounds;
 
   const _MapPickerWidget({
     super.key,
     required this.initialCenter,
     required this.initialMarkerPosition,
     required this.onMarkerUpdated,
+    this.cityBounds,
   });
 
   @override
@@ -553,17 +707,52 @@ class _MapPickerWidgetState extends State<_MapPickerWidget> {
             _mapController == _lastController &&
             _mapController == controller) {
           try {
-            _mapController!.animateCamera(
-              CameraUpdate.newLatLngZoom(
-                widget.initialMarkerPosition,
-                14.0,
-              ),
-            );
-            debugPrint('✅ Cámara movida a posición inicial');
+            // Si hay límites de la ciudad, ajustar la cámara a esos límites
+            if (widget.cityBounds != null && widget.cityBounds!.hasBounds) {
+              final bounds = LatLngBounds(
+                southwest: LatLng(
+                  widget.cityBounds!.latMin!,
+                  widget.cityBounds!.lngMin!,
+                ),
+                northeast: LatLng(
+                  widget.cityBounds!.latMax!,
+                  widget.cityBounds!.lngMax!,
+                ),
+              );
+              
+              // Ajustar la cámara para mostrar los límites de la ciudad con padding
+              _mapController!.animateCamera(
+                CameraUpdate.newLatLngBounds(
+                  bounds,
+                  80.0, // padding en píxeles
+                ),
+              );
+              debugPrint('✅ Cámara ajustada a límites de la ciudad');
+            } else {
+              // Si no hay límites, usar la posición inicial
+              _mapController!.animateCamera(
+                CameraUpdate.newLatLngZoom(
+                  widget.initialMarkerPosition,
+                  14.0,
+                ),
+              );
+              debugPrint('✅ Cámara movida a posición inicial');
+            }
           } catch (e) {
             // Solo loggear si el widget sigue montado
             if (mounted) {
               debugPrint('⚠️ Error al mover la cámara (ignorado): $e');
+              // Fallback: intentar mover a la posición inicial sin límites
+              try {
+                _mapController!.animateCamera(
+                  CameraUpdate.newLatLngZoom(
+                    widget.initialMarkerPosition,
+                    14.0,
+                  ),
+                );
+              } catch (e2) {
+                debugPrint('⚠️ Error en fallback: $e2');
+              }
             }
           }
         } else {

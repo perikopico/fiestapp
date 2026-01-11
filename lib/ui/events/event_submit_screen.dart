@@ -661,30 +661,59 @@ $dayProgram''';
   }
 
   /// Obtiene la descripción de una categoría
+  /// Usa las descripciones finales de las categorías para guiar al usuario
   String _getCategoryDescription(String categoryName) {
-    final lowerName = categoryName.toLowerCase();
+    // Descripciones finales de las categorías
+    final descriptions = {
+      'Música': 'Conciertos, festivales, flamenco, sesiones DJ y vida nocturna.',
+      'Gastronomía': 'Rutas de tapas, catas de vino, mostos, ventas y jornadas del atún.',
+      'Deportes': 'Motor (Jerez), surf/kite (Tarifa), polo, hípica y competiciones.',
+      'Arte y Cultura': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Aire Libre': 'Senderismo, rutas en kayak, playas y naturaleza activa.',
+      'Tradiciones': 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
+      'Mercadillos': 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+      // Compatibilidad con variaciones de nombres
+      'Mercados': 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+      'Cultura': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Arte': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Tradición': 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
+    };
     
-    // Mapeo de nombres de categorías a sus descripciones
-    if (lowerName.contains('cultura')) {
-      return 'Teatro, exposiciones, cine, charlas…';
-    } else if (lowerName.contains('deporte')) {
-      return 'Partidos, torneos, rutas, surf…';
-    } else if (lowerName.contains('mercado')) {
-      return 'Mercadillos, artesanía, segunda mano…';
-    } else if (lowerName.contains('música') || lowerName.contains('musica')) {
-      return 'Conciertos, bandas, DJ, acústicos…';
-    } else if (lowerName.contains('noche')) {
-      return 'Discotecas, copas, fiestas de madrugada.';
-    } else if (lowerName.contains('naturaleza')) {
-      return 'Eventos de Naturaleza';
-    } else if (lowerName.contains('fiesta') && lowerName.contains('local')) {
-      return 'Eventos de fiestas locales';
-    } else if (lowerName.contains('motor')) {
-      return 'Eventos de Motor';
-    } else {
-      // Descripción genérica para categorías no mapeadas
-      return 'Eventos de $categoryName';
+    // Buscar coincidencia exacta primero
+    if (descriptions.containsKey(categoryName)) {
+      return descriptions[categoryName]!;
     }
+    
+    // Buscar coincidencia parcial (case insensitive)
+    final lowerName = categoryName.toLowerCase();
+    for (final entry in descriptions.entries) {
+      final entryLower = entry.key.toLowerCase();
+      if (entryLower == lowerName ||
+          lowerName.contains(entryLower) ||
+          entryLower.contains(lowerName)) {
+        return entry.value;
+      }
+    }
+    
+    // Fallback para búsquedas por palabras clave (compatibilidad con código antiguo)
+    if (lowerName.contains('música') || lowerName.contains('musica') || lowerName.contains('music')) {
+      return 'Conciertos, festivales, flamenco, sesiones DJ y vida nocturna.';
+    } else if (lowerName.contains('gastronomía') || lowerName.contains('gastronomia') || lowerName.contains('gastronomy')) {
+      return 'Rutas de tapas, catas de vino, mostos, ventas y jornadas del atún.';
+    } else if (lowerName.contains('deporte') || lowerName.contains('deportes') || lowerName.contains('sport')) {
+      return 'Motor (Jerez), surf/kite (Tarifa), polo, hípica y competiciones.';
+    } else if (lowerName.contains('arte') || lowerName.contains('cultura') || lowerName.contains('culture')) {
+      return 'Teatro, exposiciones, museos, cine y visitas históricas.';
+    } else if (lowerName.contains('aire libre') || lowerName.contains('aire-libre') || lowerName.contains('naturaleza') || lowerName.contains('nature')) {
+      return 'Senderismo, rutas en kayak, playas y naturaleza activa.';
+    } else if (lowerName.contains('tradición') || lowerName.contains('tradiciones') || lowerName.contains('tradicion') || lowerName.contains('tradition')) {
+      return 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.';
+    } else if (lowerName.contains('mercadillo') || lowerName.contains('mercadillos') || lowerName.contains('mercado') || lowerName.contains('mercados') || lowerName.contains('market')) {
+      return 'Artesanía, antigüedades, rastros y moda (no alimentación).';
+    }
+    
+    // Descripción genérica para categorías no mapeadas
+    return 'Eventos de $categoryName';
   }
 
   @override

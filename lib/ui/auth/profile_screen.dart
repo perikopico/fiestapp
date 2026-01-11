@@ -52,7 +52,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _checkVenueOwnerStatus() async {
     if (!_authService.isAuthenticated) return;
-    
+
     try {
       final myVenues = await VenueOwnershipService.instance.getMyVenues();
       if (mounted) {
@@ -91,12 +91,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await _authService.signOut();
       if (!mounted) return;
-      
+
       // Navegar al dashboard y mostrar mensaje
       Navigator.of(context).popUntil((route) => route.isFirst);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Sesión cerrada')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Sesión cerrada')));
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoading = false);
@@ -125,9 +125,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Si es admin, abrir directamente el panel
     if (!mounted) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const PendingEventsScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const PendingEventsScreen()));
   }
 
   @override
@@ -136,9 +136,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final isAuthenticated = _authService.isAuthenticated;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Mi perfil'),
-      ),
+      appBar: AppBar(title: const Text('Mi perfil')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
@@ -154,25 +152,31 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 48,
-                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.primaryContainer,
                             child: Icon(
                               Icons.person,
                               size: 48,
-                              color: Theme.of(context).colorScheme.onPrimaryContainer,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.onPrimaryContainer,
                             ),
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'Inicia sesión o regístrate',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.titleLarge
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'Crea una cuenta para guardar tus favoritos y crear eventos',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
                                 ),
                             textAlign: TextAlign.center,
                           ),
@@ -223,19 +227,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 children: [
                                   CircleAvatar(
                                     radius: 48,
-                                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                                    backgroundColor: Theme.of(
+                                      context,
+                                    ).colorScheme.primaryContainer,
                                     child: Icon(
                                       Icons.person,
                                       size: 48,
-                                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onPrimaryContainer,
                                     ),
                                   ),
                                   const SizedBox(height: 16),
                                   Text(
                                     email,
-                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                        ),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(fontWeight: FontWeight.bold),
                                   ),
                                   if (user?.emailConfirmedAt == null) ...[
                                     const SizedBox(height: 8),
@@ -245,7 +254,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         vertical: 6,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Theme.of(context).colorScheme.errorContainer,
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.errorContainer,
                                         borderRadius: BorderRadius.circular(16),
                                       ),
                                       child: Row(
@@ -254,7 +265,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                           Icon(
                                             Icons.warning_amber_rounded,
                                             size: 16,
-                                            color: Theme.of(context).colorScheme.onErrorContainer,
+                                            color: Theme.of(
+                                              context,
+                                            ).colorScheme.onErrorContainer,
                                           ),
                                           const SizedBox(width: 8),
                                           Text(
@@ -276,275 +289,284 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ),
                             const SizedBox(height: 32),
-                  // Sección de acciones
-                  _buildSection(
-                    context,
-                    'Cuenta',
-                    [
-                      // Toggle de tema oscuro/claro
-                      ValueListenableBuilder<ThemeMode>(
-                        valueListenable: appThemeMode,
-                        builder: (context, mode, _) {
-                          final isDark = mode == ThemeMode.dark || 
-                              (mode == ThemeMode.system && 
-                               MediaQuery.of(context).platformBrightness == Brightness.dark);
-                          final modeText = mode == ThemeMode.system
-                              ? 'Automático'
-                              : (mode == ThemeMode.dark ? 'Oscuro' : 'Claro');
-                          
-                          return _buildListItem(
-                            context,
-                            icon: isDark ? Icons.dark_mode : Icons.light_mode,
-                            title: 'Tema',
-                            subtitle: modeText,
-                            onTap: () {
-                              // Si está en system, cambiar a dark. Si está en dark, cambiar a light. Si está en light, cambiar a system
-                              if (mode == ThemeMode.system) {
-                                appThemeMode.value = ThemeMode.dark;
-                              } else if (mode == ThemeMode.dark) {
-                                appThemeMode.value = ThemeMode.light;
-                              } else {
-                                appThemeMode.value = ThemeMode.system;
-                              }
-                            },
-                          );
-                        },
-                      ),
-                      // Botón Notificaciones
-                      _buildListItem(
-                        context,
-                        icon: Icons.notifications_outlined,
-                        title: 'Notificaciones',
-                        subtitle: 'Gestionar tus notificaciones',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const NotificationsScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      if (_isAdmin) ...[
-                        _buildListItem(
-                          context,
-                          icon: Icons.admin_panel_settings,
-                          title: 'Panel de administración',
-                          subtitle: 'Gestionar eventos pendientes',
-                          onTap: _openAdminPanel,
-                        ),
-                        _buildListItem(
-                          context,
-                          icon: Icons.place,
-                          title: 'Lugares pendientes',
-                          subtitle: 'Aprobar o rechazar lugares',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const PendingVenuesScreen(),
+                            // Sección de acciones
+                            _buildSection(context, 'Cuenta', [
+                              // Toggle de tema oscuro/claro
+                              ValueListenableBuilder<ThemeMode>(
+                                valueListenable: appThemeMode,
+                                builder: (context, mode, _) {
+                                  final isDark =
+                                      mode == ThemeMode.dark ||
+                                      (mode == ThemeMode.system &&
+                                          MediaQuery.of(
+                                                context,
+                                              ).platformBrightness ==
+                                              Brightness.dark);
+                                  final modeText = mode == ThemeMode.system
+                                      ? 'Automático'
+                                      : (mode == ThemeMode.dark
+                                            ? 'Oscuro'
+                                            : 'Claro');
+
+                                  return _buildListItem(
+                                    context,
+                                    icon: isDark
+                                        ? Icons.dark_mode
+                                        : Icons.light_mode,
+                                    title: 'Tema',
+                                    subtitle: modeText,
+                                    onTap: () {
+                                      // Si está en system, cambiar a dark. Si está en dark, cambiar a light. Si está en light, cambiar a system
+                                      if (mode == ThemeMode.system) {
+                                        appThemeMode.value = ThemeMode.dark;
+                                      } else if (mode == ThemeMode.dark) {
+                                        appThemeMode.value = ThemeMode.light;
+                                      } else {
+                                        appThemeMode.value = ThemeMode.system;
+                                      }
+                                    },
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                        _buildListItem(
-                          context,
-                          icon: Icons.verified_user,
-                        title: 'Solicitudes de propiedad',
-                        subtitle: 'Gestionar solicitudes de locales',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const VenueOwnershipRequestsScreen(),
+                              // Botón Notificaciones
+                              _buildListItem(
+                                context,
+                                icon: Icons.notifications_outlined,
+                                title: 'Notificaciones',
+                                subtitle: 'Gestionar tus notificaciones',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const NotificationsScreen(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                      ],
-                      if (_isVenueOwner) ...[
-                        _buildListItem(
-                          context,
-                          icon: Icons.store,
-                          title: 'Mis locales',
-                          subtitle: 'Ver y gestionar mis locales',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const MyVenuesScreen(),
+                              if (_isAdmin) ...[
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.admin_panel_settings,
+                                  title: 'Panel de administración',
+                                  subtitle: 'Gestionar eventos pendientes',
+                                  onTap: _openAdminPanel,
+                                ),
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.place,
+                                  title: 'Lugares pendientes',
+                                  subtitle: 'Aprobar o rechazar lugares',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const PendingVenuesScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.verified_user,
+                                  title: 'Solicitudes de propiedad',
+                                  subtitle: 'Gestionar solicitudes de locales',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const VenueOwnershipRequestsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                              if (_isVenueOwner) ...[
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.store,
+                                  title: 'Mis locales',
+                                  subtitle: 'Ver y gestionar mis locales',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const MyVenuesScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.business,
+                                  title: 'Mis eventos de venues',
+                                  subtitle: 'Aprobar eventos de mis locales',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const OwnerEventsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ],
+                              _buildListItem(
+                                context,
+                                icon: Icons.favorite,
+                                title: 'Mis favoritos',
+                                subtitle:
+                                    '${FavoritesService.instance.favorites.length} eventos guardados',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const FavoritesScreen(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                        _buildListItem(
-                          context,
-                          icon: Icons.business,
-                          title: 'Mis eventos de venues',
-                          subtitle: 'Aprobar eventos de mis locales',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const OwnerEventsScreen(),
+                              _buildListItem(
+                                context,
+                                icon: Icons.event_note,
+                                title: 'Mis eventos creados',
+                                subtitle: 'Ver los eventos que has creado',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const MyEventsScreen(),
+                                    ),
+                                  );
+                                },
                               ),
-                            );
-                          },
-                        ),
-                      ],
-                      _buildListItem(
-                        context,
-                        icon: Icons.favorite,
-                        title: 'Mis favoritos',
-                        subtitle: '${FavoritesService.instance.favorites.length} eventos guardados',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const FavoritesScreen(),
+                              _buildListItem(
+                                context,
+                                icon: Icons.business_center,
+                                title: 'Solicitar ser propietario',
+                                subtitle:
+                                    'Solicitar ser propietario de tu negocio',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const RequestVenueOwnershipScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _buildListItem(
+                                context,
+                                icon: Icons.vpn_key,
+                                title: 'Verificar código de propiedad',
+                                subtitle:
+                                    'Introduce el código que recibiste del admin',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const EnterVerificationCodeScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ]),
+                            const SizedBox(height: 24),
+                            // Legal y Privacidad
+                            _buildSection(context, 'Legal y Privacidad', [
+                              _buildListItem(
+                                context,
+                                icon: Icons.privacy_tip,
+                                title: 'Política de Privacidad',
+                                subtitle: 'Cómo protegemos tus datos',
+                                onTap: () => _openPrivacyPolicy(),
+                              ),
+                              _buildListItem(
+                                context,
+                                icon: Icons.description,
+                                title: 'Términos y Condiciones',
+                                subtitle: 'Términos de uso de la app',
+                                onTap: () => _openTerms(),
+                              ),
+                              _buildListItem(
+                                context,
+                                icon: Icons.settings,
+                                title: 'Gestionar consentimientos',
+                                subtitle:
+                                    'Modificar tus preferencias de privacidad',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const GDPRConsentScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _buildListItem(
+                                context,
+                                icon: Icons.download,
+                                title: 'Exportar mis datos',
+                                subtitle: 'Descargar todos tus datos (RGPD)',
+                                onTap: _exportUserData,
+                              ),
+                            ]),
+                            const SizedBox(height: 24),
+                            // Información
+                            _buildSection(context, 'Información', [
+                              _buildListItem(
+                                context,
+                                icon: Icons.info_outline,
+                                title: 'Sobre QuePlan',
+                                subtitle: 'Información de la app',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const AboutScreen(),
+                                    ),
+                                  );
+                                },
+                              ),
+                              _buildListItem(
+                                context,
+                                icon: Icons.badge,
+                                title: 'ID de usuario',
+                                subtitle: user?.id ?? 'N/A',
+                                onTap: () {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('ID: ${user?.id ?? "N/A"}'),
+                                      duration: const Duration(seconds: 2),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ]),
+                            const SizedBox(height: 32),
+                            // Cerrar sesión
+                            OutlinedButton.icon(
+                              onPressed: _handleSignOut,
+                              icon: const Icon(Icons.logout),
+                              label: const Text('Cerrar sesión'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Theme.of(
+                                  context,
+                                ).colorScheme.error,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
                             ),
-                          );
-                        },
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.event_note,
-                        title: 'Mis eventos creados',
-                        subtitle: 'Ver los eventos que has creado',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const MyEventsScreen(),
+                            const SizedBox(height: 16),
+                            // Eliminar cuenta
+                            OutlinedButton.icon(
+                              onPressed: _showDeleteAccountDialog,
+                              icon: const Icon(Icons.delete_forever),
+                              label: const Text('Eliminar cuenta'),
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: Colors.red,
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 16,
+                                ),
+                              ),
                             ),
-                          );
-                        },
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.business_center,
-                        title: 'Solicitar ser propietario',
-                        subtitle: 'Solicitar ser propietario de tu negocio',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const RequestVenueOwnershipScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.vpn_key,
-                        title: 'Verificar código de propiedad',
-                        subtitle: 'Introduce el código que recibiste del admin',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const EnterVerificationCodeScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  // Legal y Privacidad
-                  _buildSection(
-                    context,
-                    'Legal y Privacidad',
-                    [
-                      _buildListItem(
-                        context,
-                        icon: Icons.privacy_tip,
-                        title: 'Política de Privacidad',
-                        subtitle: 'Cómo protegemos tus datos',
-                        onTap: () => _openPrivacyPolicy(),
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.description,
-                        title: 'Términos y Condiciones',
-                        subtitle: 'Términos de uso de la app',
-                        onTap: () => _openTerms(),
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.settings,
-                        title: 'Gestionar consentimientos',
-                        subtitle: 'Modificar tus preferencias de privacidad',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const GDPRConsentScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.download,
-                        title: 'Exportar mis datos',
-                        subtitle: 'Descargar todos tus datos (RGPD)',
-                        onTap: _exportUserData,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  // Información
-                  _buildSection(
-                    context,
-                    'Información',
-                    [
-                      _buildListItem(
-                        context,
-                        icon: Icons.info_outline,
-                        title: 'Sobre QuePlan',
-                        subtitle: 'Información de la app',
-                        onTap: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const AboutScreen(),
-                            ),
-                          );
-                        },
-                      ),
-                      _buildListItem(
-                        context,
-                        icon: Icons.badge,
-                        title: 'ID de usuario',
-                        subtitle: user?.id ?? 'N/A',
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('ID: ${user?.id ?? "N/A"}'),
-                              duration: const Duration(seconds: 2),
-                            ),
-                          );
-                        },
-                      ),
                           ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 32),
-                  // Cerrar sesión
-                  OutlinedButton.icon(
-                    onPressed: _handleSignOut,
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Cerrar sesión'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  // Eliminar cuenta
-                  OutlinedButton.icon(
-                    onPressed: _showDeleteAccountDialog,
-                    icon: const Icon(Icons.delete_forever),
-                    label: const Text('Eliminar cuenta'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                  ),
-                        ],
-                      );
+                        );
                       },
                     ),
                   ],
@@ -567,14 +589,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           child: Text(
             title,
             style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                  fontWeight: FontWeight.bold,
-                ),
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+            ),
           ),
         ),
-        Card(
-          child: Column(children: children),
-        ),
+        Card(child: Column(children: children)),
       ],
     );
   }
@@ -648,9 +668,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await DataExportService.instance.exportUserData(
         sharePositionOrigin: sharePositionOrigin ?? Rect.zero,
       );
-      
+
       if (!mounted) return;
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Datos exportados correctamente'),
@@ -731,9 +751,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     try {
       await AccountDeletionService.instance.deleteAccount();
-      
+
       if (!mounted) return;
-      
+
       Navigator.of(context).popUntil((route) => route.isFirst);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -754,4 +774,3 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 }
-

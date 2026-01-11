@@ -1,0 +1,287 @@
+================================================================================
+ANALIZADOR Y NORMALIZADOR DE EVENTOS JSON
+================================================================================
+
+✅ JSON parseado correctamente: 51 eventos encontrados
+
+================================================================================
+ESTADÍSTICAS
+================================================================================
+Total de eventos: 51
+
+Categorías encontradas:
+  ✅ Aire Libre (aire-libre): 2 eventos
+  ✅ Arte y Cultura (arte-y-cultura): 16 eventos
+  ✅ Deportes (deportes): 8 eventos
+  ✅ Gastronomía (gastronomia): 5 eventos
+  ✅ Música (musica): 6 eventos
+  ✅ Tradiciones (tradiciones): 14 eventos
+
+Ciudades encontradas (1):
+  ⚠️  NO EN MAPEO Sin especificar: 51 eventos
+
+❌ ERRORES ENCONTRADOS:
+  Evento #1: Inicio del COAC 2026 (Preliminares)
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #2: XIV Trail Urbano Villaluenga
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #3: Juan Dávila: La Capital del Pecado 2.0
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #4: Clausura XX Encuentro Anual de Belenistas
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #5: 93º Aniversario Sucesos de Casas Viejas
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #6: Fútbol: CD Guadiaro vs Barbate CF
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #7: COAC 2026: Preliminares (Sesión Diaria)
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #8: Lectura: 'Incendios' de Wajdi Mouawad
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #9: Inicio IV Edición Magic Fest 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #10: Encuentro Amigos de la Biblioteca
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #11: Cercle Littéraire Francophone
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #12: Teatro: El Barbero de Picasso
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #13: Musical: Las Guerreras K-Pop
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #14: Teatro: Galdós Enamorado
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #15: Concierto: Pasión Vega – Pasión Almodóvar
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #16: Monólogo: José Luis Calero
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #17: Ruta Senderismo Los Alcornocales
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #18: Limpieza Playa Yerbabuena (Voluntariado)
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #19: David Navarro: No tengo remedio
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #20: Piano: Ramón Grau
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #21: VIII Carrera El Pilar-Marianistas
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #22: II Trail Villa de El Bosque
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #23: Gala Internacional de Magia Infantil
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #24: Romería de San Sebastián
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #25: Inauguración Pasarela Flamenca Tío Pepe 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #26: Teatro Familiar: Lúa
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #27: Concierto Homenaje a Robe Iniesta
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #28: Concierto: María Parrado
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #29: Ópera: I Tre Gobbi
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #30: I Certamen Nacional de Coplas
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #31: Tributo Dire Straits: Alchemy Project
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #32: XXXIX Ostionada Popular
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #33: VI Ruta MTB Barbate
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #34: Inicio Cuartos de Final COAC 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #35: IV Media Maratón Ciudad de Arcos
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #36: Presentación Oficial Carnaval Chipiona 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #37: XLIV Erizada Popular
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #38: Mejillonada Popular
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #39: Teatro: Los Lunes al Sol
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #40: Inicio Carnaval de Arcos 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #41: XII Víboras Trail
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #42: XXV Gambada Popular
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #43: I Chicharronada Popular
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #44: Cádiz Fight Night: Europa vs Tailandia
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #45: Encendido Alumbrado de Carnaval
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #46: Gran Final del COAC 2026
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #47: Pregón del Carnaval (Manu Sánchez)
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #48: Gran Cabalgata Magna
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #49: Inauguración XXX Festival de Jerez
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #50: Quema de la Bruja Piti
+    - location_name es requerido
+    - La fecha es requerida
+  Evento #51: Día de Andalucía
+    - location_name es requerido
+    - La fecha es requerida
+
+⚠️  ADVERTENCIAS:
+  Evento #1: Inicio del COAC 2026 (Preliminares)
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #2: XIV Trail Urbano Villaluenga
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #3: Juan Dávila: La Capital del Pecado 2.0
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #4: Clausura XX Encuentro Anual de Belenistas
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #5: 93º Aniversario Sucesos de Casas Viejas
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #6: Fútbol: CD Guadiaro vs Barbate CF
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #7: COAC 2026: Preliminares (Sesión Diaria)
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #8: Lectura: 'Incendios' de Wajdi Mouawad
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #9: Inicio IV Edición Magic Fest 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #10: Encuentro Amigos de la Biblioteca
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #11: Cercle Littéraire Francophone
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #12: Teatro: El Barbero de Picasso
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #13: Musical: Las Guerreras K-Pop
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #14: Teatro: Galdós Enamorado
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #15: Concierto: Pasión Vega – Pasión Almodóvar
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #16: Monólogo: José Luis Calero
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #17: Ruta Senderismo Los Alcornocales
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #18: Limpieza Playa Yerbabuena (Voluntariado)
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #19: David Navarro: No tengo remedio
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #20: Piano: Ramón Grau
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #21: VIII Carrera El Pilar-Marianistas
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #22: II Trail Villa de El Bosque
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #23: Gala Internacional de Magia Infantil
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #24: Romería de San Sebastián
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #25: Inauguración Pasarela Flamenca Tío Pepe 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #26: Teatro Familiar: Lúa
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #27: Concierto Homenaje a Robe Iniesta
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #28: Concierto: María Parrado
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #29: Ópera: I Tre Gobbi
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #30: I Certamen Nacional de Coplas
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #31: Tributo Dire Straits: Alchemy Project
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #32: XXXIX Ostionada Popular
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #33: VI Ruta MTB Barbate
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #34: Inicio Cuartos de Final COAC 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #35: IV Media Maratón Ciudad de Arcos
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #36: Presentación Oficial Carnaval Chipiona 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #37: XLIV Erizada Popular
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #38: Mejillonada Popular
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #39: Teatro: Los Lunes al Sol
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #40: Inicio Carnaval de Arcos 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #41: XII Víboras Trail
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #42: XXV Gambada Popular
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #43: I Chicharronada Popular
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #44: Cádiz Fight Night: Europa vs Tailandia
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #45: Encendido Alumbrado de Carnaval
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #46: Gran Final del COAC 2026
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #47: Pregón del Carnaval (Manu Sánchez)
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #48: Gran Cabalgata Magna
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #49: Inauguración XXX Festival de Jerez
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #50: Quema de la Bruja Piti
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+  Evento #51: Día de Andalucía
+    - Ciudad 'Sin especificar' no está en el mapeo de BD - se usará tal cual
+
+Eventos gratis: 51
+Eventos de pago: 0
+
+✅ Eventos normalizados correctamente
+
+================================================================================

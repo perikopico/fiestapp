@@ -361,19 +361,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         Chip(
           label: Text(
-            widget.event.formattedDate,
+            widget.event.formattedDateTime,
             style: theme.textTheme.bodySmall,
           ),
-          avatar: const Icon(Icons.event, size: 18),
-          backgroundColor: theme.colorScheme.surfaceVariant,
-          visualDensity: VisualDensity.compact,
-        ),
-        Chip(
-          label: Text(
-            widget.event.formattedTime,
-            style: theme.textTheme.bodySmall,
-          ),
-          avatar: const Icon(Icons.schedule, size: 18),
+          avatar: const Icon(Icons.calendar_today, size: 18),
           backgroundColor: theme.colorScheme.surfaceVariant,
           visualDensity: VisualDensity.compact,
         ),

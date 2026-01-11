@@ -24,24 +24,39 @@ class UpcomingList extends StatefulWidget {
 class _UpcomingListState extends State<UpcomingList> {
 
   Color _getColorForCategory(String categoryName) {
+    if (categoryName.isEmpty) return Colors.grey;
+    
     final name = categoryName.toLowerCase();
-    if (name.contains('música') || name.contains('music')) {
-      return Colors.purple;
-    } else if (name.contains('mercados') || name.contains('market')) {
-      return Colors.orange;
-    } else if (name.contains('deporte') || name.contains('sport')) {
-      return Colors.green;
-    } else if (name.contains('tradición') || name.contains('tradition') || name.contains('tradicion')) {
-      return Colors.redAccent;
-    } else if (name.contains('gastronomía') || name.contains('gastronomy') || name.contains('comida')) {
-      return Colors.amber;
-    } else if (name.contains('cultura') || name.contains('culture')) {
-      return Colors.blue;
-    } else if (name.contains('arte') || name.contains('art')) {
-      return Colors.pink;
-    } else if (name.contains('naturaleza') || name.contains('nature')) {
-      return Colors.teal;
+    
+    // Música
+    if (name.contains('música') || name.contains('musica') || name.contains('music')) {
+      return const Color(0xFF9C27B0); // Purple
     }
+    // Gastronomía
+    else if (name.contains('gastronomía') || name.contains('gastronomia') || name.contains('gastronomy') || name.contains('comida')) {
+      return const Color(0xFFFF6F00); // Amber
+    }
+    // Deportes
+    else if (name.contains('deporte') || name.contains('deportes') || name.contains('sport')) {
+      return const Color(0xFF4CAF50); // Green
+    }
+    // Arte y Cultura
+    else if (name.contains('arte') || name.contains('cultura') || name.contains('culture') || name.contains('art')) {
+      return const Color(0xFF2196F3); // Blue
+    }
+    // Aire Libre
+    else if (name.contains('aire libre') || name.contains('aire-libre') || name.contains('naturaleza') || name.contains('nature')) {
+      return const Color(0xFF00BCD4); // Cyan/Teal
+    }
+    // Tradiciones
+    else if (name.contains('tradición') || name.contains('tradiciones') || name.contains('tradicion') || name.contains('tradition')) {
+      return const Color(0xFFE91E63); // Pink/Red
+    }
+    // Mercadillos
+    else if (name.contains('mercadillo') || name.contains('mercadillos') || name.contains('mercado') || name.contains('mercados') || name.contains('market')) {
+      return const Color(0xFFFF9800); // Orange
+    }
+    
     return Colors.grey;
   }
 

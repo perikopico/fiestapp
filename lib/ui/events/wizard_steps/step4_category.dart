@@ -51,15 +51,39 @@ class _Step4CategoryState extends State<Step4Category> {
   }
 
   String _getCategoryDescription(String categoryName) {
+    // Descripciones finales de las categorías para guiar al usuario
     final descriptions = {
-      'Música': 'Conciertos, festivales, DJs, música en vivo',
-      'Deportes': 'Partidos, competiciones, eventos deportivos',
-      'Cultura': 'Teatro, exposiciones, conferencias, arte',
-      'Gastronomía': 'Ferias gastronómicas, degustaciones, eventos culinarios',
-      'Fiesta': 'Fiestas populares, celebraciones, eventos festivos',
-      'Otros': 'Otros tipos de eventos',
+      'Música': 'Conciertos, festivales, flamenco, sesiones DJ y vida nocturna.',
+      'Gastronomía': 'Rutas de tapas, catas de vino, mostos, ventas y jornadas del atún.',
+      'Deportes': 'Motor (Jerez), surf/kite (Tarifa), polo, hípica y competiciones.',
+      'Arte y Cultura': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Aire Libre': 'Senderismo, rutas en kayak, playas y naturaleza activa.',
+      'Tradiciones': 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
+      'Mercadillos': 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+      // Compatibilidad con variaciones de nombres
+      'Mercados': 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+      'Cultura': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Arte': 'Teatro, exposiciones, museos, cine y visitas históricas.',
+      'Tradición': 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
     };
-    return descriptions[categoryName] ?? 'Eventos de $categoryName';
+    
+    // Buscar coincidencia exacta
+    if (descriptions.containsKey(categoryName)) {
+      return descriptions[categoryName]!;
+    }
+    
+    // Buscar coincidencia parcial (case insensitive)
+    final lowerName = categoryName.toLowerCase();
+    for (final entry in descriptions.entries) {
+      if (entry.key.toLowerCase() == lowerName ||
+          lowerName.contains(entry.key.toLowerCase()) ||
+          entry.key.toLowerCase().contains(lowerName)) {
+        return entry.value;
+      }
+    }
+    
+    // Fallback
+    return 'Eventos de $categoryName';
   }
 
   bool _validate() {

@@ -6,7 +6,7 @@ class CategoryService {
     try {
       final rows = await Supabase.instance.client
           .from('categories')
-          .select()
+          .select('id, name, slug, icon, color')
           .order('name', ascending: true);
 
       return (rows as List)

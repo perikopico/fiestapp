@@ -16,46 +16,63 @@ class CategoryInfo {
 }
 
 /// Mapeo de nombres de categorías a su información
+/// Categorías finales de la aplicación (7 categorías principales)
 const Map<String, CategoryInfo> _categoryInfoMap = {
   'Música': CategoryInfo(
     name: 'Música',
-    subtitle: 'Conciertos, bandas, DJ, acústicos…',
-  ),
-  'Noche': CategoryInfo(
-    name: 'Noche',
-    subtitle: 'Discotecas, copas, fiestas de madrugada.',
-  ),
-  'Flamenco': CategoryInfo(
-    name: 'Flamenco',
-    subtitle: 'Zambombás, peñas, espectáculos flamencos.',
-  ),
-  'Cultura': CategoryInfo(
-    name: 'Cultura',
-    subtitle: 'Teatro, exposiciones, cine, charlas…',
-  ),
-  'Deportes': CategoryInfo(
-    name: 'Deportes',
-    subtitle: 'Partidos, torneos, rutas, surf…',
-  ),
-  'Familia & peques': CategoryInfo(
-    name: 'Familia & peques',
-    subtitle: 'Planes con niños, talleres familiares…',
+    subtitle: 'Conciertos, festivales, flamenco, sesiones DJ y vida nocturna.',
+    iconName: 'music_note',
   ),
   'Gastronomía': CategoryInfo(
     name: 'Gastronomía',
-    subtitle: 'Catas, tapas, food trucks…',
+    subtitle: 'Rutas de tapas, catas de vino, mostos, ventas y jornadas del atún.',
+    iconName: 'restaurant',
   ),
+  'Deportes': CategoryInfo(
+    name: 'Deportes',
+    subtitle: 'Motor (Jerez), surf/kite (Tarifa), polo, hípica y competiciones.',
+    iconName: 'sports_soccer',
+  ),
+  'Arte y Cultura': CategoryInfo(
+    name: 'Arte y Cultura',
+    subtitle: 'Teatro, exposiciones, museos, cine y visitas históricas.',
+    iconName: 'palette',
+  ),
+  'Aire Libre': CategoryInfo(
+    name: 'Aire Libre',
+    subtitle: 'Senderismo, rutas en kayak, playas y naturaleza activa.',
+    iconName: 'hiking',
+  ),
+  'Tradiciones': CategoryInfo(
+    name: 'Tradiciones',
+    subtitle: 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
+    iconName: 'festival',
+  ),
+  'Mercadillos': CategoryInfo(
+    name: 'Mercadillos',
+    subtitle: 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+    iconName: 'storefront',
+  ),
+  // Mantener compatibilidad con nombres anteriores/variaciones
   'Mercados': CategoryInfo(
-    name: 'Mercados',
-    subtitle: 'Mercadillos, artesanía, segunda mano…',
+    name: 'Mercadillos',
+    subtitle: 'Artesanía, antigüedades, rastros y moda (no alimentación).',
+    iconName: 'storefront',
   ),
-  'Talleres & formación': CategoryInfo(
-    name: 'Talleres & formación',
-    subtitle: 'Cursos, clases, actividades formativas.',
+  'Cultura': CategoryInfo(
+    name: 'Arte y Cultura',
+    subtitle: 'Teatro, exposiciones, museos, cine y visitas históricas.',
+    iconName: 'palette',
   ),
-  'Otros': CategoryInfo(
-    name: 'Otros',
-    subtitle: 'Planes que no encajan en las demás.',
+  'Arte': CategoryInfo(
+    name: 'Arte y Cultura',
+    subtitle: 'Teatro, exposiciones, museos, cine y visitas históricas.',
+    iconName: 'palette',
+  ),
+  'Tradición': CategoryInfo(
+    name: 'Tradiciones',
+    subtitle: 'Carnaval, Semana Santa, Ferias, Zambombas y Romerías.',
+    iconName: 'festival',
   ),
 };
 
