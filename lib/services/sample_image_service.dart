@@ -92,45 +92,123 @@ class SampleImageService {
         return [];
       }
 
-      // Construir la ruta: sample-images/{province_id}/{category_number}/
-      final path = 'sample-images/$provinceId/$categoryNumber/';
+      // Construir la ruta relativa al bucket: {province_id}/{category_number}/
+      // NO incluir 'sample-images' porque ya estamos usando .from('sample-images')
+      final path = '$provinceId/$categoryNumber';
       
       debugPrint('📸 Buscando imágenes de muestra en: $path');
+      debugPrint('   Bucket: sample-images');
       
-      // Listar archivos en la carpeta
-      final files = await supa.storage
-          .from('sample-images')
-          .list(path: path);
-
-      if (files.isEmpty) {
-        debugPrint('⚠️ No se encontraron imágenes en: $path');
-        return [];
-      }
-
-      // Filtrar solo imágenes
-      final imageFiles = files.where((file) {
-        final name = file.name.toLowerCase();
-        return name.endsWith('.jpg') ||
-            name.endsWith('.jpeg') ||
-            name.endsWith('.png') ||
-            name.endsWith('.webp');
-      }).toList();
-
-      if (imageFiles.isEmpty) {
-        debugPrint('⚠️ No se encontraron archivos de imagen en: $path');
-        return [];
-      }
-
-      // Construir las URLs públicas
-      final imageUrls = imageFiles.map((file) {
-        return supa.storage
+      List<FileObject> files = [];
+      
+      try {
+        // Intentar listar directamente la carpeta
+        files = await supa.storage
             .from('sample-images')
-            .getPublicUrl('$path${file.name}');
-      }).toList();
+            .list(path: path);
+        
+        debugPrint('📁 Resultado directo de list($path): ${files.length} archivos');
+        
+        // Si no encuentra nada, intentar listar recursivamente o la carpeta padre
+        if (files.isEmpty) {
+          debugPrint('⚠️ No se encontraron archivos, intentando listar carpeta padre...');
+          
+          // Intentar listar la carpeta de provincia
+          try {
+            final provinceFiles = await supa.storage
+                .from('sample-images')
+                .list(path: '$provinceId');
+            debugPrint('📁 Archivos en carpeta $provinceId: ${provinceFiles.length}');
+            for (final file in provinceFiles) {
+              debugPrint('   - ${file.name} (id: ${file.id})');
+            }
+          } catch (e) {
+            debugPrint('⚠️ Error al listar carpeta provincia: $e');
+          }
+          
+          // Intentar construir URLs directamente y verificar si existen
+          // Esta es una solución alternativa: construir las URLs esperadas
+          debugPrint('🔄 Intentando método alternativo: construir URLs directamente...');
+          
+          // Construir URLs para archivos comunes (01.webp a 10.webp o 16.webp)
+          final maxImages = categoryNumber == 3 ? 16 : 10; // Deportes tiene 16, otros 10
+          final List<String> imageUrls = [];
+          
+          for (int i = 1; i <= maxImages; i++) {
+            final fileName = '${i.toString().padLeft(2, '0')}.webp';
+            final imagePath = '$path/$fileName';
+            final imageUrl = supa.storage
+                .from('sample-images')
+                .getPublicUrl(imagePath);
+            
+            // Verificar si la URL es válida (en una app real podrías hacer un HEAD request)
+            // Por ahora, simplemente las agregamos todas
+            imageUrls.add(imageUrl);
+            debugPrint('   ✅ URL construida: $imageUrl');
+          }
+          
+          if (imageUrls.isNotEmpty) {
+            debugPrint('✅ Se construyeron ${imageUrls.length} URLs directamente');
+            return imageUrls;
+          }
+        }
+      } catch (e, stackTrace) {
+        debugPrint('❌ Error al listar archivos: $e');
+        debugPrint('Stack trace: $stackTrace');
+      }
 
-      debugPrint('✅ Encontradas ${imageUrls.length} imágenes de muestra');
+      // Si encontramos archivos mediante list(), procesarlos
+      if (files.isNotEmpty) {
+        debugPrint('📁 Archivos encontrados mediante list(): ${files.length}');
+        for (final file in files) {
+          debugPrint('   - ${file.name}');
+        }
+
+        // Filtrar solo imágenes (incluyendo webp)
+        final imageFiles = files.where((file) {
+          final name = file.name.toLowerCase().trim();
+          final isImage = name.endsWith('.jpg') ||
+              name.endsWith('.jpeg') ||
+              name.endsWith('.png') ||
+              name.endsWith('.webp') ||
+              name.endsWith('.JPG') ||
+              name.endsWith('.JPEG') ||
+              name.endsWith('.PNG') ||
+              name.endsWith('.WEBP');
+          if (!isImage) {
+            debugPrint('   ⚠️ Archivo ignorado (no es imagen): ${file.name}');
+          }
+          return isImage;
+        }).toList();
+
+        debugPrint('🖼️ Archivos de imagen filtrados: ${imageFiles.length}');
+        for (final file in imageFiles) {
+          debugPrint('   ✅ ${file.name}');
+        }
+
+        if (imageFiles.isEmpty) {
+          debugPrint('⚠️ No se encontraron archivos de imagen en: $path');
+          debugPrint('   Extensiones buscadas: .jpg, .jpeg, .png, .webp');
+          return [];
+        }
+
+        // Construir las URLs públicas
+        final imageUrls = imageFiles.map((file) {
+          final fullPath = '$path/${file.name}';
+          return supa.storage
+              .from('sample-images')
+              .getPublicUrl(fullPath);
+        }).toList();
+
+        debugPrint('✅ Encontradas ${imageUrls.length} imágenes de muestra');
+        
+        return imageUrls;
+      }
       
-      return imageUrls;
+      // Si llegamos aquí, no se encontraron archivos mediante list()
+      // y el método alternativo tampoco funcionó
+      debugPrint('⚠️ No se pudieron obtener imágenes de muestra para la categoría');
+      return [];
     } catch (e, stackTrace) {
       debugPrint('❌ Error al obtener imágenes de muestra: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -146,17 +224,22 @@ class SampleImageService {
     // Obtener imágenes para cada categoría (1-7)
     for (int categoryNumber = 1; categoryNumber <= 7; categoryNumber++) {
       try {
-        final path = 'sample-images/$provinceId/$categoryNumber/';
+        // Path relativo al bucket: {province_id}/{category_number}/
+        final path = '$provinceId/$categoryNumber/';
         final files = await supa.storage
             .from('sample-images')
             .list(path: path);
 
         final imageFiles = files.where((file) {
-          final name = file.name.toLowerCase();
+          final name = file.name.toLowerCase().trim();
           return name.endsWith('.jpg') ||
               name.endsWith('.jpeg') ||
               name.endsWith('.png') ||
-              name.endsWith('.webp');
+              name.endsWith('.webp') ||
+              file.name.endsWith('.JPG') ||
+              file.name.endsWith('.JPEG') ||
+              file.name.endsWith('.PNG') ||
+              file.name.endsWith('.WEBP');
         }).toList();
 
         if (imageFiles.isNotEmpty) {

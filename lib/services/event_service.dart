@@ -15,7 +15,7 @@ class EventService {
     final r = await supa
         .from('events_view')
         .select(
-          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color',
+          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url',
         )
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -99,7 +99,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,is_free,category_icon,category_color',
+          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url',
         );
 
     // Filtros básicos
@@ -177,8 +177,22 @@ class EventService {
             .toList();
       }
 
-      // Ordenar y limitar
-      events.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      // Ordenar: si hay distance_km, mantener el orden de la BD (distancia luego fecha)
+      // Si no hay distance_km, ordenar solo por fecha
+      events.sort((a, b) {
+        // Si ambos tienen distancia, ordenar primero por distancia y luego por fecha
+        if (a.distanceKm != null && b.distanceKm != null) {
+          final distanceCompare = a.distanceKm!.compareTo(b.distanceKm!);
+          if (distanceCompare != 0) return distanceCompare;
+          // Si la distancia es igual, ordenar por fecha
+          return a.startsAt.compareTo(b.startsAt);
+        }
+        // Si solo uno tiene distancia, el que tiene distancia va primero
+        if (a.distanceKm != null) return -1;
+        if (b.distanceKm != null) return 1;
+        // Si ninguno tiene distancia, ordenar solo por fecha
+        return a.startsAt.compareTo(b.startsAt);
+      });
       final limitedEvents = events.take(limit).toList();
       // Enriquecer con información de categoría si falta
       await _enrichEventsWithCategory(limitedEvents);
@@ -220,7 +234,7 @@ class EventService {
     dynamic qb = supa
         .from('events')
         .select(
-          'id, title, place, starts_at, image_url, image_alignment, city_id, category_id, is_free, is_featured, description',
+          'id, title, place, starts_at, image_url, image_alignment, city_id, category_id, price, is_featured, description, info_url',
         );
 
     // Autocompletado NO debe limitar por ciudad
@@ -251,9 +265,9 @@ class EventService {
   }) async {
     // --- Base query ---
     dynamic qb = supa.from('events_view').select('''
-    id, title, image_url, maps_url, place, is_featured, is_free,
+    id, title, image_url, maps_url, place, is_featured, price,
     starts_at, city_id, category_id,
-    city_name, category_name, category_icon, category_color
+    city_name, category_name, category_icon, category_color, info_url
   ''');
 
     // --- Fechas (en UTC, rango inclusivo/exclusivo) ---
@@ -367,7 +381,7 @@ class EventService {
             'image_url': event.imageUrl,
             'category_id': event.categoryId,
             'city_id': event.cityId,
-            'is_free': event.isFree,
+            'price': event.price,
             'maps_url': event.mapsUrl,
             'description': event.description,
             'image_alignment': event.imageAlignment,
@@ -434,7 +448,7 @@ class EventService {
             'image_url': event.imageUrl,
             'category_id': event.categoryId,
             'city_id': event.cityId,
-            'is_free': event.isFree,
+            'price': event.price,
             'maps_url': event.mapsUrl,
             'description': desc,
             'image_alignment': event.imageAlignment,
@@ -468,7 +482,7 @@ class EventService {
         final r = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, image_alignment',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url',
             )
             .or(orCondition);
 
@@ -501,7 +515,7 @@ class EventService {
     String? imageUrl,
     double? lat,
     double? lng,
-    bool isFree = true,
+    String? price,
     String? submittedByName,
     String? submittedByEmail,
     String? imageAlignment,
@@ -524,7 +538,7 @@ class EventService {
       'image_url': imageUrl?.trim(),
       'lat': lat,
       'lng': lng,
-      'is_free': isFree,
+      'price': price?.trim() ?? 'Gratis',
       'submitted_by_name': submittedByName?.trim(),
       'submitted_by_email': submittedByEmail?.trim(),
       'image_alignment': imageAlignment ?? 'center',
@@ -559,7 +573,7 @@ class EventService {
     String? imageUrl,
     double? lat,
     double? lng,
-    bool? isFree,
+    String? price,
     String? imageAlignment,
   }) async {
     final payload = <String, dynamic>{
@@ -574,7 +588,7 @@ class EventService {
       'image_url': imageUrl?.trim(),
       'lat': lat,
       'lng': lng,
-      'is_free': isFree,
+      'price': price?.trim() ?? 'Gratis',
       'image_alignment': imageAlignment ?? 'center',
     };
 
@@ -626,7 +640,7 @@ class EventService {
       final sameDateQuery = supa
           .from('events_view')
           .select(
-            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url',
           )
           .eq('city_id', event.cityId!)
           .neq('id', event.id)
@@ -644,7 +658,7 @@ class EventService {
           final titleQuery = supa
               .from('events_view')
               .select(
-                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url',
               )
               .eq('city_id', event.cityId!)
               .neq('id', event.id)
@@ -663,7 +677,7 @@ class EventService {
           final descQuery = supa
               .from('events_view')
               .select(
-                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, is_free, category_icon, category_color, description, image_alignment',
+                'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url',
               )
               .eq('city_id', event.cityId!)
               .neq('id', event.id)
@@ -763,7 +777,7 @@ class EventService {
           .from('events')
           .select(
             'id, title, city_id, category_id, starts_at, image_url, maps_url, place, '
-            'is_featured, is_free, status, description, image_alignment',
+            'is_featured, price, status, description, image_alignment, info_url',
           )
           .eq('created_by', userId)
           .order('starts_at', ascending: false); // Más recientes primero
@@ -834,7 +848,7 @@ class EventService {
             'image_url': event.imageUrl,
             'category_id': event.categoryId,
             'city_id': event.cityId,
-            'is_free': event.isFree,
+            'price': event.price,
             'maps_url': event.mapsUrl,
             'description': event.description,
             'image_alignment': event.imageAlignment,

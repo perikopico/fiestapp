@@ -1235,15 +1235,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _checkLocationPermission() async {
-    final permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
+    
+    // Si estamos en modo Radio y no hay permisos, intentar solicitarlos
+    if (_mode == LocationMode.radius && permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    
     final hasPermission = permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
     setState(() {
       _hasLocationPermission = hasPermission;
     });
+    
     // Si no hay permisos y estamos en modo Radio, cambiar a modo Ciudad
     if (!hasPermission && _mode == LocationMode.radius) {
-      await _switchMode(LocationMode.city);
+      // Solo cambiar si el permiso fue denegado permanentemente o después de solicitarlo
+      if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
+        await _switchMode(LocationMode.city);
+      }
+    } else if (hasPermission && _mode == LocationMode.radius) {
+      // Si tenemos permisos y estamos en modo Radio, obtener la ubicación
+      await _getUserLocation();
     }
   }
 
@@ -2137,11 +2150,86 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     return Scaffold(
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _reloadEvents,
-          child: CustomScrollView(
-            slivers: [
+      extendBody: true, // Permite que el body se extienda detrás del bottom navigation bar
+      backgroundColor: Colors.transparent, // Fondo transparente del Scaffold
+      body: Container(
+        // Fondo con efecto espejo y diferentes transparencias
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
+            colors: [
+              Theme.of(context).scaffoldBackgroundColor,
+              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.98),
+              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
+              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.92),
+              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.88),
+            ],
+          ),
+        ),
+        child: Stack(
+          children: [
+            // Capas de espejo con diferentes opacidades
+            Positioned(
+              top: -50,
+              right: -50,
+              child: Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.1),
+                      Colors.white.withOpacity(0.05),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -100,
+              left: -100,
+              child: Container(
+                width: 300,
+                height: 300,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.08),
+                      Colors.white.withOpacity(0.03),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: MediaQuery.of(context).size.height * 0.3,
+              left: MediaQuery.of(context).size.width * 0.5,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      Colors.white.withOpacity(0.06),
+                      Colors.white.withOpacity(0.02),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: RefreshIndicator(
+                onRefresh: _reloadEvents,
+                child: CustomScrollView(
+                  slivers: [
               SliverAppBar(
                 title: const Text('QuePlan'),
                 floating: true,
@@ -2298,15 +2386,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       const SizedBox.shrink(),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 100), // Espacio para la barra de navegación flotante
                   ],
                 ),
               ),
             ],
           ),
         ),
+              ),
+            // Barra de navegación flotante - sin fondo del Scaffold
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BottomNavBar(),
+            ),
+          ],
+        ),
       ),
-      bottomNavigationBar: const BottomNavBar(),
     );
   }
 }
@@ -2542,7 +2639,7 @@ class NearbyEventsSection extends StatelessWidget {
                             imageUrl: e.imageUrl,
                             categoryId: e.categoryId,
                             cityId: e.cityId,
-                            isFree: e.isFree,
+                            price: e.price,
                             mapsUrl: e.mapsUrl,
                             description: e.description,
                           ),

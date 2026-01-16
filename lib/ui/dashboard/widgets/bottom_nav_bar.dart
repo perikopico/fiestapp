@@ -30,39 +30,50 @@ class BottomNavBar extends StatelessWidget {
     final currentRoute = _getCurrentRoute(context);
     final theme = Theme.of(context);
     
+    // Contenedor completamente transparente - sin fondo
+    // El Scaffold ya tiene extendBody: true, así que el fondo se extiende detrás
     return Container(
-      // Contenedor transparente para permitir que el contenido se vea
-      color: Colors.transparent,
+      // Contenedor completamente transparente - sin fondo
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
+      ),
       height: 90, // Altura suficiente para la galleta flotante
+      padding: const EdgeInsets.only(bottom: 8),
       child: Center(
         child: Container(
           height: 70,
           constraints: const BoxConstraints(maxWidth: 320), // Ancho máximo de la galleta
           decoration: BoxDecoration(
-            // Fondo con 75% de transparencia (25% opacidad = 75% transparencia)
-            color: theme.colorScheme.surface.withOpacity(0.25),
+            // Sin fondo - solo borde y sombra para definir la isla flotante
             borderRadius: BorderRadius.circular(32),
             border: Border.all(
-              color: theme.colorScheme.outline.withOpacity(0.2),
-              width: 1,
+              color: theme.colorScheme.outline.withOpacity(0.15),
+              width: 0.5,
             ),
             // Efecto glassmorphism (blur)
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withOpacity(0.1),
                 blurRadius: 20,
-                offset: const Offset(0, 8),
+                offset: const Offset(0, 4),
                 spreadRadius: 0,
               ),
             ],
+            // Sin fondo de color - completamente transparente
+            color: Colors.transparent,
           ),
           // BackdropFilter para el efecto de vidrio (glassmorphism)
           child: ClipRRect(
             borderRadius: BorderRadius.circular(32),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30), // Efecto de vidrio esmerilado
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                // Fondo semitransparente para el efecto glassmorphism
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withOpacity(0.7), // Fondo semitransparente
+                  borderRadius: BorderRadius.circular(32),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -159,7 +170,7 @@ class _NavBarButton extends StatelessWidget {
           onTap: isDisabled ? null : onTap,
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 6),
+            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
             decoration: isActive
                 ? BoxDecoration(
                     color: theme.colorScheme.primaryContainer.withOpacity(0.4),
@@ -172,7 +183,7 @@ class _NavBarButton extends StatelessWidget {
               children: [
                 Icon(
                   icon,
-                  size: isAddButton ? 28 : 24,
+                  size: isAddButton ? 26 : 22,
                   color: isAddButton && !isActive
                       ? theme.colorScheme.primary
                       : color,
@@ -181,7 +192,7 @@ class _NavBarButton extends StatelessWidget {
                 Text(
                   label,
                   style: TextStyle(
-                    fontSize: 10,
+                    fontSize: 9,
                     fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                     color: isDisabled
                         ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
@@ -189,6 +200,8 @@ class _NavBarButton extends StatelessWidget {
                             ? theme.colorScheme.primary
                             : theme.colorScheme.onSurfaceVariant),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),

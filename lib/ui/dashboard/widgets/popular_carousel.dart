@@ -4,6 +4,7 @@ import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
+import '../../common/glass_card.dart';
 
 class PopularCarousel extends StatefulWidget {
   final List<Event> events;
@@ -245,23 +246,15 @@ class _PopularCarouselState extends State<PopularCarousel> {
                       );
                     },
                     borderRadius: BorderRadius.circular(16),
-                    child: Container(
+                    child: GlassCard(
                       width: 180,
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            blurRadius: 3,
-                            color: Theme.of(context).brightness == Brightness.dark
-                                ? Colors.black.withOpacity(0.4)
-                                : Colors.black12,
-                          ),
-                        ],
-                      ),
+                      blur: 15.0,
+                      opacity: 0.25,
+                      borderRadius: BorderRadius.circular(16),
+                      padding: EdgeInsets.zero,
                       child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Stack(
+                        borderRadius: BorderRadius.circular(16),
+                        child: Stack(
                       children: [
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -389,7 +382,7 @@ class _PopularCarouselState extends State<PopularCarousel> {
                         ),
                       ],
                     ),
-                  ),
+                      ),
                     ),
                   );
                 },

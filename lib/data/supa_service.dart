@@ -44,7 +44,7 @@ class SupaService {
         place: 'Peña Flamenca',
         start: DateTime(now.year, now.month, now.day, 21, 30),
         end: DateTime(now.year, now.month, now.day, 23, 30),
-        isFree: true,
+        price: 'Gratis',
         imageUrl:
             'https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop',
       ),
@@ -63,7 +63,7 @@ class SupaService {
           now,
           DateTime.saturday,
         ).add(const Duration(hours: 18)),
-        isFree: true,
+        price: 'Gratis',
         imageUrl:
             'https://images.unsplash.com/photo-1483721310020-03333e577078?q=80&w=1200&auto=format&fit=crop',
       ),
@@ -82,7 +82,7 @@ class SupaService {
           now,
           DateTime.sunday,
         ).add(const Duration(hours: 15)),
-        isFree: true,
+        price: 'Gratis',
         imageUrl:
             'https://images.unsplash.com/photo-1565011691358-7f4e6c2b0b59?q=80&w=1200&auto=format&fit=crop',
       ),
@@ -193,7 +193,7 @@ class SupaService {
         end: DateTime.parse(
           map['starts_at'].toString(),
         ).add(const Duration(hours: 2)),
-        isFree: true,
+        price: 'Gratis',
         imageUrl: map['image_url'] as String?,
       );
     }).toList();

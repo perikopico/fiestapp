@@ -8,7 +8,6 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../models/event.dart';
 import '../icons/icon_mapper.dart';
-import '../common/theme_mode_toggle.dart';
 import 'fullscreen_image_screen.dart';
 import '../../services/favorites_local_service.dart';
 import '../../services/event_service.dart';
@@ -110,6 +109,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return true; // TODO: Implementar lógica real cuando se agregue el flag al modelo
   }
 
+  /// Verifica si el precio indica que el evento es gratis
+  bool _isPriceFree(String price) {
+    final priceLower = price.toLowerCase().trim();
+    return priceLower == 'gratis' || 
+           priceLower == 'gratuito' ||
+           priceLower == 'libre' ||
+           priceLower.startsWith('gratis');
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -176,7 +184,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
             ],
           ),
-          const ThemeModeToggleAction(),
         ],
       ),
       body: SingleChildScrollView(
@@ -210,6 +217,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
             // 4. Location / Map block
             _buildLocationSection(context, theme, hasMapsUrl),
+
+            const SizedBox(height: 16),
+
+            // 4.5. Info URL block (si existe)
+            if (widget.event.infoUrl != null && widget.event.infoUrl!.isNotEmpty)
+              _buildInfoUrlSection(context, theme),
 
             const SizedBox(height: 16),
 
@@ -368,22 +381,31 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           backgroundColor: theme.colorScheme.surfaceVariant,
           visualDensity: VisualDensity.compact,
         ),
-        if (widget.event.isFree == true)
+        // Precio - siempre mostrarlo si existe
+        if (widget.event.price != null && widget.event.price!.isNotEmpty)
           Chip(
             label: Text(
-              'Gratis',
+              widget.event.price!,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: theme.colorScheme.primary,
+                color: _isPriceFree(widget.event.price!)
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.onSurfaceVariant,
               ),
             ),
             avatar: Icon(
-              Icons.check_circle,
+              _isPriceFree(widget.event.price!)
+                  ? Icons.check_circle
+                  : Icons.euro,
               size: 18,
-              color: theme.colorScheme.primary,
+              color: _isPriceFree(widget.event.price!)
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurfaceVariant,
             ),
-            backgroundColor: theme.colorScheme.primary.withOpacity(0.12),
+            backgroundColor: _isPriceFree(widget.event.price!)
+                ? theme.colorScheme.primary.withOpacity(0.12)
+                : theme.colorScheme.surfaceVariant,
             visualDensity: VisualDensity.compact,
           ),
       ],
@@ -762,6 +784,112 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         );
       }).toList(),
     );
+  }
+
+  Widget _buildInfoUrlSection(BuildContext context, ThemeData theme) {
+    final infoUrl = widget.event.infoUrl;
+    if (infoUrl == null || infoUrl.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Enlace de interés',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: () async {
+            try {
+              final uri = Uri.parse(infoUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              } else {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('No se pudo abrir el enlace: $infoUrl'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            } catch (e) {
+              debugPrint('Error al abrir enlace: $e');
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Error al abrir el enlace'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: theme.colorScheme.primary.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.link,
+                  color: theme.colorScheme.onPrimaryContainer,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Más información',
+                        style: theme.textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _getDomainFromUrl(infoUrl),
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.open_in_new,
+                  color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
+                  size: 18,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getDomainFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      return uri.host;
+    } catch (e) {
+      return url;
+    }
   }
 
   Future<void> _showReportDialog() async {

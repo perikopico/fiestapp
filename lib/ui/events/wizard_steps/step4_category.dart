@@ -25,14 +25,14 @@ class _Step4CategoryState extends State<Step4Category> {
   List<Category> _categories = [];
   bool _isLoading = true;
   Category? _selectedCategory;
-  bool _isFree = true;
+  String _price = 'Gratis';
 
   @override
   void initState() {
     super.initState();
     _loadCategories();
     _selectedCategory = widget.wizardData.category;
-    _isFree = widget.wizardData.isFree;
+    _price = widget.wizardData.price;
   }
 
   Future<void> _loadCategories() async {
@@ -103,7 +103,7 @@ class _Step4CategoryState extends State<Step4Category> {
     if (_validate()) {
       // Guardar datos
       widget.wizardData.category = _selectedCategory;
-      widget.wizardData.isFree = _isFree;
+      widget.wizardData.price = _price.isNotEmpty ? _price : 'Gratis';
       widget.wizardData.stepValidated[3] = true;
       
       widget.onNext();
@@ -198,19 +198,37 @@ class _Step4CategoryState extends State<Step4Category> {
                       ),
                     const SizedBox(height: 24),
 
-                    // Tipo de evento
+                    // Campo de precio
                     Card(
-                      child: SwitchListTile(
-                        title: const Text('Evento gratuito'),
-                        subtitle: const Text(
-                          'Marca si el evento es de acceso libre',
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Precio',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Ej: Gratis, 18€, Desde 10€, De pago...',
+                                border: const OutlineInputBorder(),
+                                helperText: 'Ingresa el precio del evento. Usa "Gratis" si no tiene costo.',
+                              ),
+                              controller: TextEditingController(text: _price)
+                                ..selection = TextSelection.collapsed(offset: _price.length),
+                              onChanged: (value) {
+                                setState(() {
+                                  _price = value.trim();
+                                });
+                              },
+                            ),
+                          ],
                         ),
-                        value: _isFree,
-                        onChanged: (value) {
-                          setState(() {
-                            _isFree = value;
-                          });
-                        },
                       ),
                     ),
                   ],

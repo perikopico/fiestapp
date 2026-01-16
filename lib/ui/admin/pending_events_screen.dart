@@ -65,7 +65,7 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
         final res = await supa
             .from('events')
             .select(
-              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, is_free, description, image_alignment, status, venue_id',
+              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, price, description, image_alignment, status, venue_id',
             )
             .eq('status', 'pending')
             .order('created_at', ascending: false);
@@ -76,7 +76,7 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
         final res = await supa
             .from('events')
             .select(
-              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, is_free, description, image_alignment, status, venue_id',
+              'id, title, city_id, category_id, starts_at, image_url, maps_url, place, is_featured, price, description, image_alignment, status, venue_id',
             )
             .eq('status', 'published')
             .gte('starts_at', now.toIso8601String())

@@ -63,7 +63,7 @@ class _EventSubmitScreenContentState extends State<_EventSubmitScreenContent> {
   DateTime? _startDate;
   DateTime? _endDate;
   TimeOfDay? _selectedTime;
-  bool _isFree = true;
+  String _price = 'Gratis'; // Precio del evento (ej: "Gratis", "18€", "Desde 10€")
   bool _hasDailyProgram = false;
   double? _lat;
   double? _lng;
@@ -1228,16 +1228,37 @@ $dayProgram''';
               _buildSectionTitle('Tipo de evento'),
               const SizedBox(height: 12),
               
-              // Switch para evento gratuito
+              // Campo de precio
               Card(
-                child: SwitchListTile(
-                  title: const Text('Evento gratuito'),
-                  value: _isFree,
-                  onChanged: (value) {
-                    setState(() {
-                      _isFree = value;
-                    });
-                  },
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Precio',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        decoration: InputDecoration(
+                          hintText: 'Ej: Gratis, 18€, Desde 10€, De pago...',
+                          border: const OutlineInputBorder(),
+                          helperText: 'Ingresa el precio del evento. Usa "Gratis" si no tiene costo.',
+                        ),
+                        controller: TextEditingController(text: _price)
+                          ..selection = TextSelection.collapsed(offset: _price.length),
+                        onChanged: (value) {
+                          setState(() {
+                            _price = value.trim();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 32),
@@ -1580,7 +1601,7 @@ $dayProgram''';
                                     : null,
                                 lat: latToSave,
                                 lng: lngToSave,
-                                isFree: _isFree,
+                                price: _price.isNotEmpty ? _price : 'Gratis',
                                 imageUrl: imageUrl,
                                 imageAlignment: _imageAlignment,
                                 venueId: _selectedVenue?.id, // Pasar venue_id si hay un lugar seleccionado
@@ -1773,7 +1794,7 @@ $dayProgram''';
                                       : null,
                                   lat: latToSave,
                                   lng: lngToSave,
-                                  isFree: _isFree,
+                                  price: _price.isNotEmpty ? _price : 'Gratis',
                                   imageUrl: imageUrl,
                                   imageAlignment: _imageAlignment,
                                   venueId: _selectedVenue?.id, // Pasar venue_id si hay un lugar seleccionado

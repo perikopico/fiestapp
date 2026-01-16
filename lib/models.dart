@@ -7,7 +7,7 @@ class City {
 class EventItem {
   final String id, title, cityId, categoryId, categoryName, place;
   final DateTime start, end;
-  final bool isFree;
+  final String? price; // Precio del evento (ej: "Gratis", "18€", "Desde 10€")
   final String? imageUrl;
 
   const EventItem({
@@ -19,7 +19,7 @@ class EventItem {
     required this.place,
     required this.start,
     required this.end,
-    required this.isFree,
+    this.price,
     this.imageUrl,
   });
 }

@@ -13,15 +13,17 @@ class Event {
   final String? imageUrl;
   final int? categoryId;
   final int? cityId;
-  final bool? isFree;
+  final String? price; // Precio del evento (ej: "Gratis", "18€", "Desde 10€", etc.)
   final String? mapsUrl;
   final String? description;
   final String? imageAlignment;
+  final String? infoUrl; // URL de interés relacionada con el evento
   final String? status; // 'pending', 'published', 'rejected'
   final String? venueId; // ID del venue asociado
   final bool? ownerApproved; // NULL = no requiere aprobación, true = aprobado, false = rechazado
   final DateTime? ownerApprovedAt;
   final String? ownerRejectedReason;
+  final double? distanceKm; // Distancia en km (solo viene de events_within_radius)
   
   /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
@@ -52,15 +54,17 @@ class Event {
     this.imageUrl,
     this.categoryId,
     this.cityId,
-    this.isFree,
+    this.price,
     this.mapsUrl,
     this.description,
     this.imageAlignment,
+    this.infoUrl,
     this.status,
     this.venueId,
     this.ownerApproved,
     this.ownerApprovedAt,
     this.ownerRejectedReason,
+    this.distanceKm,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
@@ -76,10 +80,11 @@ class Event {
       imageUrl: m['image_url'] as String?,
       categoryId: (m['category_id'] as num?)?.toInt(),
       cityId: (m['city_id'] as num?)?.toInt(),
-      isFree: m['is_free'] as bool?,
+      price: m['price'] as String?,
       mapsUrl: m['maps_url'] as String?,
       description: m['description'] as String?,
       imageAlignment: m['image_alignment'] as String? ?? 'center',
+      infoUrl: m['info_url'] as String?,
       status: m['status'] as String?,
       venueId: m['venue_id'] as String?,
       ownerApproved: m['owner_approved'] as bool?,
@@ -87,6 +92,7 @@ class Event {
           ? DateTime.parse(m['owner_approved_at'] as String) 
           : null,
       ownerRejectedReason: m['owner_rejected_reason'] as String?,
+      distanceKm: (m['distance_km'] as num?)?.toDouble(),
     );
   }
   

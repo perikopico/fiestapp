@@ -1,9 +1,8 @@
 // lib/ui/admin/admin_event_edit_screen.dart
-import 'dart:io' show File;
+import 'dart:io' show File, Directory, Platform;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
-import 'dart:io' show Platform;
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:file_picker/file_picker.dart';
@@ -16,9 +15,13 @@ import '../../services/event_service.dart';
 import '../../services/city_service.dart' show City;
 import '../../services/category_service.dart';
 import '../../services/admin_moderation_service.dart';
+import '../../services/sample_image_service.dart';
 import '../common/city_search_field.dart';
 import '../events/image_crop_screen.dart';
+import '../events/wizard_steps/step5_image.dart'; // Para ImageSelectionOption y _SampleImagePickerDialog
 import 'widgets/possible_duplicates_section.dart';
+import 'package:http/http.dart' as http;
+import 'dart:typed_data';
 
 class AdminEventEditScreen extends StatefulWidget {
   final Event event;
@@ -55,7 +58,7 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   TimeOfDay? _selectedTime;
-  bool _isFree = true;
+  String _price = 'Gratis'; // Precio del evento (ej: "Gratis", "18€", "Desde 10€")
   bool _hasDailyProgram = false;
   double? _lat;
   double? _lng;
@@ -96,7 +99,7 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
     _initialCategoryId = event.categoryId; // Guardar el ID para buscar después
     _startDate = event.startsAt;
     _selectedTime = TimeOfDay.fromDateTime(event.startsAt);
-    _isFree = event.isFree ?? true;
+    _price = event.price ?? 'Gratis';
     _imageAlignment = event.imageAlignment ?? 'center';
     _uploadedImageUrl = event.imageUrl;
 
@@ -312,6 +315,83 @@ $dayProgram''';
   }
 
   Future<void> _pickImage() async {
+    try {
+      debugPrint('📸 Iniciando selección de imagen...');
+      
+      // Mostrar diálogo para elegir entre galería, cámara e imágenes de muestra
+      if (!mounted) return;
+      final ImageSelectionOption? option = await showDialog<ImageSelectionOption>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Seleccionar imagen'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Galería'),
+                onTap: () => Navigator.of(context).pop(ImageSelectionOption.gallery),
+              ),
+              ListTile(
+                leading: const Icon(Icons.camera_alt),
+                title: const Text('Cámara'),
+                onTap: () => Navigator.of(context).pop(ImageSelectionOption.camera),
+              ),
+              ListTile(
+                leading: const Icon(Icons.collections),
+                title: const Text('Imágenes de muestra'),
+                subtitle: Text(
+                  _selectedCategory != null
+                      ? 'Ver imágenes de ${_selectedCategory!.name}'
+                      : 'Selecciona primero una categoría',
+                ),
+                enabled: _selectedCategory != null,
+                onTap: _selectedCategory != null
+                    ? () => Navigator.of(context).pop(ImageSelectionOption.sample)
+                    : null,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancelar'),
+            ),
+          ],
+        ),
+      );
+
+      if (option == null) {
+        debugPrint('📸 Selección cancelada por el usuario');
+        return;
+      }
+
+      // Si se selecciona imágenes de muestra, mostrar el selector
+      if (option == ImageSelectionOption.sample) {
+        await _pickSampleImage();
+        return;
+      }
+
+      // Para galería y cámara, usar FilePicker (galería) o ImagePicker (cámara)
+      if (option == ImageSelectionOption.gallery) {
+        await _pickImageFromGallery();
+      } else if (option == ImageSelectionOption.camera) {
+        await _pickImageFromCamera();
+      }
+    } catch (e) {
+      debugPrint('❌ Error al seleccionar imagen: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al seleccionar imagen: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickImageFromGallery() async {
     if (!kIsWeb && Platform.isIOS) {
       final photosStatus = await Permission.photos.status;
       if (!photosStatus.isGranted) {
@@ -350,6 +430,206 @@ $dayProgram''';
           _selectedImage = pickedFile;
         });
         await _openCropScreen(file);
+      }
+    }
+  }
+
+  Future<void> _pickImageFromCamera() async {
+    // Para cámara, usar FilePicker también (no hay ImagePicker disponible directamente aquí)
+    // Pero mejor usar un FilePicker que permita cámara
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: false,
+      withData: true,
+      allowCompression: false,
+    );
+
+    if (result != null && result.files.isNotEmpty) {
+      final pickedFile = result.files.first;
+
+      if (pickedFile.bytes != null) {
+        setState(() {
+          _selectedImage = pickedFile;
+        });
+        await _openCropScreenForWeb(pickedFile.bytes!);
+      } else if (pickedFile.path != null) {
+        final file = File(pickedFile.path!);
+        setState(() {
+          _selectedImage = pickedFile;
+        });
+        await _openCropScreen(file);
+      }
+    }
+  }
+
+  Future<void> _pickSampleImage() async {
+    if (_selectedCategory == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Primero debes seleccionar una categoría'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      // Obtener las imágenes de muestra para la categoría seleccionada
+      final sampleImages = await SampleImageService.instance.getSampleImagesForCategory(
+        categorySlug: _selectedCategory!.slug,
+        categoryId: _selectedCategory!.id,
+      );
+
+      if (!mounted) return;
+
+      if (sampleImages.isEmpty) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'No hay imágenes de muestra disponibles para ${_selectedCategory!.name}',
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Mostrar diálogo para seleccionar una imagen
+      final selectedImageUrl = await showDialog<String>(
+        context: context,
+        builder: (context) => _SampleImagePickerDialog(
+          imageUrls: sampleImages,
+          categoryName: _selectedCategory!.name ?? 'categoría',
+        ),
+      );
+
+      if (selectedImageUrl != null && mounted) {
+        // Descargar la imagen y guardarla como archivo local
+        await _downloadAndSaveSampleImage(selectedImageUrl);
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al obtener imágenes de muestra: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar imágenes de muestra: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
+      }
+    }
+  }
+
+  /// Extrae la extensión del archivo desde una URL
+  String _getFileExtensionFromUrl(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final path = uri.path;
+      if (path.isEmpty) return 'webp';
+      
+      final lastDot = path.lastIndexOf('.');
+      if (lastDot == -1 || lastDot == path.length - 1) {
+        return 'webp';
+      }
+      
+      final extension = path.substring(lastDot + 1).toLowerCase();
+      if (['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
+        return extension;
+      }
+      return 'webp';
+    } catch (e) {
+      debugPrint('⚠️ Error al extraer extensión de URL: $e');
+      return 'webp';
+    }
+  }
+
+  /// Descarga una imagen de muestra y la guarda como archivo local
+  Future<void> _downloadAndSaveSampleImage(String imageUrl) async {
+    try {
+      setState(() {
+        _isUploadingImage = true;
+      });
+
+      debugPrint('📥 Descargando imagen de muestra: $imageUrl');
+
+      // Descargar la imagen
+      final response = await http.get(Uri.parse(imageUrl));
+      
+      if (response.statusCode != 200) {
+        throw Exception('Error al descargar la imagen: ${response.statusCode}');
+      }
+
+      // Detectar la extensión del archivo desde la URL
+      final extension = _getFileExtensionFromUrl(imageUrl);
+      debugPrint('📸 Extensión detectada: $extension');
+
+      // Guardar en un archivo temporal con la extensión correcta
+      final tempDir = await getTemporaryDirectory();
+      final tempFile = File('${tempDir.path}/sample_${DateTime.now().millisecondsSinceEpoch}.$extension');
+      await tempFile.writeAsBytes(response.bodyBytes);
+
+      debugPrint('✅ Imagen descargada en: ${tempFile.path} (formato: $extension)');
+
+      if (!mounted) return;
+
+      // Navegar a la pantalla de recorte
+      final croppedBytes = await Navigator.of(context).push<Uint8List>(
+        MaterialPageRoute(
+          builder: (context) => ImageCropScreen(
+            imageFile: tempFile,
+            aspectRatio: 16 / 9,
+          ),
+        ),
+      );
+
+      if (croppedBytes != null && mounted) {
+        // Guardar la imagen recortada
+        final croppedDir = await Directory.systemTemp.createTemp('fiestapp_images');
+        final croppedFile = File('${croppedDir.path}/cropped_${DateTime.now().millisecondsSinceEpoch}.jpg');
+        await croppedFile.writeAsBytes(croppedBytes);
+        
+        debugPrint('✅ Imagen recortada guardada en: ${croppedFile.path}');
+        
+        setState(() {
+          _croppedImageFile = croppedFile;
+          _selectedImage = PlatformFile(
+            name: 'sample_cropped_${DateTime.now().millisecondsSinceEpoch}.jpg',
+            size: croppedBytes.length,
+            path: croppedFile.path,
+            bytes: null,
+          );
+        });
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ Error al descargar imagen de muestra: $e');
+      debugPrint('Stack trace: $stackTrace');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al descargar imagen de muestra: ${e.toString()}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingImage = false;
+        });
       }
     }
   }
@@ -606,7 +886,7 @@ $dayProgram''';
         mapsUrl: mapsUrl,
         lat: latToSave,
         lng: lngToSave,
-        isFree: _isFree,
+        price: _price.isNotEmpty ? _price : 'Gratis',
         imageUrl: imageUrl,
         imageAlignment: _imageAlignment,
       );
@@ -1382,15 +1662,37 @@ $dayProgram''';
                     _buildSectionTitle('Tipo de evento'),
                     const SizedBox(height: 12),
                     
+                    // Campo de precio
                     Card(
-                      child: SwitchListTile(
-                        title: const Text('Evento gratuito'),
-                        value: _isFree,
-                        onChanged: (value) {
-                          setState(() {
-                            _isFree = value;
-                          });
-                        },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Precio',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              decoration: InputDecoration(
+                                hintText: 'Ej: Gratis, 18€, Desde 10€, De pago...',
+                                border: const OutlineInputBorder(),
+                                helperText: 'Ingresa el precio del evento. Usa "Gratis" si no tiene costo.',
+                              ),
+                              controller: TextEditingController(text: _price)
+                                ..selection = TextSelection.collapsed(offset: _price.length),
+                              onChanged: (value) {
+                                setState(() {
+                                  _price = value.trim();
+                                });
+                              },
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                     const SizedBox(height: 32),
@@ -1561,3 +1863,104 @@ class _MapWidgetState extends State<_MapWidget> {
   }
 }
 
+/// Diálogo para seleccionar una imagen de muestra
+class _SampleImagePickerDialog extends StatelessWidget {
+  final List<String> imageUrls;
+  final String categoryName;
+
+  const _SampleImagePickerDialog({
+    required this.imageUrls,
+    required this.categoryName,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.9,
+          maxHeight: MediaQuery.of(context).size.height * 0.8,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'Imágenes de muestra - $categoryName',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            // Grid de imágenes
+            Flexible(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(16.0),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: 16.0,
+                  mainAxisSpacing: 16.0,
+                  childAspectRatio: 1.0,
+                ),
+                itemCount: imageUrls.length,
+                itemBuilder: (context, index) {
+                  final imageUrl = imageUrls[index];
+                  return GestureDetector(
+                    onTap: () => Navigator.of(context).pop(imageUrl),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8.0),
+                      child: Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (context, child, loadingProgress) {
+                          if (loadingProgress == null) return child;
+                          return Center(
+                            child: CircularProgressIndicator(
+                              value: loadingProgress.expectedTotalBytes != null
+                                  ? loadingProgress.cumulativeBytesLoaded /
+                                      loadingProgress.expectedTotalBytes!
+                                  : null,
+                            ),
+                          );
+                        },
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.broken_image,
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            // Footer
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Cancelar'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

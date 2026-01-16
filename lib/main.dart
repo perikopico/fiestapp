@@ -4,8 +4,11 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:geolocator/geolocator.dart';
 import 'ui/dashboard/dashboard_screen.dart';
 import 'ui/onboarding/permissions_onboarding_screen.dart';
+import 'ui/onboarding/splash_video_screen.dart';
 import 'services/favorites_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/fcm_token_service.dart';
@@ -189,9 +192,32 @@ class _QuePlanState extends State<QuePlan> {
 
   Future<void> _checkOnboardingStatus() async {
     final hasSeen = await OnboardingService.instance.hasSeenPermissionOnboarding();
+    
+    // Verificar si los permisos de ubicación están concedidos
+    bool hasLocationPermission = false;
+    try {
+      final locationPermission = await Geolocator.checkPermission();
+      hasLocationPermission = locationPermission == LocationPermission.whileInUse ||
+          locationPermission == LocationPermission.always;
+    } catch (e) {
+      debugPrint('Error al verificar permisos de ubicación: $e');
+      // Si falla la verificación con Geolocator, intentar con permission_handler
+      try {
+        final status = await Permission.location.status;
+        hasLocationPermission = status.isGranted;
+      } catch (e2) {
+        debugPrint('Error al verificar permisos con permission_handler: $e2');
+      }
+    }
+    
+    // Mostrar onboarding si:
+    // 1. No ha visto el onboarding, O
+    // 2. Ya lo vio pero no tiene permisos de ubicación concedidos
+    final shouldShowOnboarding = !hasSeen || !hasLocationPermission;
+    
     if (mounted) {
       setState(() {
-        _showOnboarding = !hasSeen;
+        _showOnboarding = shouldShowOnboarding;
         _isCheckingOnboarding = false;
       });
     }
@@ -200,13 +226,11 @@ class _QuePlanState extends State<QuePlan> {
   @override
   Widget build(BuildContext context) {
     if (_isCheckingOnboarding) {
-      // Mostrar splash mientras se verifica
+      // Mostrar fondo negro mientras se verifica (sin ruleta de carga)
       return MaterialApp(
         home: Scaffold(
-          backgroundColor: const Color(0xFFF8FBFF),
-          body: const Center(
-            child: CircularProgressIndicator(),
-          ),
+          backgroundColor: Colors.black,
+          body: Container(),
         ),
       );
     }
@@ -411,9 +435,11 @@ class _QuePlanState extends State<QuePlan> {
             ),
           ),
 
-          home: _showOnboarding
-              ? const PermissionsOnboardingScreen()
-              : const DashboardScreen(),
+          home: SplashVideoScreen(
+            nextScreen: _showOnboarding
+                ? const PermissionsOnboardingScreen()
+                : const DashboardScreen(),
+          ),
         );
       },
     );

@@ -538,30 +538,49 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                             ]),
                             const SizedBox(height: 32),
-                            // Cerrar sesión
-                            OutlinedButton.icon(
-                              onPressed: _handleSignOut,
-                              icon: const Icon(Icons.logout),
-                              label: const Text('Cerrar sesión'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Theme.of(
-                                  context,
-                                ).colorScheme.error,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            // Eliminar cuenta
-                            OutlinedButton.icon(
-                              onPressed: _showDeleteAccountDialog,
-                              icon: const Icon(Icons.delete_forever),
-                              label: const Text('Eliminar cuenta'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: Colors.red,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 16,
+                            // Cerrar sesión y Eliminar cuenta
+                            Card(
+                              margin: EdgeInsets.zero,
+                              child: Padding(
+                                padding: const EdgeInsets.all(4.0),
+                                child: Column(
+                                  children: [
+                                    // Cerrar sesión
+                                    OutlinedButton.icon(
+                                      onPressed: _handleSignOut,
+                                      icon: const Icon(Icons.logout, size: 20),
+                                      label: const Text('Cerrar sesión'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 14,
+                                        ),
+                                        minimumSize: const Size(double.infinity, 48),
+                                        side: BorderSide(
+                                          color: Theme.of(context).colorScheme.error,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    // Eliminar cuenta
+                                    OutlinedButton.icon(
+                                      onPressed: _showDeleteAccountDialog,
+                                      icon: const Icon(Icons.delete_forever, size: 20),
+                                      label: const Text('Eliminar cuenta'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 14,
+                                        ),
+                                        minimumSize: const Size(double.infinity, 48),
+                                        side: const BorderSide(color: Colors.red),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
