@@ -267,47 +267,68 @@ class _PopularCarouselState extends State<PopularCarousel> {
                               child: _buildEventImage(context, event, double.infinity, 110),
                             ),
                             // Title and date below
-                            Padding(
-                              padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                            Container(
+                              height: 90, // Altura fija para alinear chips
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.grey.shade900.withOpacity(0.9)
+                                    : Colors.grey.shade100,
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Theme.of(context).dividerColor.withOpacity(0.1),
+                                    width: 0.5,
+                                  ),
+                                ),
+                              ),
+                              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisSize: MainAxisSize.min,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text(
-                                    event.title,
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.w600,
-                                      fontSize: 12,
-                                      color: isPast
-                                          ? Theme.of(context).disabledColor
-                                          : Theme.of(
-                                              context,
-                                            ).colorScheme.onSurface,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
+                                  Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        event.title,
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 13,
+                                          height: 1.3,
+                                          color: isPast
+                                              ? Theme.of(context).disabledColor
+                                              : Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        () {
+                                          final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                          final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                          return "$fullDate · $fullHour";
+                                        }(),
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.bodySmall?.copyWith(
+                                          fontSize: 11,
+                                          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    () {
-                                      final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                      final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                      return "$fullDate · $fullHour";
-                                    }(),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(fontSize: 10),
-                                  ),
-                                  // Chip de categoría
-                                  if (event.categoryName != null) ...[
-                                    const SizedBox(height: 4),
+                                  // Chip de categoría (siempre abajo)
+                                  if (event.categoryName != null)
                                     Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
                                       decoration: BoxDecoration(
                                         color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
-                                        borderRadius: BorderRadius.circular(6),
+                                        borderRadius: BorderRadius.circular(8),
                                         border: Border.all(
-                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.5)),
+                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.4)),
                                           width: 1,
                                         ),
                                       ),
@@ -315,14 +336,14 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                         event.categoryName!,
                                         style: TextStyle(
                                           color: _getChipTextColor(context, event, categoryColor),
-                                          fontSize: 9,
+                                          fontSize: 10,
                                           fontWeight: FontWeight.w600,
+                                          letterSpacing: 0.2,
                                         ),
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                       ),
                                     ),
-                                  ],
                                 ],
                               ),
                             ),

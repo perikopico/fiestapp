@@ -7,6 +7,7 @@ import '../../services/data_export_service.dart';
 import '../admin/pending_events_screen.dart';
 import '../admin/pending_venues_screen.dart';
 import '../admin/venue_ownership_requests_screen.dart';
+import '../admin/event_ingestion_screen.dart';
 import '../events/favorites_screen.dart';
 import '../events/my_events_screen.dart';
 import '../venues/owner_events_screen.dart';
@@ -350,6 +351,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   title: 'Panel de administración',
                                   subtitle: 'Gestionar eventos pendientes',
                                   onTap: _openAdminPanel,
+                                ),
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.upload_file,
+                                  title: 'Ingesta de eventos JSON',
+                                  subtitle: 'Subir/modificar eventos desde JSON',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const EventIngestionScreen(),
+                                      ),
+                                    );
+                                  },
                                 ),
                                 _buildListItem(
                                   context,

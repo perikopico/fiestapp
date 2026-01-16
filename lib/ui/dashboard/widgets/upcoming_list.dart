@@ -9,12 +9,22 @@ class UpcomingList extends StatefulWidget {
   final List<Event> events;
   final VoidCallback? onClearFilters;
   final bool showCategory;
+  // Parámetros para búsqueda ampliada
+  final bool isRadiusMode;
+  final double? currentRadiusKm;
+  final VoidCallback? onExpandRadius;
+  // Texto del filtro de fecha activo
+  final String? dateFilterText;
 
   const UpcomingList({
     super.key,
     required this.events,
     this.onClearFilters,
     this.showCategory = true,
+    this.isRadiusMode = false,
+    this.currentRadiusKm,
+    this.onExpandRadius,
+    this.dateFilterText,
   });
 
   @override
@@ -181,6 +191,12 @@ class _UpcomingListState extends State<UpcomingList> {
   Widget build(BuildContext context) {
     // Estado vacío: mantenemos la tarjeta con "Borrar filtros"
     if (widget.events.isEmpty) {
+      // Verificar si debemos mostrar el botón de búsqueda ampliada
+      final shouldShowExpandButton = widget.isRadiusMode &&
+          widget.currentRadiusKm != null &&
+          widget.currentRadiusKm! < 50 &&
+          widget.onExpandRadius != null;
+
       return Center(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 24),
@@ -195,11 +211,26 @@ class _UpcomingListState extends State<UpcomingList> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Prueba cambiando de ciudad o categoría.',
+                shouldShowExpandButton
+                    ? 'No hay planes cerca. ¿Buscar en 50km?'
+                    : 'Prueba cambiando de ciudad o categoría.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               const SizedBox(height: 12),
-              if (widget.onClearFilters != null)
+              // Botón de búsqueda ampliada (solo en modo radio con radio < 50km)
+              if (shouldShowExpandButton)
+                ElevatedButton.icon(
+                  onPressed: widget.onExpandRadius,
+                  icon: const Icon(Icons.search, size: 18),
+                  label: const Text('Buscar en 50km'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
+                  ),
+                )
+              else if (widget.onClearFilters != null)
                 OutlinedButton(
                   onPressed: widget.onClearFilters,
                   child: const Text('Borrar filtros'),
@@ -210,23 +241,29 @@ class _UpcomingListState extends State<UpcomingList> {
       );
     }
 
-    // Hay eventos: mostramos cabecera + botón "Borrar filtros" + lista
+    // Hay eventos: mostramos cabecera con filtro de fecha + botón "Borrar filtros" + grid
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Cabecera con filtro de fecha y botón "Borrar filtros"
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            Text(
-              'Próximos eventos',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-                letterSpacing: -0.5,
-              ),
-            ),
+            // Mostrar filtro de fecha activo si está disponible
+            if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
+              Expanded(
+                child: Text(
+                  widget.dateFilterText!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                    fontSize: 12,
+                  ),
+                ),
+              )
+            else
+              const Spacer(),
             if (widget.onClearFilters != null)
               TextButton(
                 onPressed: widget.onClearFilters,
@@ -238,11 +275,16 @@ class _UpcomingListState extends State<UpcomingList> {
         ValueListenableBuilder<Set<String>>(
           valueListenable: FavoritesService.instance.favoritesNotifier,
           builder: (context, favorites, _) {
-            return ListView.separated(
+            return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.68, // Ratio ajustado para media foto + información
+              ),
               itemCount: widget.events.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
               itemBuilder: (context, index) {
                 final event = widget.events[index];
                 final isFavorite = FavoritesService.instance.isFavorite(event.id);
@@ -267,7 +309,8 @@ class _UpcomingListState extends State<UpcomingList> {
                 
                 return Card(
                   margin: EdgeInsets.zero,
-                  elevation: 0.3,
+                  elevation: 2, // Sombra sutil para dar profundidad
+                  shadowColor: Colors.black.withOpacity(0.1),
                   color: Theme.of(context).colorScheme.surface,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(16),
@@ -281,155 +324,149 @@ class _UpcomingListState extends State<UpcomingList> {
                       );
                     },
                     borderRadius: BorderRadius.circular(16),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
                         children: [
-                          // Imagen más grande con etiqueta FINALIZADO si está en el pasado
-                          Stack(
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              _buildEventImage(context, event, 100, 100),
-                              // Etiqueta FINALIZADO en rojo
-                              if (isPast)
-                                Positioned(
-                                  top: 8,
-                                  left: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Colors.red.withOpacity(0.9),
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: const Text(
-                                      'FINALIZADO',
-                                      style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                              // Imagen en la parte superior (media altura, similar a populares)
+                              Container(
+                                height: 110,
+                                width: double.infinity,
+                                child: _buildEventImage(context, event, double.infinity, 110),
+                              ),
+                              // Título, fecha y categoría debajo con fondo grisáceo
+                              Container(
+                                width: double.infinity,
+                                height: 90, // Altura fija para alinear chips
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey.shade900.withOpacity(0.9)
+                                      : Colors.grey.shade100,
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: Theme.of(context).dividerColor.withOpacity(0.1),
+                                      width: 0.5,
                                     ),
                                   ),
                                 ),
-                            ],
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.start,
-                              children: [
-                                Text(
-                                  event.title,
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 16,
-                                    color: isPast
-                                        ? Theme.of(context).disabledColor
-                                        : Theme.of(context).colorScheme.onSurface,
-                                  ),
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                const SizedBox(height: 6),
-                                // Fecha y lugar
-                                Row(
+                                padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Text(
-                                      DateFormat('dd MMM', 'es').format(event.startsAt),
-                                      style: Theme.of(context).textTheme.bodySmall
-                                          ?.copyWith(
-                                            color: Theme.of(context)
-                                                .colorScheme
-                                                .onSurfaceVariant
-                                                .withOpacity(0.7),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          event.title,
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13,
+                                            height: 1.3,
+                                            color: isPast
+                                                ? Theme.of(context).disabledColor
+                                                : Theme.of(context).colorScheme.onSurface,
                                           ),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          () {
+                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                            return "$fullDate · $fullHour";
+                                          }(),
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontSize: 11,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                    if (event.cityName != null) ...[
-                                      Text(
-                                        ' · ',
-                                        style: Theme.of(context).textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant
-                                                  .withOpacity(0.7),
-                                            ),
+                                    // Chip de categoría (siempre abajo)
+                                    if (widget.showCategory && event.categoryName != null)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: _getChipColor(context, event, categoryColor.withOpacity(0.4)),
+                                            width: 1,
+                                          ),
+                                        ),
+                                        child: Text(
+                                          event.categoryName!,
+                                          style: TextStyle(
+                                            color: _getChipTextColor(context, event, categoryColor),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.2,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
                                       ),
-                                      Text(
-                                        event.cityName!,
-                                        style: Theme.of(context).textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: Theme.of(context)
-                                                  .colorScheme
-                                                  .onSurfaceVariant
-                                                  .withOpacity(0.7),
-                                            ),
-                                      ),
-                                    ],
                                   ],
                                 ),
-                                const SizedBox(height: 8),
-                                // Chip de categoría con color (solo si showCategory es true)
-                                if (widget.showCategory && event.categoryName != null)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
-                                      borderRadius: BorderRadius.circular(8),
-                                      border: Border.all(
-                                        color: _getChipColor(context, event, categoryColor.withOpacity(0.5)),
-                                        width: 1,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      event.categoryName!,
-                                      style: TextStyle(
-                                        color: _getChipTextColor(context, event, categoryColor),
-                                        fontSize: 12,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(width: 8),
-                          // Iconos de corazón y ubicación
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              IconButton(
-                                icon: Icon(
-                                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                                  color: isFavorite
-                                      ? Theme.of(context).colorScheme.error
-                                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                          // Etiqueta FINALIZADO en rojo (si es pasado)
+                          if (isPast)
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(6),
                                 ),
-                                onPressed: () async {
+                                child: const Text(
+                                  'FINALIZADO',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Icono de favorito en la esquina superior derecha
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () async {
                                   await FavoritesService.instance.toggleFavorite(event.id);
                                   if (mounted) {
                                     setState(() {});
                                   }
                                 },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                iconSize: 22,
-                              ),
-                              const SizedBox(height: 4),
-                              IconButton(
-                                icon: Icon(
-                                  Icons.location_on_outlined,
-                                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                                    color: isFavorite ? Colors.red : Colors.white,
+                                    size: 16,
+                                  ),
                                 ),
-                                onPressed: () {
-                                  // TODO: Abrir mapa o detalles de ubicación
-                                },
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                iconSize: 22,
                               ),
-                            ],
+                            ),
                           ),
                         ],
                       ),

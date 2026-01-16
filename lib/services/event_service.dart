@@ -152,23 +152,46 @@ class EventService {
       debugPrint(
         'fetchEvents() [RPC]: '
         'radiusKm=$radiusKm, '
-        'searchTerm=$searchTerm -> ${events.length} eventos',
+        'searchTerm=$searchTerm -> ${events.length} eventos ANTES de filtros',
       );
 
+      // Debug: mostrar algunos eventos antes de filtrar
+      if (events.isNotEmpty) {
+        debugPrint('📅 Primeros 3 eventos ANTES de filtros:');
+        final eventsToShow = events.length > 3 ? 3 : events.length;
+        for (int i = 0; i < eventsToShow; i++) {
+          final e = events[i];
+          debugPrint('   ${i + 1}. ${e.title} - Fecha: ${e.startsAt}, Distancia: ${e.distanceKm}km');
+        }
+      }
+
       // Aplicar filtros adicionales en el cliente
+      final beforeCategoryFilter = events.length;
       if (categoryId != null) {
         events = events.where((e) => e.categoryId == categoryId).toList();
+        debugPrint('🔍 Después de filtro categoría ($categoryId): $beforeCategoryFilter -> ${events.length} eventos');
       }
+      
+      final beforeDateFilter = events.length;
       if (from != null) {
+        debugPrint('📅 Aplicando filtro de fecha FROM: $from');
         events = events
             .where(
               (e) =>
                   e.startsAt.isAfter(from.subtract(const Duration(seconds: 1))),
             )
             .toList();
+        debugPrint('📅 Después de filtro fecha FROM: $beforeDateFilter -> ${events.length} eventos');
+        // Debug: mostrar eventos eliminados por fecha
+        if (beforeDateFilter > events.length) {
+          debugPrint('⚠️ Se eliminaron ${beforeDateFilter - events.length} eventos por fecha FROM');
+        }
       }
       if (to != null) {
+        final beforeToFilter = events.length;
+        debugPrint('📅 Aplicando filtro de fecha TO: $to');
         events = events.where((e) => e.startsAt.isBefore(to)).toList();
+        debugPrint('📅 Después de filtro fecha TO: $beforeToFilter -> ${events.length} eventos');
       }
       if (searchTerm != null && searchTerm.trim().isNotEmpty) {
         final t = searchTerm.trim().toLowerCase();
@@ -177,21 +200,22 @@ class EventService {
             .toList();
       }
 
-      // Ordenar: si hay distance_km, mantener el orden de la BD (distancia luego fecha)
-      // Si no hay distance_km, ordenar solo por fecha
+      // Ordenar: PRIORIDAD 1 = Fecha (más pronto primero), PRIORIDAD 2 = Distancia (más cercano primero)
+      // Esto asegura que un evento "Mañana a 10km" aparezca ANTES que "La semana que viene a 1km"
       events.sort((a, b) {
-        // Si ambos tienen distancia, ordenar primero por distancia y luego por fecha
+        // PRIORIDAD 1: Ordenar primero por fecha (más pronto primero)
+        final dateCompare = a.startsAt.compareTo(b.startsAt);
+        if (dateCompare != 0) return dateCompare;
+        
+        // PRIORIDAD 2: Si las fechas son iguales, desempatar por distancia (más cercano primero)
         if (a.distanceKm != null && b.distanceKm != null) {
-          final distanceCompare = a.distanceKm!.compareTo(b.distanceKm!);
-          if (distanceCompare != 0) return distanceCompare;
-          // Si la distancia es igual, ordenar por fecha
-          return a.startsAt.compareTo(b.startsAt);
+          return a.distanceKm!.compareTo(b.distanceKm!);
         }
         // Si solo uno tiene distancia, el que tiene distancia va primero
         if (a.distanceKm != null) return -1;
         if (b.distanceKm != null) return 1;
-        // Si ninguno tiene distancia, ordenar solo por fecha
-        return a.startsAt.compareTo(b.startsAt);
+        // Si ninguno tiene distancia y tienen la misma fecha, mantener orden original
+        return 0;
       });
       final limitedEvents = events.take(limit).toList();
       // Enriquecer con información de categoría si falta
@@ -409,6 +433,7 @@ class EventService {
       // Si hay muchos IDs, hacer consultas en lotes para evitar URLs muy largas
       final batchSize = 50;
       final descMap = <String, String?>{};
+      final infoUrlMap = <String, String?>{};
 
       for (int i = 0; i < eventIds.length; i += batchSize) {
         final batch = eventIds.skip(i).take(batchSize).toList();
@@ -417,7 +442,7 @@ class EventService {
 
         final descRes = await supa
             .from('events')
-            .select('id, description')
+            .select('id, description, info_url')
             .or(orCondition);
 
         if (descRes is List) {
@@ -425,17 +450,22 @@ class EventService {
             final map = item as Map<String, dynamic>;
             final id = map['id'] as String;
             final desc = map['description'] as String?;
+            final infoUrl = map['info_url'] as String?;
             descMap[id] = desc;
+            infoUrlMap[id] = infoUrl;
           }
         }
       }
 
-      // Actualizar los eventos con sus descripciones
+      // Actualizar los eventos con sus descripciones e info_url
       for (int i = 0; i < events.length; i++) {
         final event = events[i];
         final desc = descMap[event.id];
-        if (desc != null || descMap.containsKey(event.id)) {
-          // Crear un nuevo evento con la descripción
+        final infoUrl = infoUrlMap[event.id] ?? event.infoUrl; // Usar el de la BD o el que ya tenía
+        
+        if (desc != null || descMap.containsKey(event.id) || infoUrl != null) {
+          // Crear un nuevo evento con la descripción e info_url
+          // IMPORTANTE: Incluir todos los campos del evento original, incluyendo info_url
           final updatedMap = {
             'id': event.id,
             'title': event.title,
@@ -450,8 +480,9 @@ class EventService {
             'city_id': event.cityId,
             'price': event.price,
             'maps_url': event.mapsUrl,
-            'description': desc,
+            'description': desc ?? event.description, // Usar el de la BD o el que ya tenía
             'image_alignment': event.imageAlignment,
+            'info_url': infoUrl, // ✅ Cargar desde BD o preservar el existente
           };
           // Reemplazar el evento en la lista
           events[i] = Event.fromMap(updatedMap);

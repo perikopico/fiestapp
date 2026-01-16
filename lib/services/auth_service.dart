@@ -163,28 +163,32 @@ class AuthService {
     }
     
     try {
-      // Especificar el deep link explícitamente para Android/iOS
-      const deepLinkUrl = 'io.supabase.fiestapp://login-callback';
-      
       if (kIsWeb) {
+        // En web, Supabase maneja automáticamente el callback si la URL está configurada
+        // en Supabase Dashboard → Authentication → URL Configuration → Redirect URLs
+        // IMPORTANTE: Añade estas URLs en Supabase Dashboard:
+        // - http://localhost:xxxxx (para desarrollo, donde xxxxx es el puerto de Flutter)
+        // - https://tu-dominio.com (para producción)
+        final redirectUrl = Uri.base.origin;
         await client.auth.signInWithOAuth(
           OAuthProvider.google,
-          redirectTo: '${Uri.base.origin}/auth/callback',
+          redirectTo: redirectUrl,
         );
+        debugPrint('✅ Redirigiendo a Google OAuth (Web)');
+        debugPrint('📍 URL de callback: $redirectUrl');
+        debugPrint('⚠️ IMPORTANTE: Asegúrate de que esta URL está en Supabase Dashboard → Authentication → Redirect URLs');
       } else {
-        // En móvil, usar el método estándar sin intentos adicionales
-        // Esto evita problemas con el code verifier en iOS
+        // En móvil, usar el deep link
+        const deepLinkUrl = 'io.supabase.fiestapp://login-callback';
         await client.auth.signInWithOAuth(
           OAuthProvider.google,
           redirectTo: deepLinkUrl,
         );
+        debugPrint('✅ Redirigiendo a Google OAuth (Móvil)');
+        debugPrint('📍 Deep link: $deepLinkUrl');
       }
-      
-      debugPrint('✅ Redirigiendo a Google OAuth');
-      debugPrint('📍 Deep link: $deepLinkUrl');
     } catch (e) {
       debugPrint('❌ Error al iniciar sesión con Google: $e');
-      // No rethrow aquí, dejar que Supabase maneje el error
       rethrow;
     }
   }

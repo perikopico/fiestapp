@@ -135,11 +135,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   DateTime? _toDate;
   String? _selectedDatePreset;
   bool _isToday = false;
-  bool _isWeekend = false;
-  bool _isThisMonth = false;
+  bool _isNextWeekend = false; // Próximo fin de semana
+  bool _isNext7Days = false; // Próximos 7 días
+  bool _isNext30Days = false; // Próximos 30 días
 
   // Nearby events state
-  double _radiusKm = 5;
+  double _radiusKm = 15; // Radio por defecto aumentado a 15km
   double? _userLat = 36.1927; // Barbate (temporal)
   double? _userLng = -5.9219; // Barbate (temporal)
   bool _isNearbyLoading = false;
@@ -177,6 +178,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _checkLocationPermission();
+    // Establecer filtro por defecto a "1 semana"
+    _setDefaultWeekFilter();
     _reloadEvents().then((_) => _loadNearby());
     _loadCities();
     _loadNearbyCities();
@@ -186,6 +189,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         AuthBanner.showAuthDialog(context);
       }
+    });
+  }
+
+  /// Establece el filtro por defecto a "7 días"
+  void _setDefaultWeekFilter() {
+    final r = next7DaysRange();
+    setState(() {
+      _isToday = false;
+      _isNextWeekend = false;
+      _isNext7Days = true;
+      _isNext30Days = false;
+      _fromDate = r.from;
+      _toDate = r.to;
     });
   }
 
@@ -318,7 +334,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Determina si hay un filtro de fecha manual activo
   bool _hasManualDateFilter() {
-    return _isToday || _isWeekend || _isThisMonth || 
+    return _isToday || _isNextWeekend || _isNext7Days || _isNext30Days || 
            (_fromDate != null || _toDate != null);
   }
 
@@ -767,6 +783,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
+  /// Expande el radio de búsqueda a 50km y recarga los eventos
+  Future<void> _expandRadiusTo50km() async {
+    setState(() {
+      _radiusKm = 50;
+    });
+    // Recargar eventos con el nuevo radio
+    await _reloadEvents();
+    // Si hay ubicación del usuario, también recargar eventos cercanos
+    if (_userLat != null && _userLng != null) {
+      await _loadNearby();
+      await _loadNearbyCities();
+    }
+  }
+
   void _clearFilters() {
     setState(() {
       // Ciudad
@@ -782,8 +812,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _fromDate = null;
       _toDate = null;
       _isToday = false;
-      _isWeekend = false;
-      _isThisMonth = false;
+      _isNextWeekend = false;
+      _isNext7Days = false;
+      _isNext30Days = false;
       _selectedDatePreset = null;
 
       // Búsqueda de eventos
@@ -1046,6 +1077,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '';
   }
 
+  /// Genera el texto informativo según el filtro de fecha seleccionado
+  /// Muestra el rango completo de fechas cuando está disponible
+  String? _getDateFilterInfoText() {
+    final hasDateFilter = _fromDate != null || _toDate != null;
+    if (!hasDateFilter) return null;
+
+    // Formato para mostrar fechas
+    final dateFormat = DateFormat('d MMM', 'es');
+
+    if (_isToday && _fromDate != null) {
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)}';
+    } else if (_isNextWeekend && _fromDate != null && _toDate != null) {
+      // Próximo fin de semana: mostrar rango completo
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    } else if (_isNext7Days && _fromDate != null && _toDate != null) {
+      // 7 días: mostrar rango completo
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    } else if (_isNext30Days && _fromDate != null && _toDate != null) {
+      // 30 días: mostrar rango completo
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    } else if (_fromDate != null && _toDate != null) {
+      // Rango personalizado (Calendario): mostrar rango completo
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    }
+
+    return null;
+  }
+
   String _getFiltersSubtitle() {
     final categoryName = _selectedCategoryId != null
         ? _getSelectedCategoryName()
@@ -1057,12 +1116,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (hasDateFilter) {
       if (_isToday) {
         dateLabel = 'Hoy';
-      } else if (_isWeekend) {
-        dateLabel = 'Fin de semana';
-      } else if (_isThisMonth) {
-        dateLabel = 'Este mes';
+      } else if (_isNextWeekend) {
+        dateLabel = 'Próximo fin de semana';
+      } else if (_isNext7Days) {
+        dateLabel = '7 días';
+      } else if (_isNext30Days) {
+        dateLabel = '30 días';
       } else if (_fromDate != null && _toDate != null) {
-        // Rango personalizado
+        // Rango personalizado (Calendario)
         dateLabel = _getSelectedDateLabel();
       }
     }
@@ -1552,7 +1613,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
               ],
               const SizedBox(height: 16),
-              // Chips de fecha (Hoy, Fin de semana, Rango)
+              // Chips de fecha (Hoy, Próximo fin de semana, 7 días, 30 días, Calendario)
               Text(
                 'Fechas',
                 style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -1564,35 +1625,69 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  ActionChip(
+                  FilterChip(
                     label: const Text('Hoy'),
-                    onPressed: () {
+                    selected: _isToday,
+                    onSelected: (_) {
                       _onFilterInteraction();
                       final r = todayRange();
                       setState(() {
                         _isToday = true;
-                        _isWeekend = false;
-                        _isThisMonth = false;
+                        _isNextWeekend = false;
+                        _isNext7Days = false;
+                        _isNext30Days = false;
                       });
                       _reloadWithDateRange(from: r.from, to: r.to);
                     },
                   ),
-                  ActionChip(
-                    label: const Text('Fin de semana'),
-                    onPressed: () {
+                  FilterChip(
+                    label: const Text('Próximo fin de semana'),
+                    selected: _isNextWeekend,
+                    onSelected: (_) {
                       _onFilterInteraction();
-                      final r = weekendRange();
+                      final r = nextWeekendRange();
                       setState(() {
                         _isToday = false;
-                        _isWeekend = true;
-                        _isThisMonth = false;
+                        _isNextWeekend = true;
+                        _isNext7Days = false;
+                        _isNext30Days = false;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  FilterChip(
+                    label: const Text('7 días'),
+                    selected: _isNext7Days,
+                    onSelected: (_) {
+                      _onFilterInteraction();
+                      final r = next7DaysRange();
+                      setState(() {
+                        _isToday = false;
+                        _isNextWeekend = false;
+                        _isNext7Days = true;
+                        _isNext30Days = false;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  FilterChip(
+                    label: const Text('30 días'),
+                    selected: _isNext30Days,
+                    onSelected: (_) {
+                      _onFilterInteraction();
+                      final r = next30DaysRange();
+                      setState(() {
+                        _isToday = false;
+                        _isNextWeekend = false;
+                        _isNext7Days = false;
+                        _isNext30Days = true;
                       });
                       _reloadWithDateRange(from: r.from, to: r.to);
                     },
                   ),
                   OutlinedButton.icon(
-                    icon: const Icon(Icons.date_range, size: 16),
-                    label: const Text('Rango...'),
+                    icon: const Icon(Icons.calendar_today, size: 16),
+                    label: const Text('Calendario'),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                       minimumSize: const Size(0, 32),
@@ -1762,8 +1857,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       setState(() {
         _selectedDatePreset = null;
         _isToday = false;
-        _isWeekend = false;
-        _isThisMonth = false;
+        _isNextWeekend = false;
+        _isNext7Days = false;
+        _isNext30Days = false;
       });
       _reloadWithDateRange(from: picked.start, to: picked.end);
     }
@@ -2316,6 +2412,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               : null,
                           onClearFilters: _clearFilters,
                           showCategory: true,
+                          dateFilterText: _getDateFilterInfoText(),
+                          // Información para búsqueda ampliada
+                          isRadiusMode: _mode == LocationMode.radius,
+                          currentRadiusKm: _radiusKm,
+                          onExpandRadius: _expandRadiusTo50km,
                         ),
                       ),
                     // Popular esta semana
@@ -2431,6 +2532,11 @@ class UpcomingEventsSection extends StatelessWidget {
   final int? selectedCityId;
   final VoidCallback? onClearFilters;
   final bool showCategory;
+  final String? dateFilterText;
+  // Parámetros para búsqueda ampliada
+  final bool isRadiusMode;
+  final double? currentRadiusKm;
+  final VoidCallback? onExpandRadius;
 
   const UpcomingEventsSection({
     super.key,
@@ -2439,6 +2545,10 @@ class UpcomingEventsSection extends StatelessWidget {
     this.selectedCityId,
     this.onClearFilters,
     this.showCategory = true,
+    this.dateFilterText,
+    this.isRadiusMode = false,
+    this.currentRadiusKm,
+    this.onExpandRadius,
   });
 
   @override
@@ -2470,10 +2580,22 @@ class UpcomingEventsSection extends StatelessWidget {
           ),
         ],
       ),
-      child: UpcomingList(
-        events: filtered,
-        onClearFilters: onClearFilters,
-        showCategory: showCategory,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Lista de eventos (el filtro de fecha se muestra dentro de UpcomingList)
+          UpcomingList(
+            events: filtered,
+            onClearFilters: onClearFilters,
+            showCategory: showCategory,
+            // Información para búsqueda ampliada
+            isRadiusMode: isRadiusMode,
+            currentRadiusKm: currentRadiusKm,
+            onExpandRadius: onExpandRadius,
+            // Texto del filtro de fecha activo
+            dateFilterText: dateFilterText,
+          ),
+        ],
       ),
     );
   }

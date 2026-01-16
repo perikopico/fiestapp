@@ -32,6 +32,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _loadFavoriteStatus();
     // Incrementar contador de vistas al abrir el evento
     EventService.instance.incrementEventView(widget.event.id);
+    // Debug: verificar si el evento tiene infoUrl
+    debugPrint('🔍 Evento ${widget.event.id} - infoUrl: ${widget.event.infoUrl}');
   }
 
   Future<void> _loadFavoriteStatus() async {
@@ -215,14 +217,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             // 3. Description block
             _buildDescriptionSection(context, widget.event),
 
-            // 4. Location / Map block
-            _buildLocationSection(context, theme, hasMapsUrl),
+            // 3.5. Info URL block (si existe) - justo después de la descripción
+            if (widget.event.infoUrl != null && widget.event.infoUrl!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              _buildInfoUrlSection(context, theme),
+            ],
 
             const SizedBox(height: 16),
 
-            // 4.5. Info URL block (si existe)
-            if (widget.event.infoUrl != null && widget.event.infoUrl!.isNotEmpty)
-              _buildInfoUrlSection(context, theme),
+            // 4. Location / Map block
+            _buildLocationSection(context, theme, hasMapsUrl),
 
             const SizedBox(height: 16),
 
@@ -788,9 +792,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Widget _buildInfoUrlSection(BuildContext context, ThemeData theme) {
     final infoUrl = widget.event.infoUrl;
+    
+    // Debug detallado
+    debugPrint('🔍 _buildInfoUrlSection llamado');
+    debugPrint('   Event ID: ${widget.event.id}');
+    debugPrint('   infoUrl value: $infoUrl');
+    debugPrint('   infoUrl is null: ${infoUrl == null}');
+    debugPrint('   infoUrl isEmpty: ${infoUrl?.isEmpty ?? true}');
+    
     if (infoUrl == null || infoUrl.isEmpty) {
+      debugPrint('⚠️ infoUrl es null o vacío, no se muestra el enlace');
       return const SizedBox.shrink();
     }
+
+    debugPrint('✅ Mostrando enlace: $infoUrl');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -801,10 +816,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             fontWeight: FontWeight.w600,
           ),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
         InkWell(
           onTap: () async {
             try {
+              debugPrint('🔗 Abriendo enlace: $infoUrl');
               final uri = Uri.parse(infoUrl);
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -818,7 +834,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 );
               }
             } catch (e) {
-              debugPrint('Error al abrir enlace: $e');
+              debugPrint('❌ Error al abrir enlace: $e');
               if (!mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -830,13 +846,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           },
           borderRadius: BorderRadius.circular(12),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
             decoration: BoxDecoration(
               color: theme.colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
                 color: theme.colorScheme.primary.withOpacity(0.3),
-                width: 1,
+                width: 1.5,
               ),
             ),
             child: Row(
@@ -844,7 +860,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 Icon(
                   Icons.link,
                   color: theme.colorScheme.onPrimaryContainer,
-                  size: 20,
+                  size: 24,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -858,7 +874,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           color: theme.colorScheme.onPrimaryContainer,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Text(
                         _getDomainFromUrl(infoUrl),
                         style: theme.textTheme.bodySmall?.copyWith(
@@ -873,7 +889,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 Icon(
                   Icons.open_in_new,
                   color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
-                  size: 18,
+                  size: 20,
                 ),
               ],
             ),
