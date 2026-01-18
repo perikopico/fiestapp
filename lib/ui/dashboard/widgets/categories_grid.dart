@@ -53,160 +53,98 @@ class CategoriesGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Categorías',
-          style: Theme.of(
-            context,
-          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final screenWidth = MediaQuery.of(context).size.width;
-            final isNarrow = screenWidth < 600;
-            final crossAxisCount = isNarrow ? 4 : 6;
-
-            // Crear lista de widgets para el grid, empezando con "Todas"
-            final List<Widget> categoryWidgets = [];
-
-            // Chip "Todas"
-            final isAllSelected = selectedCategoryId == null;
-            categoryWidgets.add(
-              InkWell(
-                onTap: () {
-                  onCategoryTap(null);
-                },
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: isAllSelected
-                        ? Theme.of(
-                            context,
-                          ).colorScheme.primaryContainer.withOpacity(0.5)
-                        : Theme.of(
-                            context,
-                          ).colorScheme.surfaceVariant.withOpacity(0.5),
-                    borderRadius: BorderRadius.circular(12),
-                    border: isAllSelected
-                        ? Border.all(
-                            color: Theme.of(context).colorScheme.primary,
-                            width: 2,
-                          )
-                        : null,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.grid_view,
-                        size: 24,
-                        color: isAllSelected
-                            ? Theme.of(context).colorScheme.onPrimaryContainer
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(height: 4),
-                      Flexible(
-                        child: Text(
-                          'Todas',
-                          style: TextStyle(
-                            fontWeight: isAllSelected
-                                ? FontWeight.bold
-                                : FontWeight.w500,
-                            fontSize: 11,
-                            color: isAllSelected
-                                ? Theme.of(
-                                    context,
-                                  ).colorScheme.onPrimaryContainer
-                                : Theme.of(context).colorScheme.onSurface,
-                          ),
-                          textAlign: TextAlign.center,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+    return SizedBox(
+      height: 50, // Altura compacta reducida de ~150px a 50px
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        children: [
+          // Chip "Todas" estilo Pill compacto
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildPillChip(
+              context: context,
+              label: 'Todas',
+              icon: Icons.grid_view,
+              isSelected: selectedCategoryId == null,
+              categoryColor: Colors.grey,
+              onTap: () => onCategoryTap(null),
+            ),
+          ),
+          // Categorías estilo Pills compactos
+          ...categories.where((c) => c.id != null).map((category) {
+            final categoryColor = _getColorForCategory(category.name);
+            final isSelected = category.id == selectedCategoryId;
+            return Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _buildPillChip(
+                context: context,
+                label: category.name,
+                icon: iconFromName(category.icon),
+                isSelected: isSelected,
+                categoryColor: categoryColor,
+                onTap: () => onCategoryTap(category.id),
               ),
             );
+          }),
+        ],
+      ),
+    );
+  }
 
-            // Agregar las categorías
-            categoryWidgets.addAll(
-              categories.map((category) {
-                final categoryColor = _getColorForCategory(category.name);
-                final isSelected =
-                    category.id != null && category.id == selectedCategoryId;
-
-                return InkWell(
-                  onTap: () {
-                    onCategoryTap(category.id);
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? categoryColor.withOpacity(0.3)
-                          : categoryColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: isSelected
-                          ? Border.all(color: categoryColor, width: 2)
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          iconFromName(category.icon),
-                          size: 24,
-                          color: isSelected
-                              ? categoryColor
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 4),
-                        Flexible(
-                          child: Text(
-                            category.name,
-                            style: TextStyle(
-                              fontWeight: isSelected
-                                  ? FontWeight.bold
-                                  : FontWeight.w500,
-                              fontSize: 11,
-                              color: isSelected
-                                  ? categoryColor
-                                  : Theme.of(context).colorScheme.onSurface,
-                            ),
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }),
-            );
-
-            return GridView.count(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisCount: crossAxisCount,
-              mainAxisSpacing: 8,
-              crossAxisSpacing: 8,
-              padding: EdgeInsets.zero,
-              childAspectRatio: 1.1,
-              children: categoryWidgets,
-            );
-          },
+  Widget _buildPillChip({
+    required BuildContext context,
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color categoryColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16), // Pill shape más compacto
+      child: Container(
+        constraints: const BoxConstraints(
+          minHeight: 36,
+          maxHeight: 36, // Altura fija compacta de 36px
         ),
-      ],
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? categoryColor.withOpacity(0.15)
+              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? Border.all(color: categoryColor, width: 1.5)
+              : Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                  width: 1,
+                ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16, // Icono más pequeño para chip compacto
+              color: isSelected
+                  ? categoryColor
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 13,
+                color: isSelected
+                    ? categoryColor
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

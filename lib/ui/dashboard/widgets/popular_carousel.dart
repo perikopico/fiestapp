@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
@@ -64,12 +65,30 @@ class _PopularCarouselState extends State<PopularCarousel> {
   /// Construye la imagen del evento con filtro de escala de grises si está en el pasado
   Widget _buildEventImage(BuildContext context, Event event, double width, double height) {
     final imageWidget = event.imageUrl != null && event.imageUrl!.isNotEmpty
-        ? Image.network(
-            event.imageUrl!,
+        ? CachedNetworkImage(
+            imageUrl: event.imageUrl!,
             width: width,
             height: height,
             fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
+            memCacheWidth: width.isFinite ? width.toInt() : null,
+            memCacheHeight: height.isFinite ? height.toInt() : null,
+            fadeInDuration: const Duration(milliseconds: 200),
+            fadeOutDuration: const Duration(milliseconds: 100),
+            placeholder: (context, url) => Container(
+              width: width,
+              height: height,
+              color: Theme.of(context).colorScheme.surfaceVariant,
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ),
+            placeholderFadeInDuration: const Duration(milliseconds: 150),
+            errorWidget: (context, url, error) {
               debugPrint('❌ Error al cargar imagen del evento ${event.id}: $error');
               return Container(
                 width: width,
@@ -82,23 +101,6 @@ class _PopularCarouselState extends State<PopularCarousel> {
                     color: event.isPast
                         ? Theme.of(context).disabledColor
                         : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              );
-            },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                width: width,
-                height: height,
-                color: Theme.of(context).colorScheme.surfaceVariant,
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    strokeWidth: 2,
                   ),
                 ),
               );
@@ -152,6 +154,13 @@ class _PopularCarouselState extends State<PopularCarousel> {
       return Theme.of(context).disabledColor;
     }
     return originalColor;
+  }
+
+  /// Oscurece un color para usar en el texto (estilo text-*-700)
+  Color _darkenColor(Color color, double amount) {
+    assert(amount >= 0 && amount <= 1);
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withLightness((hsl.lightness * (1 - amount)).clamp(0.0, 1.0)).toColor();
   }
 
   @override
@@ -255,154 +264,164 @@ class _PopularCarouselState extends State<PopularCarousel> {
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(16),
                         child: Stack(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
                           children: [
-                            // Image on top with fixed height
-                            Container(
-                              height: 110,
-                              width: double.infinity,
-                              child: _buildEventImage(context, event, double.infinity, 110),
+                            ClipRect(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Image on top with fixed height
+                                  Container(
+                                    height: 110,
+                                    width: double.infinity,
+                                    child: _buildEventImage(context, event, double.infinity, 110),
+                                  ),
+                                  // Title and date below
+                                  Container(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 96,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Theme.of(context).brightness == Brightness.dark
+                                          ? Colors.grey.shade900.withOpacity(0.9)
+                                          : Colors.grey.shade100,
+                                      border: Border(
+                                        top: BorderSide(
+                                          color: Theme.of(context).dividerColor.withOpacity(0.1),
+                                          width: 0.5,
+                                        ),
+                                      ),
+                                    ),
+                                    padding: const EdgeInsets.fromLTRB(10, 3, 10, 3),
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Flexible(
+                                          fit: FlexFit.loose,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            mainAxisAlignment: MainAxisAlignment.start,
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Text(
+                                                event.title,
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                  fontSize: 12,
+                                                  height: 1.2,
+                                                  color: isPast
+                                                      ? Theme.of(context).disabledColor
+                                                      : Theme.of(
+                                                          context,
+                                                        ).colorScheme.onSurface,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                () {
+                                                  final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                                  final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                                  return "$fullDate · $fullHour";
+                                                }(),
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall?.copyWith(
+                                                  fontSize: 9,
+                                                  height: 1.0,
+                                                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // Chip de categoría (siempre abajo) - Light Pill Style
+                                        if (event.categoryName != null)
+                                          Padding(
+                                            padding: const EdgeInsets.only(top: 2),
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                event.categoryName!,
+                                                style: TextStyle(
+                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
+                                                  fontSize: 8.5,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.05,
+                                                  height: 1.0,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                            // Title and date below
-                            Container(
-                              height: 90, // Altura fija para alinear chips
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).brightness == Brightness.dark
-                                    ? Colors.grey.shade900.withOpacity(0.9)
-                                    : Colors.grey.shade100,
-                                border: Border(
-                                  top: BorderSide(
-                                    color: Theme.of(context).dividerColor.withOpacity(0.1),
-                                    width: 0.5,
+                            // Etiqueta FINALIZADO en rojo (si es pasado)
+                            if (isPast)
+                              Positioned(
+                                top: 8,
+                                left: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withOpacity(0.9),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: const Text(
+                                    'FINALIZADO',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ),
-                              padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Text(
-                                        event.title,
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          fontSize: 13,
-                                          height: 1.3,
-                                          color: isPast
-                                              ? Theme.of(context).disabledColor
-                                              : Theme.of(
-                                                  context,
-                                                ).colorScheme.onSurface,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        () {
-                                          final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                          final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                          return "$fullDate · $fullHour";
-                                        }(),
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall?.copyWith(
-                                          fontSize: 11,
-                                          color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  // Chip de categoría (siempre abajo)
-                                  if (event.categoryName != null)
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
-                                        borderRadius: BorderRadius.circular(8),
-                                        border: Border.all(
-                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.4)),
-                                          width: 1,
-                                        ),
-                                      ),
-                                      child: Text(
-                                        event.categoryName!,
-                                        style: TextStyle(
-                                          color: _getChipTextColor(context, event, categoryColor),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w600,
-                                          letterSpacing: 0.2,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
+                            // Icono de favorito en la esquina superior derecha
+                            Positioned(
+                              top: 8,
+                              right: 8,
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    await FavoritesService.instance.toggleFavorite(event.id);
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.5),
+                                      shape: BoxShape.circle,
                                     ),
-                                ],
+                                    child: Icon(
+                                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                                      color: isFavorite
+                                          ? Colors.red
+                                          : Colors.white,
+                                      size: 18,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        // Etiqueta FINALIZADO en rojo (si es pasado)
-                        if (isPast)
-                          Positioned(
-                            top: 8,
-                            left: 8,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Colors.red.withOpacity(0.9),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: const Text(
-                                'FINALIZADO',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                          ),
-                        // Icono de favorito en la esquina superior derecha
-                        Positioned(
-                          top: 8,
-                          right: 8,
-                          child: Material(
-                            color: Colors.transparent,
-                            child: InkWell(
-                              onTap: () async {
-                                await FavoritesService.instance.toggleFavorite(event.id);
-                                if (mounted) {
-                                  setState(() {});
-                                }
-                              },
-                              borderRadius: BorderRadius.circular(20),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.5),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Icon(
-                                  isFavorite ? Icons.favorite : Icons.favorite_border,
-                                  color: isFavorite
-                                      ? Colors.red
-                                      : Colors.white,
-                                  size: 18,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                       ),
                     ),
                   );

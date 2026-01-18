@@ -435,11 +435,9 @@ class _QuePlanState extends State<QuePlan> {
             ),
           ),
 
-          home: SplashVideoScreen(
-            nextScreen: _showOnboarding
-                ? const PermissionsOnboardingScreen()
-                : const DashboardScreen(),
-          ),
+          home: _showOnboarding
+              ? const PermissionsOnboardingScreen()
+              : const DashboardScreen(),
         );
       },
     );

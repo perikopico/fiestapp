@@ -354,6 +354,8 @@ class _OwnerEventsScreenState extends State<OwnerEventsScreen>
                   Text(
                     event.title,
                     style: Theme.of(context).textTheme.titleLarge,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   
                   const SizedBox(height: 8),

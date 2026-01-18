@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
@@ -15,6 +16,9 @@ class UpcomingList extends StatefulWidget {
   final VoidCallback? onExpandRadius;
   // Texto del filtro de fecha activo
   final String? dateFilterText;
+  // Información de búsqueda activa
+  final bool hasActiveSearch;
+  final String? searchTerm;
 
   const UpcomingList({
     super.key,
@@ -25,6 +29,8 @@ class UpcomingList extends StatefulWidget {
     this.currentRadiusKm,
     this.onExpandRadius,
     this.dateFilterText,
+    this.hasActiveSearch = false,
+    this.searchTerm,
   });
 
   @override
@@ -70,6 +76,48 @@ class _UpcomingListState extends State<UpcomingList> {
     return Colors.grey;
   }
 
+  /// Construye sugerencias basadas en el término de búsqueda
+  Widget _buildSuggestions(BuildContext context) {
+    if (widget.searchTerm == null || widget.searchTerm!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final searchTerm = widget.searchTerm!.toLowerCase();
+    final suggestions = <String>[];
+
+    // Sugerencias basadas en el término de búsqueda
+    if (searchTerm.length < 3) {
+      suggestions.add('Intenta usar más de 3 letras');
+      suggestions.add('Verifica la ortografía');
+    } else {
+      suggestions.add('Verifica la ortografía del término');
+      suggestions.add('Intenta usar términos más generales');
+      suggestions.add('Prueba buscar solo por ciudad o categoría');
+      if (searchTerm.contains('evento') || searchTerm.contains('plan')) {
+        suggestions.add('Busca por el nombre específico del evento');
+      }
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: suggestions.map((suggestion) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              '• $suggestion',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 12,
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
   Alignment _alignmentFromString(String? value) {
     switch (value) {
       case 'top':
@@ -85,13 +133,34 @@ class _UpcomingListState extends State<UpcomingList> {
   /// Construye la imagen del evento con filtro de escala de grises si está en el pasado
   Widget _buildEventImage(BuildContext context, Event event, double width, double height) {
     final imageWidget = event.imageUrl != null && event.imageUrl!.isNotEmpty
-        ? Image.network(
-            event.imageUrl!,
+        ? CachedNetworkImage(
+            imageUrl: event.imageUrl!,
             width: width,
             height: height,
             fit: BoxFit.cover,
             alignment: _alignmentFromString(event.imageAlignment),
-            errorBuilder: (context, error, stackTrace) {
+            memCacheWidth: width.isFinite ? width.toInt() : null,
+            memCacheHeight: height.isFinite ? height.toInt() : null,
+            fadeInDuration: const Duration(milliseconds: 200),
+            fadeOutDuration: const Duration(milliseconds: 100),
+            placeholder: (context, url) => Container(
+              width: width,
+              height: height,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceVariant,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  ),
+                ),
+              ),
+            ),
+            placeholderFadeInDuration: const Duration(milliseconds: 150),
+            errorWidget: (context, url, error) {
               debugPrint('❌ Error al cargar imagen del evento ${event.id}: $error');
               return Container(
                 width: width,
@@ -106,26 +175,6 @@ class _UpcomingListState extends State<UpcomingList> {
                   color: event.isPast
                       ? Theme.of(context).disabledColor
                       : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              );
-            },
-            loadingBuilder: (context, child, loadingProgress) {
-              if (loadingProgress == null) return child;
-              return Container(
-                width: width,
-                height: height,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    strokeWidth: 2,
-                  ),
                 ),
               );
             },
@@ -187,10 +236,48 @@ class _UpcomingListState extends State<UpcomingList> {
     return originalColor;
   }
 
+  /// Oscurece un color para usar en el texto (estilo text-*-700)
+  Color _darkenColor(Color color, double amount) {
+    assert(amount >= 0 && amount <= 1);
+    final hsl = HSLColor.fromColor(color);
+    return hsl.withLightness((hsl.lightness * (1 - amount)).clamp(0.0, 1.0)).toColor();
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Estado vacío: mantenemos la tarjeta con "Borrar filtros"
+    // Estado vacío: mostrar mensaje según si hay búsqueda activa o no
     if (widget.events.isEmpty) {
+      // Si no hay búsqueda activa, mostrar mensaje de bienvenida
+      if (!widget.hasActiveSearch) {
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Utiliza los filtros de arriba para localizar tu localidad o evento',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Selecciona una ciudad, categoría o fecha para encontrar planes',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+
+      // Si hay búsqueda activa pero sin resultados, mostrar mensaje con sugerencias
       // Verificar si debemos mostrar el botón de búsqueda ampliada
       final shouldShowExpandButton = widget.isRadiusMode &&
           widget.currentRadiusKm != null &&
@@ -199,24 +286,41 @@ class _UpcomingListState extends State<UpcomingList> {
 
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 24),
+          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.event_busy, size: 40),
+              Text(
+                'No se encontraron eventos',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurface,
+                ),
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 8),
-              Text(
-                'No hay eventos para estos filtros',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                shouldShowExpandButton
-                    ? 'No hay planes cerca. ¿Buscar en 50km?'
-                    : 'Prueba cambiando de ciudad o categoría.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
+              if (widget.searchTerm != null && widget.searchTerm!.isNotEmpty) ...[
+                Text(
+                  'No hay resultados para "${widget.searchTerm}"',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                _buildSuggestions(context),
+              ] else ...[
+                Text(
+                  shouldShowExpandButton
+                      ? 'No hay planes cerca. ¿Buscar en 50km?'
+                      : 'Prueba cambiando de ciudad o categoría.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 16),
               // Botón de búsqueda ampliada (solo en modo radio con radio < 50km)
               if (shouldShowExpandButton)
                 ElevatedButton.icon(
@@ -271,7 +375,7 @@ class _UpcomingListState extends State<UpcomingList> {
               ),
           ],
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         ValueListenableBuilder<Set<String>>(
           valueListenable: FavoritesService.instance.favoritesNotifier,
           builder: (context, favorites, _) {
@@ -281,7 +385,7 @@ class _UpcomingListState extends State<UpcomingList> {
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
+                mainAxisSpacing: 10,
                 childAspectRatio: 0.68, // Ratio ajustado para media foto + información
               ),
               itemCount: widget.events.length,
@@ -353,61 +457,65 @@ class _UpcomingListState extends State<UpcomingList> {
                                     ),
                                   ),
                                 ),
-                                padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                                padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          event.title,
-                                          style: TextStyle(
-                                            fontWeight: FontWeight.w600,
-                                            fontSize: 13,
-                                            height: 1.3,
-                                            color: isPast
-                                                ? Theme.of(context).disabledColor
-                                                : Theme.of(context).colorScheme.onSurface,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Text(
+                                            event.title,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                              height: 1.2,
+                                              color: isPast
+                                                  ? Theme.of(context).disabledColor
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          () {
-                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                            return "$fullDate · $fullHour";
-                                          }(),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            fontSize: 11,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                                          const SizedBox(height: 6),
+                                          // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
+                                          Text(
+                                            () {
+                                              final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                              final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                              final location = event.cityName ?? '';
+                                              if (location.isNotEmpty) {
+                                                return "$fullDate · $fullHour · $location";
+                                              }
+                                              return "$fullDate · $fullHour";
+                                            }(),
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                              fontSize: 10,
+                                              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                            ),
                                           ),
-                                        ),
-                                      ],
+                                        ],
+                                      ),
                                     ),
-                                    // Chip de categoría (siempre abajo)
+                                    // Chip de categoría (discreto, con baja opacidad) - Light Pill Style
                                     if (widget.showCategory && event.categoryName != null)
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.2)),
-                                          borderRadius: BorderRadius.circular(8),
-                                          border: Border.all(
-                                            color: _getChipColor(context, event, categoryColor.withOpacity(0.4)),
-                                            width: 1,
-                                          ),
+                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
+                                          borderRadius: BorderRadius.circular(12),
                                         ),
                                         child: Text(
                                           event.categoryName!,
                                           style: TextStyle(
-                                            color: _getChipTextColor(context, event, categoryColor),
-                                            fontSize: 10,
+                                            color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
+                                            fontSize: 9,
                                             fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.2,
+                                            letterSpacing: 0.1,
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,

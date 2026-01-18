@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' hide Category;
 import 'package:geolocator/geolocator.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:video_player/video_player.dart';
 import 'package:fiestapp/services/event_service.dart';
 import 'package:fiestapp/data/events_repository.dart';
 import 'package:fiestapp/models/event.dart' as model;
@@ -15,6 +16,7 @@ import 'widgets/hero_slider.dart';
 import 'widgets/upcoming_list.dart';
 import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
+import 'widgets/featured_events_carousel.dart';
 import 'widgets/unified_search_bar.dart';
 import 'widgets/city_radio_toggle.dart';
 import '../icons/icon_mapper.dart';
@@ -100,10 +102,93 @@ final Map<String, List<String>> kMonthlyTaglines = {
 };
 
 class DashboardScreen extends StatefulWidget {
-  const DashboardScreen({super.key});
+  final Map<String, dynamic>? preloadedData;
+  
+  const DashboardScreen({super.key, this.preloadedData});
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
+
+  /// Pre-carga los datos del dashboard para mejorar la transición desde el splash
+  static Future<Map<String, dynamic>> preloadData() async {
+    try {
+      final eventService = EventService.instance;
+      final categoryService = CategoryService();
+      
+      // Establecer filtro por defecto a "1 Mes" (30 días)
+      final r = next30DaysRange();
+      
+      // Cargar datos en paralelo
+      final results = await Future.wait([
+        eventService.fetchEvents(
+          cityIds: null,
+          categoryId: null,
+          from: r.from,
+          to: r.to,
+          radiusKm: 15.0, // Radio por defecto
+          center: {'lat': 36.1927, 'lng': -5.9219}, // Ubicación por defecto
+          searchTerm: null,
+        ),
+        eventService.fetchPopularEvents(
+          provinceId: null,
+          limit: 7,
+        ),
+        categoryService.fetchAll(),
+      ]);
+
+      final upcoming = results[0] as List<Event>;
+      final featured = results[1] as List<Event>;
+      final categories = results[2] as List<Category>;
+
+      // Pre-cargar imágenes del carrusel destacado usando precacheImage de Flutter
+      // Las imágenes se cargarán en caché para acceso rápido
+      if (featured.isNotEmpty) {
+        final imagePrecacheFutures = featured
+            .where((e) => e.imageUrl != null && e.imageUrl!.isNotEmpty)
+            .take(5) // Pre-cargar las primeras 5 para tener más imágenes listas
+            .map((e) async {
+          try {
+            final imageProvider = NetworkImage(e.imageUrl!);
+            await imageProvider.resolve(const ImageConfiguration());
+          } catch (e) {
+            // Silenciar errores de precarga
+          }
+        });
+        // No esperar todas, cargar en paralelo y continuar
+        Future.wait(imagePrecacheFutures, eagerError: false);
+      }
+
+      // Pre-cargar imágenes de los primeros eventos de la lista
+      if (upcoming.isNotEmpty) {
+        final imagePrecacheFutures = upcoming
+            .where((e) => e.imageUrl != null && e.imageUrl!.isNotEmpty)
+            .take(8) // Pre-cargar las primeras 8 para la primera vista
+            .map((e) async {
+          try {
+            final imageProvider = NetworkImage(e.imageUrl!);
+            await imageProvider.resolve(const ImageConfiguration());
+          } catch (e) {
+            // Silenciar errores de precarga
+          }
+        });
+        // No esperar todas, cargar en paralelo y continuar
+        Future.wait(imagePrecacheFutures, eagerError: false);
+      }
+
+      return {
+        'upcomingEvents': upcoming,
+        'featuredEvents': featured,
+        'categories': categories,
+      };
+    } catch (e) {
+      debugPrint('Error al pre-cargar datos del dashboard: $e');
+      return {
+        'upcomingEvents': <Event>[],
+        'featuredEvents': <Event>[],
+        'categories': <Category>[],
+      };
+    }
+  }
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
@@ -174,16 +259,47 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isHeroLoading = false;
   bool _textVisible = true; // Control de visibilidad del texto para fade
 
+  // Video splash overlay state
+  VideoPlayerController? _videoController;
+  bool _showIntro = true;
+  bool _isVideoInitialized = false; // Estado para saber si el video está listo
+  double _videoOpacity = 1.0;
+
   @override
   void initState() {
     super.initState();
     _checkLocationPermission();
     // Establecer filtro por defecto a "1 semana"
     _setDefaultWeekFilter();
-    _reloadEvents().then((_) => _loadNearby());
-    _loadCities();
-    _loadNearbyCities();
-    _loadHeroBanner();
+    
+    // IMPORTANTE: Cargar datos del Dashboard INMEDIATAMENTE en segundo plano
+    // Esto asegura que cuando el video termine, la app ya esté lista para usarse.
+    // La carga ocurre en paralelo, no bloquea el inicio del video.
+    if (widget.preloadedData != null) {
+      setState(() {
+        _upcomingEvents = widget.preloadedData!['upcomingEvents'] as List<Event>? ?? [];
+        _featuredEvents = widget.preloadedData!['featuredEvents'] as List<Event>? ?? [];
+        _categories = widget.preloadedData!['categories'] as List<Category>? ?? [];
+        _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
+        _isLoading = false;
+      });
+      // Cargar el resto en segundo plano (en paralelo con el video)
+      _loadCities();
+      _loadNearbyCities();
+      _loadHeroBanner();
+      _reloadEvents().then((_) => _loadNearby());
+    } else {
+      // Si no hay datos pre-cargados, cargar normalmente (en paralelo con el video)
+      _reloadEvents().then((_) => _loadNearby());
+      _loadCities();
+      _loadNearbyCities();
+      _loadHeroBanner();
+    }
+    
+    // Inicializar video de introducción en PARALELO con la carga del Dashboard
+    // El Dashboard sigue cargándose debajo del overlay blanco/video
+    _initializeIntroVideo();
+    
     // Mostrar diálogo de autenticación después de que la UI cargue
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -192,14 +308,85 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  /// Establece el filtro por defecto a "7 días"
+  /// Inicializa el video de introducción como overlay
+  Future<void> _initializeIntroVideo() async {
+    try {
+      _videoController = VideoPlayerController.asset('assets/videos/splash.mp4');
+      await _videoController!.initialize();
+      
+      if (mounted) {
+        // Configurar video
+        _videoController!.setLooping(false);
+        _videoController!.setVolume(0.0);
+        
+        // Añadir listener para detectar cuando termine
+        _videoController!.addListener(_videoListener);
+        
+        // Marcar video como inicializado ANTES de reproducir
+        setState(() {
+          _isVideoInitialized = true;
+        });
+        
+        // Reproducir automáticamente
+        _videoController!.play();
+      }
+    } catch (e) {
+      debugPrint('Error al inicializar video de introducción: $e');
+      // Si hay error, ocultar el overlay inmediatamente
+      if (mounted) {
+        setState(() {
+          _showIntro = false;
+          _isVideoInitialized = false;
+        });
+      }
+    }
+  }
+
+  /// Listener para detectar cuando el video termine
+  void _videoListener() {
+    if (_videoController == null || !mounted) return;
+    
+    final position = _videoController!.value.position;
+    final duration = _videoController!.value.duration;
+    
+    // Si el video terminó, iniciar fade out
+    if (duration > Duration.zero && position >= duration) {
+      _videoController!.removeListener(_videoListener);
+      _fadeOutVideo();
+    }
+  }
+
+  /// Inicia la animación de desvanecimiento del video
+  void _fadeOutVideo() {
+    if (!mounted) return;
+    
+    // Animar opacidad de 1.0 a 0.0 en 500ms
+    setState(() {
+      _videoOpacity = 0.0;
+    });
+    
+    // Después de la animación, eliminar el widget del video
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted) {
+        setState(() {
+          _showIntro = false;
+        });
+        // Hacer dispose del controlador
+        _videoController?.removeListener(_videoListener);
+        _videoController?.dispose();
+        _videoController = null;
+      }
+    });
+  }
+
+  /// Establece el filtro por defecto a "1 Mes" (30 días)
   void _setDefaultWeekFilter() {
-    final r = next7DaysRange();
+    final r = next30DaysRange();
     setState(() {
       _isToday = false;
       _isNextWeekend = false;
-      _isNext7Days = true;
-      _isNext30Days = false;
+      _isNext7Days = false;
+      _isNext30Days = true;
       _fromDate = r.from;
       _toDate = r.to;
     });
@@ -213,6 +400,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _citySearchCtrl.dispose();
     _filterPanelAutoCloseTimer?.cancel();
     _heroTimer?.cancel();
+    _videoController?.removeListener(_videoListener);
+    _videoController?.dispose();
     super.dispose();
   }
 
@@ -1081,28 +1270,49 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Muestra el rango completo de fechas cuando está disponible
   String? _getDateFilterInfoText() {
     final hasDateFilter = _fromDate != null || _toDate != null;
-    if (!hasDateFilter) return null;
+    
+    // Si no hay filtro activo, mostrar "1 Mes" por defecto
+    if (!hasDateFilter) {
+      return 'Mostrando planes: Próximos 30 días';
+    }
 
-    // Formato para mostrar fechas
-    final dateFormat = DateFormat('d MMM', 'es');
-
-    if (_isToday && _fromDate != null) {
-      return 'Mostrando planes: ${dateFormat.format(_fromDate!)}';
-    } else if (_isNextWeekend && _fromDate != null && _toDate != null) {
-      // Próximo fin de semana: mostrar rango completo
-      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
-    } else if (_isNext7Days && _fromDate != null && _toDate != null) {
-      // 7 días: mostrar rango completo
-      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
-    } else if (_isNext30Days && _fromDate != null && _toDate != null) {
-      // 30 días: mostrar rango completo
-      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    // Dynamic label según el filtro activo
+    if (_isToday) {
+      return 'Mostrando planes: Hoy';
+    } else if (_isNext7Days) {
+      return 'Mostrando planes: Próximos 7 días';
+    } else if (_isNext30Days) {
+      return 'Mostrando planes: Próximos 30 días';
     } else if (_fromDate != null && _toDate != null) {
-      // Rango personalizado (Calendario): mostrar rango completo
+      // Rango personalizado (Calendario)
+      final dateFormat = DateFormat('d MMM', 'es');
       return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
     }
 
     return null;
+  }
+
+  /// Obtiene el texto de la etiqueta del filtro de fecha para mostrar debajo de las categorías
+  String _getDateFilterLabelText() {
+    // Si no hay filtro activo, mostrar "1 Mes" por defecto
+    if (!_isToday && !_isNext7Days && !_isNext30Days && _fromDate == null && _toDate == null) {
+      return 'Mostrando planes: Próximo mes';
+    }
+
+    // Dynamic label según el filtro activo
+    if (_isToday) {
+      return 'Mostrando planes: Hoy';
+    } else if (_isNext7Days) {
+      return 'Mostrando planes: Próximos 7 días';
+    } else if (_isNext30Days) {
+      return 'Mostrando planes: Próximo mes';
+    } else if (_fromDate != null && _toDate != null) {
+      // Rango personalizado (Calendario)
+      final dateFormat = DateFormat('d MMM', 'es');
+      return 'Mostrando planes: ${dateFormat.format(_fromDate!)} - ${dateFormat.format(_toDate!)}';
+    }
+
+    return 'Mostrando planes: Próximo mes';
   }
 
   String _getFiltersSubtitle() {
@@ -1466,72 +1676,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Barra de toggle que ocupa todo el ancho con flecha abajo
-          InkWell(
-            onTap: () {
-              setState(() {
-                _isFilterPanelExpanded = !_isFilterPanelExpanded;
-                if (_isFilterPanelExpanded) {
-                  _resetFilterPanelTimer();
-                }
-              });
+          // Radio y Ciudad siempre visible
+          CityRadioToggle(
+            selectedMode: _mode,
+            onModeChanged: (mode) async {
+              if (mode != _mode) {
+                await _switchMode(mode);
+              }
             },
-            borderRadius: BorderRadius.circular(16),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                color: Theme.of(context).colorScheme.surface,
-                border: Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.12),
-                  width: 1.5,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Theme.of(context).colorScheme.shadow.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                children: [
-                  CityRadioToggle(
-                    selectedMode: _mode,
-                    onModeChanged: (mode) async {
-                      if (mode != _mode) {
-                        await _switchMode(mode);
-                      }
-                    },
-                    selectedCityName: _selectedCityName,
-                    radiusKm: _radiusKm,
-                    hasLocationPermission: _hasLocationPermission,
-                  ),
-                  const SizedBox(height: 8),
-                  // Flecha centrada abajo
-                  AnimatedRotation(
-                    turns: _isFilterPanelExpanded ? 0.5 : 0,
-                    duration: const Duration(milliseconds: 300),
-                    child: Icon(
-                      Icons.keyboard_arrow_down,
-                      color: Theme.of(context).colorScheme.primary,
-                      size: 28,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            selectedCityName: _selectedCityName,
+            radiusKm: _radiusKm,
+            hasLocationPermission: _hasLocationPermission,
           ),
-          // Desplegable con animación
-          AnimatedCrossFade(
-            firstChild: const SizedBox.shrink(),
-            secondChild: _buildExpandedFilterContent(),
-            crossFadeState: _isFilterPanelExpanded
-                ? CrossFadeState.showSecond
-                : CrossFadeState.showFirst,
-            duration: const Duration(milliseconds: 300),
-          ),
+          // Contenido de filtros siempre visible y compacto
+          _buildExpandedFilterContent(),
         ],
       ),
     );
@@ -1540,168 +1698,116 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget _buildExpandedFilterContent() {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          color: Theme.of(context).colorScheme.surface,
-          border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Theme.of(context).colorScheme.shadow.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Contenido según el modo - Compacto
+          if (_mode == LocationMode.radius) ...[
+            // Modo Radio: Categorías en slide lateral + selector de radio
+            if (_hasLocationPermission) ...[
+              _buildRadiusAndLocationContent(),
+              const SizedBox(height: 12),
+            ],
+            // Categorías en slide horizontal compacto
+            SizedBox(
+              height: 50,
+              child: _buildHorizontalCategoriesList(),
+            ),
+          ] else ...[
+            // Modo Ciudad: Búsqueda de ciudad + categorías
+            UnifiedSearchBar(
+              selectedCityId: _selectedCityId,
+              onCitySelected: (city) {
+                _onFilterInteraction();
+                if (mounted) {
+                  setState(() {
+                    _selectedCityId = city.id;
+                    _selectedCityIds = {city.id};
+                    _selectedCityName = city.name;
+                  });
+                  _updateCurrentProvinceId();
+                  _reloadEvents();
+                }
+              },
+              onSearchChanged: null,
+            ),
+            const SizedBox(height: 12),
+            // Categorías en slide horizontal compacto
+            SizedBox(
+              height: 50,
+              child: _buildHorizontalCategoriesList(),
             ),
           ],
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 12),
+          // Chips de fecha: Hoy, 7 Días, 1 Mes (por defecto), Calendario - Compacto
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
             children: [
-              // Contenido según el modo
-              if (_mode == LocationMode.radius) ...[
-                // Modo Radio: Categorías en slide lateral + selector de radio
-                if (_hasLocationPermission) ...[
-                  _buildRadiusAndLocationContent(),
-                  const SizedBox(height: 16),
-                ],
-                // Categorías en slide horizontal
-                Text(
-                  'Categorías',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 120,
-                  child: _buildHorizontalCategoriesList(),
-                ),
-              ] else ...[
-                // Modo Ciudad: Búsqueda de ciudad + categorías
-                UnifiedSearchBar(
-                  selectedCityId: _selectedCityId,
-                  onCitySelected: (city) {
-                    _onFilterInteraction();
-                    if (mounted) {
-                      setState(() {
-                        _selectedCityId = city.id;
-                        _selectedCityIds = {city.id};
-                        _selectedCityName = city.name;
-                      });
-                      _updateCurrentProvinceId();
-                      _reloadEvents();
-                    }
-                  },
-                  onSearchChanged: null,
-                ),
-                const SizedBox(height: 16),
-                // Categorías en slide horizontal
-                Text(
-                  'Categorías',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  height: 120,
-                  child: _buildHorizontalCategoriesList(),
-                ),
-              ],
-              const SizedBox(height: 16),
-              // Chips de fecha (Hoy, Próximo fin de semana, 7 días, 30 días, Calendario)
-              Text(
-                'Fechas',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+              FilterChip(
+                label: const Text('Hoy'),
+                selected: _isToday,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) {
+                  _onFilterInteraction();
+                  final r = todayRange();
+                  setState(() {
+                    _isToday = true;
+                    _isNextWeekend = false;
+                    _isNext7Days = false;
+                    _isNext30Days = false;
+                  });
+                  _reloadWithDateRange(from: r.from, to: r.to);
+                },
               ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  FilterChip(
-                    label: const Text('Hoy'),
-                    selected: _isToday,
-                    onSelected: (_) {
-                      _onFilterInteraction();
-                      final r = todayRange();
-                      setState(() {
-                        _isToday = true;
-                        _isNextWeekend = false;
-                        _isNext7Days = false;
-                        _isNext30Days = false;
-                      });
-                      _reloadWithDateRange(from: r.from, to: r.to);
-                    },
-                  ),
-                  FilterChip(
-                    label: const Text('Próximo fin de semana'),
-                    selected: _isNextWeekend,
-                    onSelected: (_) {
-                      _onFilterInteraction();
-                      final r = nextWeekendRange();
-                      setState(() {
-                        _isToday = false;
-                        _isNextWeekend = true;
-                        _isNext7Days = false;
-                        _isNext30Days = false;
-                      });
-                      _reloadWithDateRange(from: r.from, to: r.to);
-                    },
-                  ),
-                  FilterChip(
-                    label: const Text('7 días'),
-                    selected: _isNext7Days,
-                    onSelected: (_) {
-                      _onFilterInteraction();
-                      final r = next7DaysRange();
-                      setState(() {
-                        _isToday = false;
-                        _isNextWeekend = false;
-                        _isNext7Days = true;
-                        _isNext30Days = false;
-                      });
-                      _reloadWithDateRange(from: r.from, to: r.to);
-                    },
-                  ),
-                  FilterChip(
-                    label: const Text('30 días'),
-                    selected: _isNext30Days,
-                    onSelected: (_) {
-                      _onFilterInteraction();
-                      final r = next30DaysRange();
-                      setState(() {
-                        _isToday = false;
-                        _isNextWeekend = false;
-                        _isNext7Days = false;
-                        _isNext30Days = true;
-                      });
-                      _reloadWithDateRange(from: r.from, to: r.to);
-                    },
-                  ),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.calendar_today, size: 16),
-                    label: const Text('Calendario'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                      minimumSize: const Size(0, 32),
-                    ),
-                    onPressed: () {
-                      _onFilterInteraction();
-                      _showDateRangePicker();
-                    },
-                  ),
-                ],
+              FilterChip(
+                label: const Text('7 Días'),
+                selected: _isNext7Days,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) {
+                  _onFilterInteraction();
+                  final r = next7DaysRange();
+                  setState(() {
+                    _isToday = false;
+                    _isNextWeekend = false;
+                    _isNext7Days = true;
+                    _isNext30Days = false;
+                  });
+                  _reloadWithDateRange(from: r.from, to: r.to);
+                },
+              ),
+              FilterChip(
+                label: const Text('1 Mes'),
+                selected: _isNext30Days,
+                visualDensity: VisualDensity.compact,
+                onSelected: (_) {
+                  _onFilterInteraction();
+                  final r = next30DaysRange();
+                  setState(() {
+                    _isToday = false;
+                    _isNextWeekend = false;
+                    _isNext7Days = false;
+                    _isNext30Days = true;
+                  });
+                  _reloadWithDateRange(from: r.from, to: r.to);
+                },
+              ),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_today, size: 14),
+                label: const Text('Calendario'),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  minimumSize: const Size(0, 32),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () {
+                  _onFilterInteraction();
+                  _showDateRangePicker();
+                },
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1711,132 +1817,105 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return const Center(child: Text('No hay categorías disponibles'));
     }
 
-    final List<Widget> categoryWidgets = [];
-
-    // Cuadro "Todas"
-    final isAllSelected = _selectedCategoryId == null;
-    categoryWidgets.add(
-      SizedBox(
-        width: 100,
-        child: InkWell(
-          onTap: () {
-            _onFilterInteraction();
-            setState(() {
-              _selectedCategoryId = null;
-            });
-            _reloadEvents();
-          },
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: isAllSelected
-                  ? Theme.of(context).colorScheme.primaryContainer.withOpacity(0.5)
-                  : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(12),
-              border: isAllSelected
-                  ? Border.all(
-                      color: Theme.of(context).colorScheme.primary,
-                      width: 2,
-                    )
-                  : null,
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.grid_view,
-                  size: 32,
-                  color: isAllSelected
-                      ? Theme.of(context).colorScheme.onPrimaryContainer
-                      : Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Todas',
-                  style: TextStyle(
-                    fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w500,
-                    fontSize: 12,
-                    color: isAllSelected
-                        ? Theme.of(context).colorScheme.onPrimaryContainer
-                        : Theme.of(context).colorScheme.onSurface,
-                  ),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    // Agregar las categorías
-    categoryWidgets.addAll(
-      _categories.where((c) => c.id != null).map((category) {
-        final categoryColor = _getColorForCategory(category.name);
-        final isSelected = category.id == _selectedCategoryId;
-
-        return SizedBox(
-          width: 100,
-          child: InkWell(
+    return ListView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      children: [
+        // Chip "Todas" estilo Pill compacto
+        Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: _buildCompactCategoryChip(
+            label: 'Todas',
+            icon: Icons.grid_view,
+            isSelected: _selectedCategoryId == null,
+            categoryColor: Colors.grey,
             onTap: () {
               _onFilterInteraction();
               setState(() {
-                _selectedCategoryId = isSelected ? null : category.id;
+                _selectedCategoryId = null;
               });
               _reloadEvents();
             },
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
+          ),
+        ),
+        // Categorías estilo Pills compactos
+        ..._categories.where((c) => c.id != null).map((category) {
+          final categoryColor = _getColorForCategory(category.name);
+          final isSelected = category.id == _selectedCategoryId;
+          return Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: _buildCompactCategoryChip(
+              label: category.name,
+              icon: iconFromName(category.icon),
+              isSelected: isSelected,
+              categoryColor: categoryColor,
+              onTap: () {
+                _onFilterInteraction();
+                setState(() {
+                  _selectedCategoryId = isSelected ? null : category.id;
+                });
+                _reloadEvents();
+              },
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  /// Construye un chip compacto de categoría (estilo horizontal)
+  Widget _buildCompactCategoryChip({
+    required String label,
+    required IconData icon,
+    required bool isSelected,
+    required Color categoryColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        constraints: const BoxConstraints(
+          minHeight: 36,
+          maxHeight: 36, // Altura fija compacta de 36px
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? categoryColor.withOpacity(0.15)
+              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(16),
+          border: isSelected
+              ? Border.all(color: categoryColor, width: 1.5)
+              : Border.all(
+                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+                  width: 1,
+                ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 16, // Icono pequeño
+              color: isSelected
+                  ? categoryColor
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                fontSize: 13,
                 color: isSelected
-                    ? categoryColor.withOpacity(0.3)
-                    : categoryColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-                border: isSelected
-                    ? Border.all(color: categoryColor, width: 2)
-                    : null,
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    iconFromName(category.icon),
-                    size: 32,
-                    color: isSelected
-                        ? categoryColor
-                        : Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    category.name,
-                    style: TextStyle(
-                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                      fontSize: 12,
-                      color: isSelected
-                          ? categoryColor
-                          : Theme.of(context).colorScheme.onSurface,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    ? categoryColor
+                    : Theme.of(context).colorScheme.onSurface,
               ),
             ),
-          ),
-        );
-      }),
-    );
-
-    return ListView(
-      scrollDirection: Axis.horizontal,
-      children: categoryWidgets,
+          ],
+        ),
+      ),
     );
   }
 
@@ -2048,10 +2127,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   /// Construye el widget del hero banner con rotación automática
   Widget _buildHeroBanner(BuildContext context) {
-    // Calcular altura responsive - aumentada significativamente
+    // Calcular altura responsive - reducida en un 20%
     final size = MediaQuery.of(context).size;
     final isMobile = size.width < 600;
-    final bannerHeight = isMobile ? 480.0 : 400.0;
+    final bannerHeight = isMobile ? 384.0 : 320.0; // Reducido 20% (480*0.8=384, 400*0.8=320)
 
     if (_isHeroLoading) {
       return SizedBox(
@@ -2245,10 +2324,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       );
     }
 
-    return Scaffold(
-      extendBody: true, // Permite que el body se extienda detrás del bottom navigation bar
-      backgroundColor: Colors.transparent, // Fondo transparente del Scaffold
-      body: Container(
+    // Envolver el Scaffold en un Stack para añadir el overlay del video
+    // IMPORTANTE: El Scaffold (Dashboard) se carga INMEDIATAMENTE en segundo plano
+    // mientras se muestra el overlay blanco/video. Cuando el video termina,
+    // la app ya está lista y cargada.
+    return Stack(
+      children: [
+        // Capa 1 (Fondo): El Scaffold con toda la UI de la app
+        // Esta capa se carga y renderiza desde el inicio, aunque esté tapada por el overlay
+        Scaffold(
+          extendBody: true, // Permite que el body se extienda detrás del bottom navigation bar
+          backgroundColor: Colors.transparent, // Fondo transparente del Scaffold
+          body: Container(
         // Fondo con efecto espejo y diferentes transparencias
         decoration: BoxDecoration(
           gradient: LinearGradient(
@@ -2341,11 +2428,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 0, 0, 4),
-                      child: _buildHeroBanner(context),
-                    ),
+                    // Carrusel de eventos destacados estilo Netflix
+                    if (!_isLoading && _featuredEvents.isNotEmpty) ...[
+                      FeaturedEventsCarousel(events: _featuredEvents),
+                      const SizedBox(height: 8),
+                    ] else if (_isLoading) ...[
+                      // Placeholder sutil mientras carga (sin ruleta visible)
+                      AnimatedOpacity(
+                        opacity: 0.3,
+                        duration: const Duration(milliseconds: 300),
+                        child: SizedBox(
+                          height: 235,
+                          child: Container(
+                            color: Colors.grey.shade900,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     if (!_isLoading) ...[_buildFilterPanel()],
+                    // Etiqueta dinámica del filtro de fecha
                     // Resultados de búsqueda
                     if (_searchEventTerm != null &&
                         _searchEventTerm!.isNotEmpty) ...[
@@ -2417,55 +2519,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           isRadiusMode: _mode == LocationMode.radius,
                           currentRadiusKm: _radiusKm,
                           onExpandRadius: _expandRadiusTo50km,
-                        ),
-                      ),
-                    // Popular esta semana
-                    if (_isLoading)
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 24),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).colorScheme.surfaceVariant,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: SizedBox(
-                            height: 230,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                              ),
-                              scrollDirection: Axis.horizontal,
-                              itemCount: 5,
-                              separatorBuilder:
-                                  (BuildContext context, int index) =>
-                                      const SizedBox(width: 12),
-                              itemBuilder: (BuildContext context, int index) {
-                                return const SizedBox(
-                                  width: 280,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      ShimmerBlock(height: 150),
-                                      ShimmerBlock(height: 16, width: 160),
-                                      ShimmerBlock(height: 14, width: 120),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 28),
-                        child: PopularThisWeekSection(
-                          events: _featuredEvents,
-                          onClearFilters: _clearFilters,
-                          title: _popularTitle(),
+                          // Información de búsqueda activa (búsqueda de texto o filtros aplicados)
+                          hasActiveSearch: (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ||
+                              _selectedCategoryId != null ||
+                              _selectedCityId != null ||
+                              _fromDate != null ||
+                              _toDate != null,
+                          searchTerm: _searchEventTerm,
                         ),
                       ),
                     // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
@@ -2489,12 +2549,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       const SizedBox.shrink(),
                     const SizedBox(height: 100), // Espacio para la barra de navegación flotante
                   ],
-                ),
-              ),
-            ],
-          ),
-        ),
-              ),
+                ), // Cierra Column
+              ), // Cierra SliverToBoxAdapter
+            ], // Cierra slivers del CustomScrollView
+                ), // Cierra CustomScrollView
+              ), // Cierra RefreshIndicator
+            ), // Cierra SafeArea
             // Barra de navegación flotante - sin fondo del Scaffold
             const Positioned(
               left: 0,
@@ -2502,9 +2562,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
               bottom: 0,
               child: BottomNavBar(),
             ),
-          ],
-        ),
-      ),
+          ], // Cierra children del Stack interno
+        ), // Cierra Stack interno
+        ), // Cierra Container (body del Scaffold)
+        ), // Cierra Scaffold
+        // Capa 2 (Frente): Video overlay (solo si _showIntro es true)
+        // Ignora SafeArea para cubrir toda la pantalla (notch, barra inferior, etc.)
+        if (_showIntro)
+          Positioned.fill(
+            child: MediaQuery.removePadding(
+              context: context,
+              removeTop: true,
+              removeBottom: true,
+              removeLeft: true,
+              removeRight: true,
+              child: IgnorePointer(
+                child: _isVideoInitialized && _videoController != null && _videoController!.value.isInitialized
+                    ? AnimatedOpacity(
+                        opacity: _videoOpacity,
+                        duration: const Duration(milliseconds: 500),
+                        child: Container(
+                          color: Colors.black,
+                          width: double.infinity,
+                          height: double.infinity,
+                          child: FittedBox(
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            child: SizedBox(
+                              width: _videoController!.value.size.width,
+                              height: _videoController!.value.size.height,
+                              child: VideoPlayer(_videoController!),
+                            ),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        // Fondo blanco sólido mientras el video se inicializa
+                        color: Colors.white,
+                        width: double.infinity,
+                        height: double.infinity,
+                      ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -2537,6 +2638,9 @@ class UpcomingEventsSection extends StatelessWidget {
   final bool isRadiusMode;
   final double? currentRadiusKm;
   final VoidCallback? onExpandRadius;
+  // Información de búsqueda activa
+  final bool hasActiveSearch;
+  final String? searchTerm;
 
   const UpcomingEventsSection({
     super.key,
@@ -2549,6 +2653,8 @@ class UpcomingEventsSection extends StatelessWidget {
     this.isRadiusMode = false,
     this.currentRadiusKm,
     this.onExpandRadius,
+    this.hasActiveSearch = false,
+    this.searchTerm,
   });
 
   @override
@@ -2594,6 +2700,9 @@ class UpcomingEventsSection extends StatelessWidget {
             onExpandRadius: onExpandRadius,
             // Texto del filtro de fecha activo
             dateFilterText: dateFilterText,
+            // Información de búsqueda activa
+            hasActiveSearch: hasActiveSearch,
+            searchTerm: searchTerm,
           ),
         ],
       ),
@@ -2616,7 +2725,7 @@ class CategoriesSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
@@ -3024,65 +3133,62 @@ class _NearbyControlWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Radio',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w500),
-                    ),
-                    Text(
-                      '${radiusKm.toInt()} km',
-                      style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                SliderTheme(
-                  data: SliderTheme.of(context).copyWith(
-                    trackHeight: 6,
-                    thumbShape: const RoundSliderThumbShape(
-                      enabledThumbRadius: 9,
-                    ),
-                    overlayShape: const RoundSliderOverlayShape(
-                      overlayRadius: 18,
-                    ),
-                    activeTrackColor: Theme.of(
-                      context,
-                    ).colorScheme.primary,
-                    inactiveTrackColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.25),
-                    thumbColor: Theme.of(context).colorScheme.primary,
-                    overlayColor: Theme.of(
-                      context,
-                    ).colorScheme.primary.withOpacity(0.16),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Radio',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w500),
                   ),
-                  child: Slider(
-                    value: radiusKm,
-                    min: 5,
-                    max: 100,
-                    divisions: 19,
-                    label: '${radiusKm.round()} km',
-                    onChanged: onRadiusChanged,
+                  Text(
+                    '${radiusKm.toInt()} km',
+                    style: Theme.of(context).textTheme.bodyMedium
+                        ?.copyWith(fontWeight: FontWeight.w600),
                   ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackHeight: 6,
+                  thumbShape: const RoundSliderThumbShape(
+                    enabledThumbRadius: 9,
+                  ),
+                  overlayShape: const RoundSliderOverlayShape(
+                    overlayRadius: 18,
+                  ),
+                  activeTrackColor: Theme.of(
+                    context,
+                  ).colorScheme.primary,
+                  inactiveTrackColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withOpacity(0.25),
+                  thumbColor: Theme.of(context).colorScheme.primary,
+                  overlayColor: Theme.of(
+                    context,
+                  ).colorScheme.primary.withOpacity(0.16),
                 ),
-              ],
-            ),
-          ],
-        ),
+                child: Slider(
+                  value: radiusKm,
+                  min: 5,
+                  max: 100,
+                  divisions: 19,
+                  label: '${radiusKm.round()} km',
+                  onChanged: onRadiusChanged,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

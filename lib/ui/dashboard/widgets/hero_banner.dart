@@ -17,7 +17,7 @@ class HeroBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 220,
+      height: 176, // Reducido 20% (220*0.8=176)
       child: Stack(
         children: [
           // Imagen de fondo

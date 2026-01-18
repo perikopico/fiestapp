@@ -251,7 +251,11 @@ class _UnifiedSearchBarState extends State<UnifiedSearchBar> {
                         size: 20,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
-                      title: Text(event.title),
+                      title: Text(
+                        event.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       subtitle: event.cityName != null
                           ? Text(
                               event.cityName!,

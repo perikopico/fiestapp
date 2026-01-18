@@ -111,7 +111,7 @@ class _HeroSliderState extends State<HeroSlider> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 200,
+      height: 144, // Reducido 20% (180*0.8=144)
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,
