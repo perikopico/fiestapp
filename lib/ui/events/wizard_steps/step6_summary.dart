@@ -375,13 +375,27 @@ class _Step6SummaryState extends State<Step6Summary> {
         }
 
         try {
+          // Preparar lista de categoryIds si hay múltiples categorías
+          List<int>? categoryIds;
+          if (widget.wizardData.categories.length > 1) {
+            categoryIds = widget.wizardData.categories
+                .where((c) => c.id != null)
+                .map((c) => c.id!)
+                .toList();
+            // La primera ya está en categoryId, así que quitarla de la lista adicional
+            if (categoryIds.isNotEmpty && categoryIds.first == widget.wizardData.category!.id!) {
+              categoryIds.removeAt(0);
+            }
+          }
+
           await _eventService.submitEvent(
             title: widget.wizardData.title!,
             town: widget.wizardData.city!.name,
             place: placeName,
             startsAt: startsAt,
             cityId: widget.wizardData.cityId!,
-            categoryId: widget.wizardData.category!.id!,
+            categoryId: widget.wizardData.category!.id!, // Primera categoría (obligatoria)
+            categoryIds: categoryIds, // Categorías adicionales (si hay más de 1)
             description: description,
             mapsUrl: (latToSave != null && lngToSave != null)
                 ? 'https://www.google.com/maps/search/?api=1&query=$latToSave,$lngToSave'
@@ -429,13 +443,27 @@ class _Step6SummaryState extends State<Step6Summary> {
             final lngToSave = widget.wizardData.getFinalLng();
             final placeName = widget.wizardData.getPlaceName();
 
+            // Preparar lista de categoryIds si hay múltiples categorías
+            List<int>? categoryIds;
+            if (widget.wizardData.categories.length > 1) {
+              categoryIds = widget.wizardData.categories
+                  .where((c) => c.id != null)
+                  .map((c) => c.id!)
+                  .toList();
+              // La primera ya está en categoryId, así que quitarla de la lista adicional
+              if (categoryIds.isNotEmpty && categoryIds.first == widget.wizardData.category!.id!) {
+                categoryIds.removeAt(0);
+              }
+            }
+
             await _eventService.submitEvent(
               title: widget.wizardData.title!,
               town: widget.wizardData.city!.name,
               place: placeName,
               startsAt: startsAt,
               cityId: widget.wizardData.cityId!,
-              categoryId: widget.wizardData.category!.id!,
+              categoryId: widget.wizardData.category!.id!, // Primera categoría (obligatoria)
+              categoryIds: categoryIds, // Categorías adicionales (si hay más de 1)
               description: description,
               mapsUrl: (latToSave != null && lngToSave != null)
                   ? 'https://www.google.com/maps/search/?api=1&query=$latToSave,$lngToSave'

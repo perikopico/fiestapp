@@ -3,7 +3,14 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
-	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<string>es</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>es</string>
+		<string>en</string>
+		<string>de</string>
+		<string>zh</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>QuePlan</string>
 	<key>CFBundleExecutable</key>

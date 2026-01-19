@@ -385,8 +385,8 @@ class _UpcomingListState extends State<UpcomingList> {
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 2,
                 crossAxisSpacing: 12,
-                mainAxisSpacing: 10,
-                childAspectRatio: 0.68, // Ratio ajustado para media foto + información
+                mainAxisSpacing: 8, // Espaciado entre eventos para mejor separación visual
+                childAspectRatio: 1.02, // Ratio ajustado para eliminar overflow (tarjetas más anchas, menos altas)
               ),
               itemCount: widget.events.length,
               itemBuilder: (context, index) {
@@ -435,21 +435,25 @@ class _UpcomingListState extends State<UpcomingList> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.start,
                             children: [
-                              // Imagen en la parte superior (media altura, similar a populares)
+                              // Imagen en la parte superior
                               Container(
-                                height: 110,
+                                height: 105,
                                 width: double.infinity,
-                                child: _buildEventImage(context, event, double.infinity, 110),
+                                child: _buildEventImage(context, event, double.infinity, 105),
                               ),
                               // Título, fecha y categoría debajo con fondo grisáceo
                               Container(
                                 width: double.infinity,
-                                height: 90, // Altura fija para alinear chips
                                 decoration: BoxDecoration(
                                   color: Theme.of(context).brightness == Brightness.dark
                                       ? Colors.grey.shade900.withOpacity(0.9)
                                       : Colors.grey.shade100,
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(16),
+                                    bottomRight: Radius.circular(16),
+                                  ),
                                   border: Border(
                                     top: BorderSide(
                                       color: Theme.of(context).dividerColor.withOpacity(0.1),
@@ -457,18 +461,19 @@ class _UpcomingListState extends State<UpcomingList> {
                                     ),
                                   ),
                                 ),
-                                padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+                                padding: const EdgeInsets.only(left: 10, top: 6, right: 10, bottom: 6), // Padding inferior ajustado para evitar overflow
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  mainAxisAlignment: MainAxisAlignment.start,
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Text(
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          height: 30.0, // Altura fija para 2 líneas (ligeramente reducida para evitar overflow)
+                                          child: Text(
                                             event.title,
                                             style: TextStyle(
                                               fontWeight: FontWeight.w600,
@@ -478,49 +483,68 @@ class _UpcomingListState extends State<UpcomingList> {
                                                   ? Theme.of(context).disabledColor
                                                   : Theme.of(context).colorScheme.onSurface,
                                             ),
-                                            maxLines: 2,
+                                            maxLines: 2, // Dos líneas máximo
                                             overflow: TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(height: 6),
-                                          // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
-                                          Text(
-                                            () {
-                                              final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                              final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                              final location = event.cityName ?? '';
-                                              if (location.isNotEmpty) {
-                                                return "$fullDate · $fullHour · $location";
-                                              }
-                                              return "$fullDate · $fullHour";
-                                            }(),
-                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                              fontSize: 10,
-                                              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    // Chip de categoría (discreto, con baja opacidad) - Light Pill Style
-                                    if (widget.showCategory && event.categoryName != null)
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                        decoration: BoxDecoration(
-                                          color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
-                                          borderRadius: BorderRadius.circular(12),
                                         ),
-                                        child: Text(
-                                          event.categoryName!,
-                                          style: TextStyle(
-                                            color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.1,
+                                        const SizedBox(height: 4), // Reducido de 5 a 4
+                                        // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
+                                        Text(
+                                          () {
+                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                            final location = event.cityName ?? '';
+                                            if (location.isNotEmpty) {
+                                              return "$fullDate · $fullHour · $location";
+                                            }
+                                            return "$fullDate · $fullHour";
+                                          }(),
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontSize: 10,
+                                            height: 1.1,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
                                           ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
                                         ),
+                                      ],
+                                    ),
+                                    // Chips de categoría (discreto, con baja opacidad) - Light Pill Style
+                                    // Reservar espacio para hasta 2 categorías + espacio visual
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 1), // Espacio entre texto y chips
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Primera categoría (si existe)
+                                          if (widget.showCategory && event.categoryName != null)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                event.categoryName!,
+                                                style: TextStyle(
+                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.1,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          // Espacio entre primera y segunda categoría
+                                          const SizedBox(height: 4), // Espacio entre categorías
+                                          // Segunda categoría (placeholder para futura implementación)
+                                          // Aquí se mostrará la segunda categoría cuando se implemente múltiples categorías
+                                          const SizedBox(height: 4), // Espacio visual adicional para mantener distancia
+                                        ],
                                       ),
+                                    ),
                                   ],
                                 ),
                               ),

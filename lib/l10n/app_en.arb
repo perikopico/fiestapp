@@ -1,0 +1,30 @@
+{
+  "@@locale": "en",
+  "appTitle": "QuePlan",
+  "@appTitle": {
+    "description": "Application title"
+  },
+  "cancel": "Cancel",
+  "save": "Save",
+  "delete": "Delete",
+  "confirm": "Confirm",
+  "continueText": "Continue",
+  "@continueText": {
+    "description": "Continue button text"
+  },
+  "back": "Back",
+  "next": "Next",
+  "done": "Done",
+  "search": "Search",
+  "filter": "Filter",
+  "settings": "Settings",
+  "profile": "Profile",
+  "login": "Sign In",
+  "register": "Sign Up",
+  "logout": "Sign Out",
+  "createAccount": "Create Account",
+  "saveFavoritesCreateEvents": "Save your favorites and create events",
+  "continueWithoutAccount": "Continue without account",
+  "signUp": "Sign Up",
+  "signIn": "Sign In"
+}

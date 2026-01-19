@@ -24,14 +24,17 @@ class _Step4CategoryState extends State<Step4Category> {
   final CategoryService _categoryService = CategoryService();
   List<Category> _categories = [];
   bool _isLoading = true;
-  Category? _selectedCategory;
+  List<Category> _selectedCategories = []; // Lista de 1-2 categorías
   String _price = 'Gratis';
 
   @override
   void initState() {
     super.initState();
     _loadCategories();
-    _selectedCategory = widget.wizardData.category;
+    // Inicializar con la categoría existente si hay
+    if (widget.wizardData.category != null) {
+      _selectedCategories = [widget.wizardData.category!];
+    }
     _price = widget.wizardData.price;
   }
 
@@ -87,10 +90,10 @@ class _Step4CategoryState extends State<Step4Category> {
   }
 
   bool _validate() {
-    if (_selectedCategory == null) {
+    if (_selectedCategories.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Por favor, selecciona una categoría'),
+          content: Text('Por favor, selecciona al menos una categoría'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -101,13 +104,38 @@ class _Step4CategoryState extends State<Step4Category> {
 
   void _handleNext() {
     if (_validate()) {
-      // Guardar datos
-      widget.wizardData.category = _selectedCategory;
+      // Guardar datos: primera categoría como principal, lista completa para múltiples
+      widget.wizardData.category = _selectedCategories.first;
+      widget.wizardData.categories = List.from(_selectedCategories); // Nueva propiedad
       widget.wizardData.price = _price.isNotEmpty ? _price : 'Gratis';
       widget.wizardData.stepValidated[3] = true;
       
       widget.onNext();
     }
+  }
+
+  void _toggleCategory(Category category) {
+    setState(() {
+      if (_selectedCategories.contains(category)) {
+        // Si ya está seleccionada, quitarla (mínimo 1, así que solo si hay más de 1)
+        if (_selectedCategories.length > 1) {
+          _selectedCategories.remove(category);
+        }
+      } else {
+        // Si no está seleccionada, agregarla (máximo 2)
+        if (_selectedCategories.length < 2) {
+          _selectedCategories.add(category);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Puedes seleccionar máximo 2 categorías'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    });
   }
 
   @override
@@ -139,62 +167,84 @@ class _Step4CategoryState extends State<Step4Category> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Selector de categoría
+                    // Selector de categorías (permite 1-2 categorías)
                     if (_isLoading)
                       const Center(child: CircularProgressIndicator())
                     else
-                      DropdownButtonFormField<Category>(
-                        decoration: InputDecoration(
-                          labelText: 'Categoría *',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: const Icon(Icons.category),
-                        ),
-                        value: _selectedCategory,
-                        selectedItemBuilder: (BuildContext context) {
-                          return _categories
-                              .where((Category c) => c.id != null)
-                              .map<Widget>((Category category) {
-                            return Text(
-                              category.name,
-                              overflow: TextOverflow.ellipsis,
-                            );
-                          }).toList();
-                        },
-                        items: _categories
-                            .where((Category c) => c.id != null)
-                            .map((Category category) {
-                          final description = _getCategoryDescription(category.name);
-                          return DropdownMenuItem<Category>(
-                            value: category,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  category.name,
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
-                                ),
-                                Text(
-                                  description,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSurfaceVariant
-                                        .withOpacity(0.7),
-                                  ),
-                                ),
-                              ],
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Categoría${_selectedCategories.length > 1 ? "s" : ""} * (${_selectedCategories.length}/2)',
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
                             ),
-                          );
-                        }).toList(),
-                        onChanged: (value) {
-                          setState(() {
-                            _selectedCategory = value;
-                          });
-                        },
+                          ),
+                          if (_selectedCategories.isEmpty)
+                            Text(
+                              'Selecciona al menos una categoría',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            )
+                          else if (_selectedCategories.length == 1)
+                            Text(
+                              'Opcional: puedes agregar una segunda categoría',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          const SizedBox(height: 12),
+                          // Lista de categorías seleccionables
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _categories
+                                .where((Category c) => c.id != null)
+                                .map((Category category) {
+                              final isSelected = _selectedCategories.contains(category);
+                              final description = _getCategoryDescription(category.name);
+                              
+                              return FilterChip(
+                                label: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      category.name,
+                                      style: TextStyle(
+                                        fontWeight: isSelected 
+                                            ? FontWeight.w600 
+                                            : FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      description,
+                                      style: TextStyle(
+                                        fontSize: 10,
+                                        color: isSelected
+                                            ? Theme.of(context).colorScheme.onPrimary
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant
+                                                .withOpacity(0.7),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                selected: isSelected,
+                                onSelected: (_) => _toggleCategory(category),
+                                selectedColor: Theme.of(context).colorScheme.primary,
+                                checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+                                labelStyle: TextStyle(
+                                  color: isSelected
+                                      ? Theme.of(context).colorScheme.onPrimary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
                       ),
                     const SizedBox(height: 24),
 

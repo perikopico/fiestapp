@@ -1,0 +1,30 @@
+{
+  "@@locale": "de",
+  "appTitle": "QuePlan",
+  "@appTitle": {
+    "description": "Anwendungstitel"
+  },
+  "cancel": "Abbrechen",
+  "save": "Speichern",
+  "delete": "Löschen",
+  "confirm": "Bestätigen",
+  "continueText": "Fortfahren",
+  "@continueText": {
+    "description": "Text der Schaltfläche Fortfahren"
+  },
+  "back": "Zurück",
+  "next": "Weiter",
+  "done": "Fertig",
+  "search": "Suchen",
+  "filter": "Filtern",
+  "settings": "Einstellungen",
+  "profile": "Profil",
+  "login": "Anmelden",
+  "register": "Registrieren",
+  "logout": "Abmelden",
+  "createAccount": "Konto erstellen",
+  "saveFavoritesCreateEvents": "Speichere deine Favoriten und erstelle Veranstaltungen",
+  "continueWithoutAccount": "Ohne Konto fortfahren",
+  "signUp": "Registrieren",
+  "signIn": "Anmelden"
+}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart';
 import '../event_wizard_screen.dart';
 
@@ -162,6 +163,7 @@ class _Step2DateTimeState extends State<Step2DateTime> {
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
+                          locale: Localizations.localeOf(context),
                           initialDate: _startDate ?? DateTime.now(),
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -195,6 +197,7 @@ class _Step2DateTimeState extends State<Step2DateTime> {
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
+                          locale: Localizations.localeOf(context),
                           initialDate: _endDate ?? _startDate ?? DateTime.now(),
                           firstDate: _startDate ?? DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365)),

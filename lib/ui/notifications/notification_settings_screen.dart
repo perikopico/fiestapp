@@ -225,7 +225,7 @@ class _NotificationSettingsScreenState
 
             const SizedBox(height: 24),
 
-            // Save button
+            // Botón Guardar
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(

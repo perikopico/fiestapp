@@ -264,58 +264,122 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _showIntro = true;
   bool _isVideoInitialized = false; // Estado para saber si el video está listo
   double _videoOpacity = 1.0;
+  bool _videoFinished = false; // Estado para saber si el video terminó
 
   @override
   void initState() {
     super.initState();
-    _checkLocationPermission();
-    // Establecer filtro por defecto a "1 semana"
+    // Establecer filtro por defecto a "1 mes"
     _setDefaultWeekFilter();
     
-    // IMPORTANTE: Cargar datos del Dashboard INMEDIATAMENTE en segundo plano
-    // Esto asegura que cuando el video termine, la app ya esté lista para usarse.
-    // La carga ocurre en paralelo, no bloquea el inicio del video.
-    if (widget.preloadedData != null) {
-      setState(() {
-        _upcomingEvents = widget.preloadedData!['upcomingEvents'] as List<Event>? ?? [];
-        _featuredEvents = widget.preloadedData!['featuredEvents'] as List<Event>? ?? [];
-        _categories = widget.preloadedData!['categories'] as List<Category>? ?? [];
-        _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
-        _isLoading = false;
+    // IMPORTANTE: Verificar permisos PRIMERO para establecer el modo correcto
+    // Si no hay permisos, cambiar a modo Ciudad ANTES de cargar datos
+    _checkLocationPermissionAndSetMode().then((_) {
+      // IMPORTANTE: Cargar TODOS los datos PRIMERO, luego reproducir el video
+      // Esto asegura que cuando el video termine, la app ya esté completamente cargada
+      _loadAllDataFirst().then((_) {
+        // Solo después de cargar todos los datos, inicializar el video
+        if (mounted) {
+          _initializeIntroVideo();
+        }
       });
-      // Cargar el resto en segundo plano (en paralelo con el video)
-      _loadCities();
-      _loadNearbyCities();
-      _loadHeroBanner();
-      _reloadEvents().then((_) => _loadNearby());
-    } else {
-      // Si no hay datos pre-cargados, cargar normalmente (en paralelo con el video)
-      _reloadEvents().then((_) => _loadNearby());
-      _loadCities();
-      _loadNearbyCities();
-      _loadHeroBanner();
+    });
+  }
+  
+  /// Verifica los permisos de ubicación y establece el modo correcto antes de cargar datos
+  Future<void> _checkLocationPermissionAndSetMode() async {
+    var permission = await Geolocator.checkPermission();
+    
+    // Si el permiso está denegado, solicitar permisos solo una vez
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
     }
     
-    // Inicializar video de introducción en PARALELO con la carga del Dashboard
-    // El Dashboard sigue cargándose debajo del overlay blanco/video
-    _initializeIntroVideo();
+    final hasPermission = permission == LocationPermission.whileInUse ||
+        permission == LocationPermission.always;
     
-    // Mostrar diálogo de autenticación después de que la UI cargue
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        AuthBanner.showAuthDialog(context);
+    setState(() {
+      _hasLocationPermission = hasPermission;
+      // Si no hay permisos, establecer modo Ciudad automáticamente
+      if (!hasPermission) {
+        _mode = LocationMode.city;
+        // Limpiar ciudad seleccionada para mostrar eventos de toda la provincia
+        _selectedCityId = null;
+        _selectedCityIds = {};
+        _selectedCityName = null;
       }
     });
+    
+    // Si tenemos permisos y estamos en modo Radio, obtener la ubicación
+    if (hasPermission && _mode == LocationMode.radius) {
+      await _getUserLocation();
+    }
+  }
+  
+  /// Carga todos los datos del dashboard ANTES de mostrar el video
+  Future<void> _loadAllDataFirst() async {
+    try {
+      // Si hay datos pre-cargados, usarlos primero
+      if (widget.preloadedData != null) {
+        setState(() {
+          _upcomingEvents = widget.preloadedData!['upcomingEvents'] as List<Event>? ?? [];
+          _featuredEvents = widget.preloadedData!['featuredEvents'] as List<Event>? ?? [];
+          _categories = widget.preloadedData!['categories'] as List<Category>? ?? [];
+          _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
+        });
+      }
+      
+      // Cargar el resto de datos en paralelo y esperar a que terminen
+      await Future.wait([
+        widget.preloadedData == null ? _reloadEvents() : Future.value(), // Solo recargar si no hay preloaded
+        _loadCities(),
+        _loadNearbyCities(),
+        _loadHeroBanner(),
+      ], eagerError: false); // No fallar si uno falla
+      
+      // Si había preloaded data, recargar eventos después
+      if (widget.preloadedData != null) {
+        await _reloadEvents();
+      }
+      
+      // Cargar eventos cercanos después de recargar eventos
+      await _loadNearby();
+      
+      // Marcar como cargado
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error al cargar datos del dashboard: $e');
+      // Incluso si hay error, marcar como cargado para que el video se muestre
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   /// Inicializa el video de introducción como overlay
+  /// IMPORTANTE: Este método solo se llama DESPUÉS de que todos los datos estén cargados
   Future<void> _initializeIntroVideo() async {
     try {
+      // Crear el controlador
       _videoController = VideoPlayerController.asset('assets/videos/splash.mp4');
-      await _videoController!.initialize();
       
-      if (mounted) {
-        // Configurar video
+      // Pre-inicializar el controlador (esto precarga el video)
+      // Usar un timeout para evitar que se quede colgado
+      await _videoController!.initialize().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          throw TimeoutException('Video initialization timeout');
+        },
+      );
+      
+      if (mounted && _videoController != null) {
+        // Configurar video para mejor rendimiento
         _videoController!.setLooping(false);
         _videoController!.setVolume(0.0);
         
@@ -327,17 +391,26 @@ class _DashboardScreenState extends State<DashboardScreen> {
           _isVideoInitialized = true;
         });
         
-        // Reproducir automáticamente
-        _videoController!.play();
+        // Pequeño delay para asegurar que el widget esté completamente renderizado
+        // Esto ayuda a que el video se reproduzca sin lag
+        await Future.delayed(const Duration(milliseconds: 100));
+        
+        if (mounted && _videoController != null && _videoController!.value.isInitialized) {
+          // Reproducir automáticamente
+          await _videoController!.play();
+        }
       }
     } catch (e) {
       debugPrint('Error al inicializar video de introducción: $e');
-      // Si hay error, ocultar el overlay inmediatamente
+      // Si hay error, ocultar el overlay inmediatamente y mostrar diálogo
       if (mounted) {
         setState(() {
           _showIntro = false;
           _isVideoInitialized = false;
+          _videoFinished = true;
         });
+        // Mostrar diálogo de autenticación si el video falla
+        _showAuthDialogAfterVideo();
       }
     }
   }
@@ -360,6 +433,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _fadeOutVideo() {
     if (!mounted) return;
     
+    // Marcar que el video terminó
+    setState(() {
+      _videoFinished = true;
+    });
+    
     // Animar opacidad de 1.0 a 0.0 en 500ms
     setState(() {
       _videoOpacity = 0.0;
@@ -375,6 +453,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _videoController?.removeListener(_videoListener);
         _videoController?.dispose();
         _videoController = null;
+        
+        // Mostrar diálogo de autenticación después de que el video termine
+        _showAuthDialogAfterVideo();
+      }
+    });
+  }
+  
+  /// Muestra el diálogo de autenticación después de que el video termine
+  void _showAuthDialogAfterVideo() {
+    if (!mounted) return;
+    
+    // Pequeño delay para asegurar que la UI esté lista
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (mounted && !AuthService.instance.isAuthenticated) {
+        AuthBanner.showAuthDialog(context);
       }
     });
   }
@@ -835,20 +928,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
+      // Si estamos en modo Ciudad sin permisos y sin ciudad seleccionada,
+      // cargar eventos de toda la provincia (null = sin filtrar por ciudad)
       final List<int>? cityIds = _mode == LocationMode.city
           ? (_selectedCityIds.isNotEmpty
                 ? _selectedCityIds.toList()
                 : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
           : null;
 
-      final double? radius = _mode == LocationMode.radius && _radiusKm > 0
+      final double? radius = _mode == LocationMode.radius && _hasLocationPermission && _radiusKm > 0
           ? _radiusKm
           : null;
 
       // Crear objeto center para el modo radio
-      // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
+      // Solo usar radio si tenemos permisos de ubicación
       dynamic center;
-      if (_mode == LocationMode.radius) {
+      if (_mode == LocationMode.radius && _hasLocationPermission) {
         if (_userLat != null && _userLng != null) {
           center = {'lat': _userLat, 'lng': _userLng};
         } else {
@@ -1523,7 +1618,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (!hasPermission && _mode == LocationMode.radius) {
       // Solo cambiar si el permiso fue denegado permanentemente o después de solicitarlo
       if (permission == LocationPermission.deniedForever || permission == LocationPermission.denied) {
-        await _switchMode(LocationMode.city);
+        setState(() {
+          _mode = LocationMode.city;
+          // Limpiar ciudad seleccionada para mostrar eventos de toda la provincia
+          _selectedCityId = null;
+          _selectedCityIds = {};
+          _selectedCityName = null;
+        });
+        // Recargar eventos con el nuevo modo
+        await _reloadEvents();
       }
     } else if (hasPermission && _mode == LocationMode.radius) {
       // Si tenemos permisos y estamos en modo Radio, obtener la ubicación
@@ -2566,8 +2669,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ), // Cierra Stack interno
         ), // Cierra Container (body del Scaffold)
         ), // Cierra Scaffold
-        // Capa 2 (Frente): Video overlay (solo si _showIntro es true)
+        // Capa 2 (Frente - MÁS ALTA): Video overlay (solo si _showIntro es true)
         // Ignora SafeArea para cubrir toda la pantalla (notch, barra inferior, etc.)
+        // Esta capa debe estar por encima de TODO, incluyendo diálogos
         if (_showIntro)
           Positioned.fill(
             child: MediaQuery.removePadding(
@@ -2577,31 +2681,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
               removeLeft: true,
               removeRight: true,
               child: IgnorePointer(
-                child: _isVideoInitialized && _videoController != null && _videoController!.value.isInitialized
-                    ? AnimatedOpacity(
-                        opacity: _videoOpacity,
-                        duration: const Duration(milliseconds: 500),
-                        child: Container(
-                          color: Colors.black,
-                          width: double.infinity,
-                          height: double.infinity,
-                          child: FittedBox(
-                            fit: BoxFit.cover,
-                            alignment: Alignment.center,
-                            child: SizedBox(
-                              width: _videoController!.value.size.width,
-                              height: _videoController!.value.size.height,
-                              child: VideoPlayer(_videoController!),
+                // Ignorar eventos de puntero para que no interfiera con la UI debajo
+                ignoring: true, // El video no necesita recibir eventos táctiles
+                child: RepaintBoundary(
+                  // RepaintBoundary optimiza el renderizado del video reduciendo repaints innecesarios
+                  child: _isVideoInitialized && _videoController != null && _videoController!.value.isInitialized
+                      ? AnimatedOpacity(
+                          opacity: _videoOpacity,
+                          duration: const Duration(milliseconds: 500),
+                          curve: Curves.easeOut,
+                          child: Container(
+                            color: Colors.black,
+                            width: double.infinity,
+                            height: double.infinity,
+                            // Usar FittedBox con BoxFit.cover para llenar toda la pantalla sin distorsión
+                            // Esto es más eficiente que usar LayoutBuilder + Transform
+                            child: FittedBox(
+                              fit: BoxFit.cover,
+                              alignment: Alignment.center,
+                              child: SizedBox(
+                                width: _videoController!.value.size.width,
+                                height: _videoController!.value.size.height,
+                                child: VideoPlayer(_videoController!),
+                              ),
                             ),
                           ),
+                        )
+                      : Container(
+                          // Fondo blanco sólido mientras el video se inicializa
+                          color: Colors.white,
+                          width: double.infinity,
+                          height: double.infinity,
                         ),
-                      )
-                    : Container(
-                        // Fondo blanco sólido mientras el video se inicializa
-                        color: Colors.white,
-                        width: double.infinity,
-                        height: double.infinity,
-                      ),
+                ),
               ),
             ),
           ),

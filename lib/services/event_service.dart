@@ -534,13 +534,19 @@ class EventService {
     }
   }
 
+  /// Crea un nuevo evento
+  /// 
+  /// [categoryId] - Categoría principal (obligatoria, para compatibilidad con BBDD actual)
+  /// [categoryIds] - Lista opcional de categorías adicionales (máximo 2 total)
+  ///                 Por ahora solo se usa la primera, pero se guarda para futuro
   Future<void> submitEvent({
     required String title,
     required String town,
     required String place,
     required DateTime startsAt,
     required int cityId,
-    required int categoryId,
+    required int categoryId, // Categoría principal (obligatoria)
+    List<int>? categoryIds, // Lista adicional de categorías (para soporte futuro)
     String? description,
     String? mapsUrl,
     String? imageUrl,
@@ -587,7 +593,33 @@ class EventService {
     // Eliminar claves con null para no pisar defaults
     payload.removeWhere((key, value) => value == null);
 
-    await supa.from('events').insert(payload);
+    // Insertar el evento y obtener el ID
+    final insertResult = await supa.from('events').insert(payload).select('id').single();
+    final newEventId = insertResult['id'] as String;
+
+    // Si se proporcionaron múltiples categorías, guardarlas en event_categories
+    if (categoryIds != null && categoryIds.length > 1) {
+      try {
+        // Insertar todas las categorías con is_primary=true para la primera
+        final categoryPayloads = categoryIds.asMap().entries.map((entry) {
+          final index = entry.key;
+          final catId = entry.value;
+          return {
+            'event_id': newEventId,
+            'category_id': catId,
+            'is_primary': index == 0, // La primera es la principal
+          };
+        }).toList();
+
+        if (categoryPayloads.isNotEmpty) {
+          await supa.from('event_categories').insert(categoryPayloads);
+          debugPrint('✅ ${categoryPayloads.length} categoría(s) guardada(s) en event_categories para evento $newEventId');
+        }
+      } catch (e) {
+        // Si la tabla event_categories no existe aún, solo loguear el error
+        debugPrint('⚠️ No se pudieron guardar categorías múltiples (la tabla event_categories puede no existir aún): $e');
+      }
+    }
   }
 
   /// Actualiza un evento existente
@@ -598,7 +630,8 @@ class EventService {
     required String place,
     required DateTime startsAt,
     required int cityId,
-    required int categoryId,
+    required int categoryId, // Categoría principal (obligatoria)
+    List<int>? categoryIds, // Lista adicional de categorías (para soporte futuro)
     String? description,
     String? mapsUrl,
     String? imageUrl,
@@ -626,7 +659,38 @@ class EventService {
     // Eliminar claves con null para no pisar valores existentes
     payload.removeWhere((key, value) => value == null);
 
+    // Actualizar el evento
     await supa.from('events').update(payload).eq('id', eventId);
+
+    // Si se proporcionaron múltiples categorías, guardarlas en event_categories
+    if (categoryIds != null && categoryIds.length > 1) {
+      try {
+        // Primero, eliminar todas las categorías existentes del evento
+        await supa
+            .from('event_categories')
+            .delete()
+            .eq('event_id', eventId);
+
+        // Insertar todas las categorías con is_primary=true para la primera
+        final categoryPayloads = categoryIds.asMap().entries.map((entry) {
+          final index = entry.key;
+          final catId = entry.value;
+          return {
+            'event_id': eventId,
+            'category_id': catId,
+            'is_primary': index == 0, // La primera es la principal
+          };
+        }).toList();
+
+        if (categoryPayloads.isNotEmpty) {
+          await supa.from('event_categories').insert(categoryPayloads);
+          debugPrint('✅ ${categoryPayloads.length} categoría(s) guardada(s) en event_categories para evento $eventId');
+        }
+      } catch (e) {
+        // Si la tabla event_categories no existe aún, solo loguear el error
+        debugPrint('⚠️ No se pudieron guardar categorías múltiples (la tabla event_categories puede no existir aún): $e');
+      }
+    }
   }
 
   /// Busca posibles eventos duplicados basándose en criterios de similitud

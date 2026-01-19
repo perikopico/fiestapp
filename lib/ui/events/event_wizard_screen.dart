@@ -34,7 +34,8 @@ class EventWizardData {
   double? lng;
   
   // Paso 4: Categoría y tipo
-  Category? category;
+  Category? category; // Categoría principal (primera de la lista)
+  List<Category> categories = []; // Lista de categorías (1-2)
   String price = 'Gratis'; // Precio del evento (ej: "Gratis", "18€", "Desde 10€")
   
   // Paso 5: Imagen

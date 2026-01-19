@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:fiestapp/services/auth_service.dart';
+import 'package:fiestapp/l10n/app_localizations.dart';
 import '../../auth/login_screen.dart';
 import '../../auth/register_screen.dart';
 
@@ -7,14 +8,15 @@ import '../../auth/register_screen.dart';
 /// Invita al registro/inicio de sesión o permite continuar sin cuenta
 class AuthBanner {
   /// Muestra el diálogo flotante de autenticación si el usuario no está autenticado
+  /// IMPORTANTE: Este método solo debe llamarse DESPUÉS de que el video de splash termine
   static Future<void> showAuthDialog(BuildContext context) async {
     // Si el usuario ya está autenticado, no mostrar el diálogo
     if (AuthService.instance.isAuthenticated) {
       return;
     }
 
-    // Esperar un poco para que la UI termine de cargar
-    await Future.delayed(const Duration(milliseconds: 500));
+    // Esperar un poco para que la UI termine de cargar después del video
+    await Future.delayed(const Duration(milliseconds: 300));
 
     if (!context.mounted) return;
 
@@ -23,9 +25,11 @@ class AuthBanner {
       return;
     }
 
+    // Mostrar el diálogo con useRootNavigator para asegurar que esté en la capa correcta
     await showDialog(
       context: context,
       barrierDismissible: true,
+      useRootNavigator: true, // Usar el root navigator para estar por encima de todo
       builder: (context) => _AuthDialog(),
     );
   }
@@ -71,7 +75,7 @@ class _AuthDialog extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Crea tu cuenta',
+                              AppLocalizations.of(context)!.createAccount,
                               style: Theme.of(context).textTheme.titleLarge?.copyWith(
                                     color: Colors.white,
                                     fontWeight: FontWeight.bold,
@@ -79,7 +83,7 @@ class _AuthDialog extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Text(
-                              'Guarda tus favoritos y crea eventos',
+                              AppLocalizations.of(context)!.saveFavoritesCreateEvents,
                               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Colors.white.withOpacity(0.9),
                                   ),
@@ -121,9 +125,9 @@ class _AuthDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Registrarse',
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)!.signUp,
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -149,9 +153,9 @@ class _AuthDialog extends StatelessWidget {
                         borderRadius: BorderRadius.circular(12),
                       ),
                     ),
-                    child: const Text(
-                      'Iniciar sesión',
-                      style: TextStyle(
+                    child: Text(
+                      AppLocalizations.of(context)!.signIn,
+                      style: const TextStyle(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -168,9 +172,9 @@ class _AuthDialog extends StatelessWidget {
                 foregroundColor: Colors.white.withOpacity(0.9),
                 padding: const EdgeInsets.symmetric(vertical: 8),
               ),
-              child: const Text(
-                'Continuar sin cuenta',
-                style: TextStyle(
+              child: Text(
+                AppLocalizations.of(context)!.continueWithoutAccount,
+                style: const TextStyle(
                   fontSize: 14,
                 ),
               ),

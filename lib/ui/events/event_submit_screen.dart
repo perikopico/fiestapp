@@ -797,6 +797,7 @@ $dayProgram''';
                 onPressed: () async {
                   final date = await showDatePicker(
                     context: context,
+                    locale: Localizations.localeOf(context),
                     initialDate: _startDate ?? DateTime.now(),
                     firstDate: DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -831,6 +832,7 @@ $dayProgram''';
                 onPressed: () async {
                   final date = await showDatePicker(
                     context: context,
+                    locale: Localizations.localeOf(context),
                     initialDate: _endDate ?? _startDate ?? DateTime.now(),
                     firstDate: _startDate ?? DateTime.now(),
                     lastDate: DateTime.now().add(const Duration(days: 365)),

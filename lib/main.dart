@@ -1,6 +1,8 @@
-import 'dart:ui' show PlatformDispatcher;
+import 'dart:ui' show PlatformDispatcher, Locale;
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:fiestapp/l10n/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -37,11 +39,31 @@ Future<void> main() async {
   // El resto se inicializa en background después de que la app arranque
   
   // 1. Formato de fecha (rápido, necesario para la UI)
+  // Detectar idioma del sistema para inicializar formato de fecha
   try {
-    await initializeDateFormatting('es');
-    debugPrint("✅ Formato de fecha inicializado");
+    final systemLocale = PlatformDispatcher.instance.locale;
+    final languageCode = systemLocale.languageCode;
+    // Soporte español, inglés, alemán y chino, por defecto español
+    String dateLocale;
+    if (languageCode == 'en') {
+      dateLocale = 'en';
+    } else if (languageCode == 'de') {
+      dateLocale = 'de';
+    } else if (languageCode == 'zh') {
+      dateLocale = 'zh';
+    } else {
+      dateLocale = 'es'; // Por defecto español
+    }
+    await initializeDateFormatting(dateLocale, null);
+    debugPrint("✅ Formato de fecha inicializado para idioma: $dateLocale");
   } catch (e) {
-    debugPrint("⚠️ Error al inicializar formato de fecha: $e");
+    // Si falla, intentar con español
+    try {
+      await initializeDateFormatting('es', null);
+      debugPrint("✅ Formato de fecha inicializado (fallback a español)");
+    } catch (e2) {
+      debugPrint("⚠️ Error al inicializar formato de fecha: $e2");
+    }
   }
   
   // 2. Cargar .env (necesario para Supabase, pero rápido)
@@ -238,10 +260,38 @@ class _QuePlanState extends State<QuePlan> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: appThemeMode,
       builder: (context, mode, _) {
+        // Detectar idioma del sistema
+        final systemLocale = PlatformDispatcher.instance.locale;
+        
         return MaterialApp(
           title: 'QuePlan',
           navigatorKey: navigatorKey,
           debugShowCheckedModeBanner: false,
+          // Configuración de localización
+          locale: systemLocale, // Usa el idioma del sistema
+          supportedLocales: const [
+            Locale('es', ''), // Español
+            Locale('en', ''), // Inglés
+            Locale('de', ''), // Alemán
+            Locale('zh', ''), // Chino
+          ],
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          // Fallback a español si el idioma del sistema no está soportado
+          localeResolutionCallback: (locale, supportedLocales) {
+            // Si el idioma del sistema está soportado, usarlo
+            for (var supportedLocale in supportedLocales) {
+              if (supportedLocale.languageCode == locale?.languageCode) {
+                return supportedLocale;
+              }
+            }
+            // Si no, usar español por defecto
+            return const Locale('es', '');
+          },
           themeMode: mode, // 👈 aquí usamos el modo dinámico
           // 🌞 Tema claro
           theme: ThemeData(

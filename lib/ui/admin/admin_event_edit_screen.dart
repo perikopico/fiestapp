@@ -54,7 +54,8 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
   City? _selectedCity;
   int? _selectedCityId;
   int? _initialCategoryId; // Guardar el ID inicial para buscar después de cargar
-  Category? _selectedCategory;
+  Category? _selectedCategory; // Categoría principal (para compatibilidad)
+  Set<Category> _selectedCategories = {}; // Lista de categorías seleccionadas (1-2)
   DateTime? _startDate;
   DateTime? _endDate;
   TimeOfDay? _selectedTime;
@@ -155,22 +156,28 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
           // Buscar la categoría correcta de la lista cargada
           if (_initialCategoryId != null && categories.isNotEmpty) {
             try {
-              _selectedCategory = categories.firstWhere(
+              final category = categories.firstWhere(
                 (c) => c.id == _initialCategoryId,
               );
+              _selectedCategory = category;
+              _selectedCategories = {category}; // Inicializar con la categoría existente
             } catch (e) {
               // Si no se encuentra, usar la primera categoría con ID válido
-              _selectedCategory = categories.firstWhere(
+              final category = categories.firstWhere(
                 (c) => c.id != null,
                 orElse: () => categories.first,
               );
+              _selectedCategory = category;
+              _selectedCategories = {category};
             }
           } else if (categories.isNotEmpty) {
             // Si no hay categoría inicial, usar la primera con ID válido
-            _selectedCategory = categories.firstWhere(
+            final category = categories.firstWhere(
               (c) => c.id != null,
               orElse: () => categories.first,
             );
+            _selectedCategory = category;
+            _selectedCategories = {category};
           }
           _isLoadingData = false;
         });
@@ -297,8 +304,8 @@ $dayProgram''';
       _cityError = null;
     }
 
-    if (_selectedCategory == null || _selectedCategory!.id == null) {
-      _categoryError = 'Por favor, selecciona una categoría';
+    if (_selectedCategories.isEmpty || _selectedCategory == null || _selectedCategory!.id == null) {
+      _categoryError = 'Por favor, selecciona al menos una categoría';
       isValid = false;
     } else {
       _categoryError = null;
@@ -871,6 +878,9 @@ $dayProgram''';
           ? 'https://www.google.com/maps/search/?api=1&query=$latToSave,$lngToSave'
           : null;
 
+      // Preparar lista de categorías
+      final categoryIds = _selectedCategories.map((c) => c.id!).toList();
+
       // Actualizar el evento
       await _eventService.updateEvent(
         eventId: widget.event.id,
@@ -881,7 +891,8 @@ $dayProgram''';
             : _placeController.text,
         startsAt: startsAt,
         cityId: _selectedCityId!,
-        categoryId: _selectedCategory!.id!,
+        categoryId: _selectedCategory!.id!, // Primera categoría (obligatoria)
+        categoryIds: categoryIds, // Lista de categorías (1-2)
         description: _descriptionController.text.trim(),
         mapsUrl: mapsUrl,
         lat: latToSave,
@@ -1211,6 +1222,7 @@ $dayProgram''';
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
+                          locale: Localizations.localeOf(context),
                           initialDate: _startDate ?? DateTime.now(),
                           firstDate: DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -1243,6 +1255,7 @@ $dayProgram''';
                       onPressed: () async {
                         final date = await showDatePicker(
                           context: context,
+                          locale: Localizations.localeOf(context),
                           initialDate: _endDate ?? _startDate ?? DateTime.now(),
                           firstDate: _startDate ?? DateTime.now(),
                           lastDate: DateTime.now().add(const Duration(days: 365)),
@@ -1583,78 +1596,125 @@ $dayProgram''';
                     _buildSectionTitle('Categoría'),
                     const SizedBox(height: 12),
                     
-                    DropdownButtonFormField<Category>(
-                      decoration: InputDecoration(
-                        labelText: 'Categoría',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        errorText: _categoryError,
-                      ),
-                      value: _selectedCategory,
-                      // Mostrar solo el nombre en el campo seleccionado (evita overflow)
-                      selectedItemBuilder: (BuildContext context) {
-                        return _categories
-                            .where((Category c) => c.id != null)
-                            .fold<Map<int, Category>>({}, (map, category) {
-                              if (category.id != null && !map.containsKey(category.id)) {
-                                map[category.id!] = category;
-                              }
-                              return map;
-                            })
-                            .values
-                            .toList()
-                            .map<Widget>((Category category) {
-                              return Text(
-                                category.name,
-                                overflow: TextOverflow.ellipsis,
-                              );
-                            }).toList();
-                      },
-                      // En el menú desplegable, mostrar nombre + descripción
-                      items: _categories
-                          .where((Category c) => c.id != null)
-                          .fold<Map<int, Category>>({}, (map, category) {
-                            // Eliminar duplicados por ID, manteniendo el primero encontrado
-                            if (category.id != null && !map.containsKey(category.id)) {
-                              map[category.id!] = category;
-                            }
-                            return map;
-                          })
-                          .values
-                          .toList()
-                          .map((Category category) {
-                        final description = _getCategoryDescription(category.name);
-                        return DropdownMenuItem<Category>(
-                          value: category,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                category.name,
-                                style: const TextStyle(fontWeight: FontWeight.w500),
-                              ),
-                              Text(
-                                description,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant
-                                      .withOpacity(0.7),
-                                ),
-                              ),
-                            ],
+                    // Selector de categorías (permite 1-2 categorías)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Categoría${_selectedCategories.length > 1 ? "s" : ""} * (${_selectedCategories.length}/2)',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setState(() {
-                          _selectedCategory = value;
-                          _categoryError = null;
-                        });
-                      },
+                        ),
+                        if (_selectedCategories.isEmpty)
+                          Text(
+                            'Selecciona al menos una categoría',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          )
+                        else if (_selectedCategories.length == 1)
+                          Text(
+                            'Opcional: puedes agregar una segunda categoría',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        if (_categoryError != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              _categoryError!,
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+                        // Lista de categorías seleccionables
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _categories
+                              .where((Category c) => c.id != null)
+                              .fold<Map<int, Category>>({}, (map, category) {
+                                if (category.id != null && !map.containsKey(category.id)) {
+                                  map[category.id!] = category;
+                                }
+                                return map;
+                              })
+                              .values
+                              .toList()
+                              .map((Category category) {
+                            final isSelected = _selectedCategories.contains(category);
+                            final description = _getCategoryDescription(category.name);
+                            
+                            return FilterChip(
+                              label: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    category.name,
+                                    style: TextStyle(
+                                      fontWeight: isSelected 
+                                          ? FontWeight.w600 
+                                          : FontWeight.w500,
+                                    ),
+                                  ),
+                                  Text(
+                                    description,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: isSelected
+                                          ? Theme.of(context).colorScheme.onPrimary
+                                          : Theme.of(context)
+                                              .colorScheme
+                                              .onSurfaceVariant
+                                              .withOpacity(0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                setState(() {
+                                  if (selected) {
+                                    if (_selectedCategories.length < 2) {
+                                      _selectedCategories.add(category);
+                                      _selectedCategory = _selectedCategories.first; // Primera categoría como principal
+                                      _categoryError = null;
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Solo puedes seleccionar un máximo de 2 categorías.'),
+                                          backgroundColor: Colors.orange,
+                                        ),
+                                      );
+                                    }
+                                  } else {
+                                    _selectedCategories.remove(category);
+                                    if (_selectedCategories.isNotEmpty) {
+                                      _selectedCategory = _selectedCategories.first; // Primera categoría como principal
+                                    } else {
+                                      _selectedCategory = null;
+                                    }
+                                    _categoryError = null;
+                                  }
+                                });
+                              },
+                              selectedColor: Theme.of(context).colorScheme.primary,
+                              checkmarkColor: Theme.of(context).colorScheme.onPrimary,
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? Theme.of(context).colorScheme.onPrimary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 32),
 
