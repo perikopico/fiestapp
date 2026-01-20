@@ -740,10 +740,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     
     try {
       await precacheImage(NetworkImage(nextImageUrl), context);
-      debugPrint('✅ Imagen precargada: ${nextImageUrl.substring(0, 50)}...');
+      LoggerService.instance.debug('Imagen precargada para hero banner', data: {'url': nextImageUrl.substring(0, 50)});
     } catch (e) {
-      debugPrint('⚠️ Error al precargar imagen del hero: $e');
-      debugPrint('   URL: ${nextImageUrl.substring(0, 100)}...');
+      LoggerService.instance.warning('Error al precargar imagen del hero', data: {'url': nextImageUrl.substring(0, 100), 'error': e.toString()});
       // No hacer nada más, la imagen se cargará cuando se muestre
     }
   }
@@ -774,10 +773,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         } catch (e) {
           attempts++;
           if (attempts < 5) {
-            debugPrint('⚠️ Supabase no está inicializado aún, esperando... (intento $attempts/5)');
+            LoggerService.instance.debug('Supabase no inicializado, esperando', data: {'intento': attempts, 'max': 5});
             await Future.delayed(Duration(milliseconds: 500));
           } else {
-            debugPrint('⚠️ Supabase no está inicializado después de 5 intentos, usando imágenes de fallback');
+            LoggerService.instance.warning('Supabase no inicializado después de 5 intentos, usando imágenes de fallback');
             setState(() {
               _heroImageUrls = _getFallbackHeroImages();
               _isHeroLoading = false;
@@ -796,7 +795,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
       
       final monthFolder = _currentMonthFolder();
-      debugPrint('📁 Buscando imágenes en hero_banners/$monthFolder');
+      LoggerService.instance.debug('Buscando imágenes en hero_banners', data: {'folder': monthFolder});
       final storage = client.storage.from('hero_banners');
       final result = await storage.list(path: monthFolder);
 
