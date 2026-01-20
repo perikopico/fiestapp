@@ -812,7 +812,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       if (imageFiles.isEmpty) {
         // Si no hay imágenes en Supabase para este mes, intentar cargar desde la raíz
-        debugPrint('⚠️ No se encontraron imágenes en $monthFolder, buscando en la raíz...');
+        LoggerService.instance.debug('No se encontraron imágenes en carpeta mensual, buscando en raíz', data: {'folder': monthFolder});
         try {
           final rootFiles = await storage.list(path: '');
           final rootImageFiles = rootFiles.where((file) {
@@ -824,17 +824,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
           }).toList();
           
           if (rootImageFiles.isNotEmpty) {
-            debugPrint('✅ Encontradas ${rootImageFiles.length} imágenes en la raíz');
+            LoggerService.instance.info('Imágenes encontradas en raíz de hero_banners', data: {'count': rootImageFiles.length});
             imageUrls = rootImageFiles.map((file) {
               return storage.getPublicUrl(file.name);
             }).toList();
           } else {
-            debugPrint('⚠️ No se encontraron imágenes en Supabase Storage, usando fallback');
+            LoggerService.instance.warning('No se encontraron imágenes en Supabase Storage, usando fallback');
             imageUrls = _getFallbackHeroImages();
           }
         } catch (e) {
-          debugPrint('❌ Error al buscar imágenes en la raíz: $e');
-          debugPrint('   Usando imágenes de fallback');
+          LoggerService.instance.error('Error al buscar imágenes en la raíz de hero_banners', error: e);
+          LoggerService.instance.info('Usando imágenes de fallback');
           imageUrls = _getFallbackHeroImages();
         }
       } else {
@@ -842,7 +842,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         imageUrls = imageFiles.map((file) {
           return storage.getPublicUrl('$monthFolder/${file.name}');
         }).toList();
-        debugPrint('✅ Encontradas ${imageUrls.length} imágenes en $monthFolder');
+        LoggerService.instance.info('Imágenes encontradas en carpeta mensual', data: {'count': imageUrls.length, 'folder': monthFolder});
       }
 
       // Mezclar las URLs para tener un orden aleatorio
@@ -891,8 +891,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (e) {
-      debugPrint('❌ Error al cargar hero banner desde Supabase: $e');
-      debugPrint('   Usando imágenes de fallback');
+      LoggerService.instance.error('Error al cargar hero banner desde Supabase', error: e);
+      LoggerService.instance.info('Usando imágenes de fallback');
       
       // En caso de error, usar imágenes de fallback
       final fallbackImages = _getFallbackHeroImages();
@@ -1676,7 +1676,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      debugPrint('Servicios de ubicación desactivados.');
+      LoggerService.instance.warning('Servicios de ubicación desactivados');
       setState(() {
         _hasLocationPermission = false;
       });
@@ -1687,7 +1687,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        debugPrint('Permiso de ubicación denegado.');
+        LoggerService.instance.warning('Permiso de ubicación denegado');
         setState(() {
           _hasLocationPermission = false;
         });
@@ -1700,7 +1700,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     if (permission == LocationPermission.deniedForever) {
-      debugPrint('Permiso de ubicación denegado permanentemente.');
+      LoggerService.instance.warning('Permiso de ubicación denegado permanentemente');
       setState(() {
         _hasLocationPermission = false;
       });
