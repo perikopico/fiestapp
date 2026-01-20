@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:provider/provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../services/logger_service.dart';
 
 class SplashVideoScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -66,7 +67,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
           });
         }
       } catch (e) {
-        debugPrint('Error al pre-cargar dashboard: $e');
+        LoggerService.instance.error('Error al pre-cargar dashboard', error: e);
         if (mounted) {
           setState(() {
             _isNextScreenReady = true;
@@ -119,7 +120,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
         // Si el video dura 4 segundos o más, el listener se encargará de navegar cuando termine
       }
     } catch (e) {
-      debugPrint('Error al inicializar el video: $e');
+      LoggerService.instance.error('Error al inicializar el video', error: e);
       // Si hay un error, navegar inmediatamente después de un breve delay
       _timer = Timer(const Duration(milliseconds: 500), () {
         _navigateToNext();

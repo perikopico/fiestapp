@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/url_helper.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import '../../services/favorites_service.dart';
 import '../../services/account_deletion_service.dart';
@@ -650,33 +651,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _openPrivacyPolicy() async {
-    const url = 'https://queplan-app.com/privacy';
-    final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el enlace')),
-      );
-    }
+    await UrlHelper.launchUrlSafely(
+      context,
+      'https://queplan-app.com/privacy',
+      errorMessage: 'No se pudo abrir la política de privacidad',
+    );
   }
 
   Future<void> _openTerms() async {
-    const url = 'https://queplan-app.com/terms';
-    final uri = Uri.parse(url);
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el enlace')),
-      );
-    }
+    await UrlHelper.launchUrlSafely(
+      context,
+      'https://queplan-app.com/terms',
+      errorMessage: 'No se pudo abrir los términos y condiciones',
+    );
   }
 
   Future<void> _exportUserData() async {

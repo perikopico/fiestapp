@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/url_helper.dart';
 import 'gdpr_consent_screen.dart';
 
 class AboutScreen extends StatefulWidget {
@@ -36,6 +37,15 @@ class _AboutScreenState extends State<AboutScreen> {
   }
 
   Future<void> _openUrl(String url) async {
+    await UrlHelper.launchUrlSafely(
+      context,
+      url,
+      errorMessage: 'No se pudo abrir el enlace',
+    );
+  }
+  
+  // Método legacy mantenido por compatibilidad (ya no se usa)
+  Future<void> _openUrlLegacy(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);

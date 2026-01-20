@@ -122,23 +122,23 @@ Future<void> _initializeBackgroundServices() async {
   // Firebase y FCM (pueden tardar, no son críticos para mostrar la UI)
   try {
     await Firebase.initializeApp();
-    debugPrint("✅ Firebase inicializado con éxito");
+    LoggerService.instance.info('Firebase inicializado con éxito');
     
     // Inicializar FCM de forma asíncrona (puede tardar en iOS)
     FCMTokenService.instance.initialize().then((_) {
-      debugPrint("✅ FCMTokenService inicializado");
+      LoggerService.instance.info('FCMTokenService inicializado');
     }).catchError((e) {
-      debugPrint("⚠️ Error al inicializar FCMTokenService: $e");
+      LoggerService.instance.error('Error al inicializar FCMTokenService', error: e);
     });
     
     NotificationHandler.instance.initialize().then((_) {
-      debugPrint("✅ NotificationHandler inicializado");
+      LoggerService.instance.info('NotificationHandler inicializado');
     }).catchError((e) {
-      debugPrint("⚠️ Error al inicializar NotificationHandler: $e");
+      LoggerService.instance.error('Error al inicializar NotificationHandler', error: e);
     });
   } catch (e) {
-    debugPrint("⚠️ Error al inicializar Firebase: $e");
-    debugPrint("⚠️ La app funcionará sin notificaciones push");
+    LoggerService.instance.error('Error al inicializar Firebase', error: e);
+    LoggerService.instance.warning('La app funcionará sin notificaciones push');
   }
   
   // Configurar listener de autenticación de Supabase (si está inicializado)
@@ -231,13 +231,13 @@ class _QuePlanState extends State<QuePlan> {
       hasLocationPermission = locationPermission == LocationPermission.whileInUse ||
           locationPermission == LocationPermission.always;
     } catch (e) {
-      debugPrint('Error al verificar permisos de ubicación: $e');
+      LoggerService.instance.error('Error al verificar permisos de ubicación', error: e);
       // Si falla la verificación con Geolocator, intentar con permission_handler
       try {
         final status = await Permission.location.status;
         hasLocationPermission = status.isGranted;
       } catch (e2) {
-        debugPrint('Error al verificar permisos con permission_handler: $e2');
+        LoggerService.instance.error('Error al verificar permisos con permission_handler', error: e2);
       }
     }
     

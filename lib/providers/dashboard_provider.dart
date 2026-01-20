@@ -7,6 +7,7 @@ import '../services/category_service.dart';
 import '../services/city_service.dart';
 import '../services/cache_service.dart';
 import '../services/analytics_service.dart';
+import '../services/logger_service.dart';
 import '../utils/date_ranges.dart';
 import '../utils/dashboard_utils.dart';
 
@@ -118,7 +119,7 @@ class DashboardProvider extends ChangeNotifier {
       _userLng = position.longitude;
       notifyListeners();
     } catch (e) {
-      debugPrint('Error al obtener ubicación: $e');
+      LoggerService.instance.error('Error al obtener ubicación', error: e);
     }
   }
 
@@ -211,7 +212,7 @@ class DashboardProvider extends ChangeNotifier {
           );
           provinceId = selectedCity.provinceId;
         } catch (e) {
-          debugPrint('Error al obtener provinceId de la ciudad: $e');
+          LoggerService.instance.error('Error al obtener provinceId de la ciudad', error: e);
         }
       }
 
@@ -222,7 +223,7 @@ class DashboardProvider extends ChangeNotifier {
 
       notifyListeners();
     } catch (e) {
-      debugPrint('Error al cargar eventos destacados: $e');
+      LoggerService.instance.error('Error al cargar eventos destacados', error: e);
     }
   }
 

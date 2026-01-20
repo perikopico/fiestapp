@@ -1,6 +1,7 @@
 // lib/ui/legal/gdpr_consent_screen.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../utils/url_helper.dart';
 import '../../services/gdpr_consent_service.dart';
 
 class GDPRConsentScreen extends StatefulWidget {
@@ -103,15 +104,11 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
   }
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo abrir el enlace')),
-      );
-    }
+    await UrlHelper.launchUrlSafely(
+      context,
+      url,
+      errorMessage: 'No se pudo abrir el enlace',
+    );
   }
 
   @override
