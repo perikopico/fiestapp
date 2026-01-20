@@ -384,7 +384,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         });
       }
     } catch (e) {
-      debugPrint('Error al cargar datos del dashboard: $e');
+      LoggerService.instance.error('Error al cargar datos del dashboard', error: e);
       // Incluso si hay error, marcar como cargado para que el video se muestre
       if (mounted) {
         setState(() {
