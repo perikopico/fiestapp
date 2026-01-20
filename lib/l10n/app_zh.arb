@@ -26,5 +26,59 @@
   "saveFavoritesCreateEvents": "保存您的收藏并创建活动",
   "continueWithoutAccount": "不使用账户继续",
   "signUp": "注册",
-  "signIn": "登录"
+  "signIn": "登录",
+  "allCategories": "全部",
+  "@allCategories": {
+    "description": "显示所有类别的标签"
+  },
+  "allCategoriesLabel": "所有类别",
+  "viewFeaturedEvents": "查看精选活动",
+  "enableLocationServices": "请在设置中启用位置服务以使用无线电模式。",
+  "locationPermissionsDisabled": "位置权限已禁用。请在设置中启用它们以使用无线电模式。",
+  "locationPermissionRequired": "需要位置权限才能使用无线电模式。",
+  "errorLoadingData": "加载数据错误：{error}",
+  "@errorLoadingData": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "重试",
+  "errorConnection": "连接错误。请检查您的互联网连接。",
+  "errorPermissions": "需要权限才能继续。请在设置中检查权限。",
+  "errorAuthentication": "身份验证错误。请重新登录。",
+  "errorDatabase": "加载数据错误。请稍后再试。",
+  "errorUnknown": "发生意外错误。请重试。",
+  "mustAcceptTerms": "您必须接受条款和隐私政策才能继续",
+  "consentsSaved": "同意已成功保存",
+  "errorSaving": "保存错误：{error}",
+  "@errorSaving": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "dataConsent": "数据同意",
+  "acceptTerms": "我接受条款和条件",
+  "readTerms": "阅读条款",
+  "acceptPrivacy": "我接受隐私政策",
+  "readPrivacy": "阅读隐私政策",
+  "location": "位置",
+  "notifications": "通知",
+  "profileAndFavorites": "个人资料和收藏",
+  "analytics": "分析",
+  "saveAndContinue": "保存并继续",
+  "acceptAll": "全部接受",
+  "aboutQuePlan": "关于QuePlan",
+  "contact": "联系方式",
+  "privacyPolicy": "隐私政策",
+  "termsAndConditions": "条款和条件",
+  "manageConsents": "管理同意",
+  "modifyPrivacyPreferences": "修改您的隐私偏好",
+  "noEventsFound": "未找到活动",
+  "noEventsFoundDescription": "使用所选筛选器未找到活动",
+  "noSearchResults": "无结果",
+  "noSearchResultsDescription": "尝试调整您的搜索筛选器"
 }

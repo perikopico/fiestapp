@@ -55,7 +55,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
     if (!_acceptedTerms || !_acceptedPrivacyPolicy) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Debes aceptar los Términos y la Política de Privacidad para continuar'),
+          content: Text(AppLocalizations.of(context)?.mustAcceptTerms ?? 'Debes aceptar los Términos y la Política de Privacidad para continuar'),
           backgroundColor: Colors.orange,
         ),
       );
@@ -78,7 +78,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Consentimientos guardados correctamente'),
+          content: Text(AppLocalizations.of(context)?.consentsSaved ?? 'Consentimientos guardados correctamente'),
           backgroundColor: Colors.green,
         ),
       );
@@ -92,7 +92,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error al guardar: $e'),
+          content: Text(AppLocalizations.of(context)?.errorSaving(e.toString()) ?? 'Error al guardar: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -115,7 +115,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Consentimiento de Datos'),
+        title: Text(AppLocalizations.of(context)?.dataConsent ?? 'Consentimiento de Datos'),
         automaticallyImplyLeading: !widget.isFirstTime,
       ),
       body: _isLoading
@@ -138,10 +138,10 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   // Términos y condiciones
                   Card(
                     child: CheckboxListTile(
-                      title: const Text('Acepto los Términos y Condiciones'),
+                      title: Text(AppLocalizations.of(context)?.acceptTerms ?? 'Acepto los Términos y Condiciones'),
                       subtitle: TextButton(
                         onPressed: () => _openUrl(termsUrl),
-                        child: const Text('Leer términos'),
+                        child: Text(AppLocalizations.of(context)?.readTerms ?? 'Leer términos'),
                       ),
                       value: _acceptedTerms,
                       onChanged: (value) => setState(() => _acceptedTerms = value ?? false),
@@ -153,10 +153,10 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   // Política de privacidad
                   Card(
                     child: CheckboxListTile(
-                      title: const Text('Acepto la Política de Privacidad'),
+                      title: Text(AppLocalizations.of(context)?.acceptPrivacy ?? 'Acepto la Política de Privacidad'),
                       subtitle: TextButton(
                         onPressed: () => _openUrl(privacyPolicyUrl),
-                        child: const Text('Leer política de privacidad'),
+                        child: Text(AppLocalizations.of(context)?.readPrivacy ?? 'Leer política de privacidad'),
                       ),
                       value: _acceptedPrivacyPolicy,
                       onChanged: (value) => setState(() => _acceptedPrivacyPolicy = value ?? false),
@@ -179,7 +179,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   // Consentimientos individuales
                   Card(
                     child: CheckboxListTile(
-                      title: const Text('Ubicación'),
+                      title: Text(AppLocalizations.of(context)?.location ?? 'Ubicación'),
                       subtitle: const Text(
                         'Usamos tu ubicación para mostrarte eventos cercanos y ordenar resultados por distancia.',
                       ),
@@ -190,7 +190,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   
                   Card(
                     child: CheckboxListTile(
-                      title: const Text('Notificaciones'),
+                      title: Text(AppLocalizations.of(context)?.notifications ?? 'Notificaciones'),
                       subtitle: const Text(
                         'Te enviamos notificaciones sobre eventos que te interesan según tus preferencias.',
                       ),
@@ -212,7 +212,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   
                   Card(
                     child: CheckboxListTile(
-                      title: const Text('Analytics'),
+                      title: Text(AppLocalizations.of(context)?.analytics ?? 'Analytics'),
                       subtitle: const Text(
                         'Recopilamos datos de uso anónimos para mejorar la app y entender cómo la usas.',
                       ),
@@ -245,7 +245,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                         _consentAnalytics = true;
                       });
                     },
-                    child: const Text('Aceptar todo'),
+                    child: Text(AppLocalizations.of(context)?.acceptAll ?? 'Aceptar todo'),
                   ),
                 ],
               ),

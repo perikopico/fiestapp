@@ -19,12 +19,66 @@
   "filter": "Filter",
   "settings": "Settings",
   "profile": "Profile",
-  "login": "Sign In",
-  "register": "Sign Up",
-  "logout": "Sign Out",
-  "createAccount": "Create Account",
+  "login": "Sign in",
+  "register": "Register",
+  "logout": "Sign out",
+  "createAccount": "Create account",
   "saveFavoritesCreateEvents": "Save your favorites and create events",
   "continueWithoutAccount": "Continue without account",
-  "signUp": "Sign Up",
-  "signIn": "Sign In"
+  "signUp": "Sign up",
+  "signIn": "Sign in",
+  "allCategories": "All",
+  "@allCategories": {
+    "description": "Label to show all categories"
+  },
+  "allCategoriesLabel": "All categories",
+  "viewFeaturedEvents": "View featured events",
+  "enableLocationServices": "Please enable location services in Settings to use Radio mode.",
+  "locationPermissionsDisabled": "Location permissions are disabled. Please enable them in Settings to use Radio mode.",
+  "locationPermissionRequired": "Location permissions are required to use Radio mode.",
+  "errorLoadingData": "Error loading data: {error}",
+  "@errorLoadingData": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "Retry",
+  "errorConnection": "Connection error. Please check your internet connection.",
+  "errorPermissions": "Permissions are required to continue. Please check permissions in settings.",
+  "errorAuthentication": "Authentication error. Please sign in again.",
+  "errorDatabase": "Error loading data. Please try again later.",
+  "errorUnknown": "An unexpected error occurred. Please try again.",
+  "mustAcceptTerms": "You must accept the Terms and Privacy Policy to continue",
+  "consentsSaved": "Consents saved successfully",
+  "errorSaving": "Error saving: {error}",
+  "@errorSaving": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "dataConsent": "Data Consent",
+  "acceptTerms": "I accept the Terms and Conditions",
+  "readTerms": "Read terms",
+  "acceptPrivacy": "I accept the Privacy Policy",
+  "readPrivacy": "Read privacy policy",
+  "location": "Location",
+  "notifications": "Notifications",
+  "profileAndFavorites": "Profile and favorites",
+  "analytics": "Analytics",
+  "saveAndContinue": "Save and continue",
+  "acceptAll": "Accept all",
+  "aboutQuePlan": "About QuePlan",
+  "contact": "Contact",
+  "privacyPolicy": "Privacy Policy",
+  "termsAndConditions": "Terms and Conditions",
+  "manageConsents": "Manage consents",
+  "modifyPrivacyPreferences": "Modify your privacy preferences",
+  "noEventsFound": "No events found",
+  "noEventsFoundDescription": "No events found with the selected filters",
+  "noSearchResults": "No results",
+  "noSearchResultsDescription": "Try adjusting your search filters"
 }

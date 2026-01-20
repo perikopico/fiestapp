@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../models/category.dart';
 import '../../icons/icon_mapper.dart';
 import '../../../utils/accessibility_utils.dart';
+import '../../../l10n/app_localizations.dart';
 
 class CategoriesGrid extends StatelessWidget {
   final List<Category> categories;
@@ -65,7 +66,7 @@ class CategoriesGrid extends StatelessWidget {
             padding: const EdgeInsets.only(right: 8),
             child: _buildPillChip(
               context: context,
-              label: 'Todas',
+              label: AppLocalizations.of(context)?.allCategories ?? 'Todas',
               icon: Icons.grid_view,
               isSelected: selectedCategoryId == null,
               categoryColor: Colors.grey,

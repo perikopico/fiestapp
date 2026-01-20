@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 
 class HeroBanner extends StatelessWidget {
   final String title;
@@ -83,7 +84,7 @@ class HeroBanner extends StatelessWidget {
                 ElevatedButton.icon(
                   onPressed: onFeaturedTap,
                   icon: const Icon(Icons.chevron_right, size: 18),
-                  label: const Text('Ver eventos destacados'),
+                  label: Text(AppLocalizations.of(context)?.viewFeaturedEvents ?? 'Ver eventos destacados'),
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,

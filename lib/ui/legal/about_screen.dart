@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/url_helper.dart';
+import '../../l10n/app_localizations.dart';
 import 'gdpr_consent_screen.dart';
 
 class AboutScreen extends StatefulWidget {
@@ -66,7 +67,7 @@ class _AboutScreenState extends State<AboutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Sobre QuePlan'),
+        title: Text(AppLocalizations.of(context)?.aboutQuePlan ?? 'Sobre QuePlan'),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -132,14 +133,14 @@ class _AboutScreenState extends State<AboutScreen> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.privacy_tip),
-                  title: const Text('Política de Privacidad'),
+                  title: Text(AppLocalizations.of(context)?.privacyPolicy ?? 'Política de Privacidad'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _openUrl(privacyPolicyUrl),
                 ),
                 const Divider(height: 1),
                 ListTile(
                   leading: const Icon(Icons.description),
-                  title: const Text('Términos y Condiciones'),
+                  title: Text(AppLocalizations.of(context)?.termsAndConditions ?? 'Términos y Condiciones'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => _openUrl(termsUrl),
                 ),
@@ -155,8 +156,8 @@ class _AboutScreenState extends State<AboutScreen> {
               children: [
                 ListTile(
                   leading: const Icon(Icons.settings),
-                  title: const Text('Gestionar consentimientos'),
-                  subtitle: const Text('Modificar tus preferencias de privacidad'),
+                  title: Text(AppLocalizations.of(context)?.manageConsents ?? 'Gestionar consentimientos'),
+                  subtitle: Text(AppLocalizations.of(context)?.modifyPrivacyPreferences ?? 'Modificar tus preferencias de privacidad'),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () {
                     Navigator.of(context).push(

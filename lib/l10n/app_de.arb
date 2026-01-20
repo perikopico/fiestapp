@@ -26,5 +26,59 @@
   "saveFavoritesCreateEvents": "Speichere deine Favoriten und erstelle Veranstaltungen",
   "continueWithoutAccount": "Ohne Konto fortfahren",
   "signUp": "Registrieren",
-  "signIn": "Anmelden"
+  "signIn": "Anmelden",
+  "allCategories": "Alle",
+  "@allCategories": {
+    "description": "Bezeichnung zum Anzeigen aller Kategorien"
+  },
+  "allCategoriesLabel": "Alle Kategorien",
+  "viewFeaturedEvents": "Empfohlene Veranstaltungen anzeigen",
+  "enableLocationServices": "Bitte aktivieren Sie die Ortungsdienste in den Einstellungen, um den Radio-Modus zu verwenden.",
+  "locationPermissionsDisabled": "Standortberechtigungen sind deaktiviert. Bitte aktivieren Sie sie in den Einstellungen, um den Radio-Modus zu verwenden.",
+  "locationPermissionRequired": "Standortberechtigungen sind erforderlich, um den Radio-Modus zu verwenden.",
+  "errorLoadingData": "Fehler beim Laden der Daten: {error}",
+  "@errorLoadingData": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "Wiederholen",
+  "errorConnection": "Verbindungsfehler. Bitte überprüfen Sie Ihre Internetverbindung.",
+  "errorPermissions": "Berechtigungen sind erforderlich, um fortzufahren. Bitte überprüfen Sie die Berechtigungen in den Einstellungen.",
+  "errorAuthentication": "Authentifizierungsfehler. Bitte melden Sie sich erneut an.",
+  "errorDatabase": "Fehler beim Laden der Daten. Bitte versuchen Sie es später erneut.",
+  "errorUnknown": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+  "mustAcceptTerms": "Sie müssen die Allgemeinen Geschäftsbedingungen und die Datenschutzrichtlinie akzeptieren, um fortzufahren",
+  "consentsSaved": "Einverständnisse erfolgreich gespeichert",
+  "errorSaving": "Fehler beim Speichern: {error}",
+  "@errorSaving": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "dataConsent": "Dateneinverständnis",
+  "acceptTerms": "Ich akzeptiere die Allgemeinen Geschäftsbedingungen",
+  "readTerms": "Bedingungen lesen",
+  "acceptPrivacy": "Ich akzeptiere die Datenschutzrichtlinie",
+  "readPrivacy": "Datenschutzrichtlinie lesen",
+  "location": "Standort",
+  "notifications": "Benachrichtigungen",
+  "profileAndFavorites": "Profil und Favoriten",
+  "analytics": "Analysen",
+  "saveAndContinue": "Speichern und fortfahren",
+  "acceptAll": "Alle akzeptieren",
+  "aboutQuePlan": "Über QuePlan",
+  "contact": "Kontakt",
+  "privacyPolicy": "Datenschutzrichtlinie",
+  "termsAndConditions": "Allgemeine Geschäftsbedingungen",
+  "manageConsents": "Einverständnisse verwalten",
+  "modifyPrivacyPreferences": "Ihre Datenschutzeinstellungen ändern",
+  "noEventsFound": "Keine Veranstaltungen gefunden",
+  "noEventsFoundDescription": "Keine Veranstaltungen mit den ausgewählten Filtern gefunden",
+  "noSearchResults": "Keine Ergebnisse",
+  "noSearchResultsDescription": "Versuchen Sie, Ihre Suchfilter anzupassen"
 }

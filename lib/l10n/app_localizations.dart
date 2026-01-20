@@ -227,6 +227,228 @@ abstract class AppLocalizations {
   /// In es, this message translates to:
   /// **'Iniciar sesión'**
   String get signIn;
+
+  /// Etiqueta para mostrar todas las categorías
+  ///
+  /// In es, this message translates to:
+  /// **'Todas'**
+  String get allCategories;
+
+  /// No description provided for @allCategoriesLabel.
+  ///
+  /// In es, this message translates to:
+  /// **'Todas las categorías'**
+  String get allCategoriesLabel;
+
+  /// No description provided for @viewFeaturedEvents.
+  ///
+  /// In es, this message translates to:
+  /// **'Ver eventos destacados'**
+  String get viewFeaturedEvents;
+
+  /// No description provided for @enableLocationServices.
+  ///
+  /// In es, this message translates to:
+  /// **'Por favor, activa los servicios de ubicación en Configuración para usar el modo Radio.'**
+  String get enableLocationServices;
+
+  /// No description provided for @locationPermissionsDisabled.
+  ///
+  /// In es, this message translates to:
+  /// **'Los permisos de ubicación están deshabilitados. Por favor, habilítalos en Configuración para usar el modo Radio.'**
+  String get locationPermissionsDisabled;
+
+  /// No description provided for @locationPermissionRequired.
+  ///
+  /// In es, this message translates to:
+  /// **'Se necesitan permisos de ubicación para usar el modo Radio.'**
+  String get locationPermissionRequired;
+
+  /// No description provided for @errorLoadingData.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar datos: {error}'**
+  String errorLoadingData(String error);
+
+  /// No description provided for @retry.
+  ///
+  /// In es, this message translates to:
+  /// **'Reintentar'**
+  String get retry;
+
+  /// No description provided for @errorConnection.
+  ///
+  /// In es, this message translates to:
+  /// **'Error de conexión. Por favor, verifica tu conexión a internet.'**
+  String get errorConnection;
+
+  /// No description provided for @errorPermissions.
+  ///
+  /// In es, this message translates to:
+  /// **'Se necesitan permisos para continuar. Por favor, verifica los permisos en la configuración.'**
+  String get errorPermissions;
+
+  /// No description provided for @errorAuthentication.
+  ///
+  /// In es, this message translates to:
+  /// **'Error de autenticación. Por favor, inicia sesión nuevamente.'**
+  String get errorAuthentication;
+
+  /// No description provided for @errorDatabase.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al cargar los datos. Por favor, intenta de nuevo más tarde.'**
+  String get errorDatabase;
+
+  /// No description provided for @errorUnknown.
+  ///
+  /// In es, this message translates to:
+  /// **'Ha ocurrido un error inesperado. Por favor, intenta de nuevo.'**
+  String get errorUnknown;
+
+  /// No description provided for @mustAcceptTerms.
+  ///
+  /// In es, this message translates to:
+  /// **'Debes aceptar los Términos y la Política de Privacidad para continuar'**
+  String get mustAcceptTerms;
+
+  /// No description provided for @consentsSaved.
+  ///
+  /// In es, this message translates to:
+  /// **'Consentimientos guardados correctamente'**
+  String get consentsSaved;
+
+  /// No description provided for @errorSaving.
+  ///
+  /// In es, this message translates to:
+  /// **'Error al guardar: {error}'**
+  String errorSaving(String error);
+
+  /// No description provided for @dataConsent.
+  ///
+  /// In es, this message translates to:
+  /// **'Consentimiento de Datos'**
+  String get dataConsent;
+
+  /// No description provided for @acceptTerms.
+  ///
+  /// In es, this message translates to:
+  /// **'Acepto los Términos y Condiciones'**
+  String get acceptTerms;
+
+  /// No description provided for @readTerms.
+  ///
+  /// In es, this message translates to:
+  /// **'Leer términos'**
+  String get readTerms;
+
+  /// No description provided for @acceptPrivacy.
+  ///
+  /// In es, this message translates to:
+  /// **'Acepto la Política de Privacidad'**
+  String get acceptPrivacy;
+
+  /// No description provided for @readPrivacy.
+  ///
+  /// In es, this message translates to:
+  /// **'Leer política de privacidad'**
+  String get readPrivacy;
+
+  /// No description provided for @location.
+  ///
+  /// In es, this message translates to:
+  /// **'Ubicación'**
+  String get location;
+
+  /// No description provided for @notifications.
+  ///
+  /// In es, this message translates to:
+  /// **'Notificaciones'**
+  String get notifications;
+
+  /// No description provided for @profileAndFavorites.
+  ///
+  /// In es, this message translates to:
+  /// **'Perfil y favoritos'**
+  String get profileAndFavorites;
+
+  /// No description provided for @analytics.
+  ///
+  /// In es, this message translates to:
+  /// **'Analytics'**
+  String get analytics;
+
+  /// No description provided for @saveAndContinue.
+  ///
+  /// In es, this message translates to:
+  /// **'Guardar y continuar'**
+  String get saveAndContinue;
+
+  /// No description provided for @acceptAll.
+  ///
+  /// In es, this message translates to:
+  /// **'Aceptar todo'**
+  String get acceptAll;
+
+  /// No description provided for @aboutQuePlan.
+  ///
+  /// In es, this message translates to:
+  /// **'Sobre QuePlan'**
+  String get aboutQuePlan;
+
+  /// No description provided for @contact.
+  ///
+  /// In es, this message translates to:
+  /// **'Contacto'**
+  String get contact;
+
+  /// No description provided for @privacyPolicy.
+  ///
+  /// In es, this message translates to:
+  /// **'Política de Privacidad'**
+  String get privacyPolicy;
+
+  /// No description provided for @termsAndConditions.
+  ///
+  /// In es, this message translates to:
+  /// **'Términos y Condiciones'**
+  String get termsAndConditions;
+
+  /// No description provided for @manageConsents.
+  ///
+  /// In es, this message translates to:
+  /// **'Gestionar consentimientos'**
+  String get manageConsents;
+
+  /// No description provided for @modifyPrivacyPreferences.
+  ///
+  /// In es, this message translates to:
+  /// **'Modificar tus preferencias de privacidad'**
+  String get modifyPrivacyPreferences;
+
+  /// No description provided for @noEventsFound.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay eventos'**
+  String get noEventsFound;
+
+  /// No description provided for @noEventsFoundDescription.
+  ///
+  /// In es, this message translates to:
+  /// **'No se encontraron eventos con los filtros seleccionados'**
+  String get noEventsFoundDescription;
+
+  /// No description provided for @noSearchResults.
+  ///
+  /// In es, this message translates to:
+  /// **'No hay resultados'**
+  String get noSearchResults;
+
+  /// No description provided for @noSearchResultsDescription.
+  ///
+  /// In es, this message translates to:
+  /// **'Intenta ajustar tus filtros de búsqueda'**
+  String get noSearchResultsDescription;
 }
 
 class _AppLocalizationsDelegate

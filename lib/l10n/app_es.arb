@@ -26,5 +26,59 @@
   "saveFavoritesCreateEvents": "Guarda tus favoritos y crea eventos",
   "continueWithoutAccount": "Continuar sin cuenta",
   "signUp": "Registrarse",
-  "signIn": "Iniciar sesión"
+  "signIn": "Iniciar sesión",
+  "allCategories": "Todas",
+  "@allCategories": {
+    "description": "Etiqueta para mostrar todas las categorías"
+  },
+  "allCategoriesLabel": "Todas las categorías",
+  "viewFeaturedEvents": "Ver eventos destacados",
+  "enableLocationServices": "Por favor, activa los servicios de ubicación en Configuración para usar el modo Radio.",
+  "locationPermissionsDisabled": "Los permisos de ubicación están deshabilitados. Por favor, habilítalos en Configuración para usar el modo Radio.",
+  "locationPermissionRequired": "Se necesitan permisos de ubicación para usar el modo Radio.",
+  "errorLoadingData": "Error al cargar datos: {error}",
+  "@errorLoadingData": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "retry": "Reintentar",
+  "errorConnection": "Error de conexión. Por favor, verifica tu conexión a internet.",
+  "errorPermissions": "Se necesitan permisos para continuar. Por favor, verifica los permisos en la configuración.",
+  "errorAuthentication": "Error de autenticación. Por favor, inicia sesión nuevamente.",
+  "errorDatabase": "Error al cargar los datos. Por favor, intenta de nuevo más tarde.",
+  "errorUnknown": "Ha ocurrido un error inesperado. Por favor, intenta de nuevo.",
+  "mustAcceptTerms": "Debes aceptar los Términos y la Política de Privacidad para continuar",
+  "consentsSaved": "Consentimientos guardados correctamente",
+  "errorSaving": "Error al guardar: {error}",
+  "@errorSaving": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "dataConsent": "Consentimiento de Datos",
+  "acceptTerms": "Acepto los Términos y Condiciones",
+  "readTerms": "Leer términos",
+  "acceptPrivacy": "Acepto la Política de Privacidad",
+  "readPrivacy": "Leer política de privacidad",
+  "location": "Ubicación",
+  "notifications": "Notificaciones",
+  "profileAndFavorites": "Perfil y favoritos",
+  "analytics": "Analytics",
+  "saveAndContinue": "Guardar y continuar",
+  "acceptAll": "Aceptar todo",
+  "aboutQuePlan": "Sobre QuePlan",
+  "contact": "Contacto",
+  "privacyPolicy": "Política de Privacidad",
+  "termsAndConditions": "Términos y Condiciones",
+  "manageConsents": "Gestionar consentimientos",
+  "modifyPrivacyPreferences": "Modificar tus preferencias de privacidad",
+  "noEventsFound": "No hay eventos",
+  "noEventsFoundDescription": "No se encontraron eventos con los filtros seleccionados",
+  "noSearchResults": "No hay resultados",
+  "noSearchResultsDescription": "Intenta ajustar tus filtros de búsqueda"
 }

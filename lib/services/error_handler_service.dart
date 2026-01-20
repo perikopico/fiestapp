@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import '../l10n/app_localizations.dart';
 import 'logger_service.dart';
 
 /// Tipos de errores comunes
@@ -28,7 +29,7 @@ class ErrorHandlerService {
 
     // Determinar tipo de error
     final errorType = _getErrorType(error);
-    final message = customMessage ?? _getErrorMessage(errorType, error);
+    final message = customMessage ?? _getErrorMessage(errorType, context);
 
     // Mostrar snackbar o diálogo según el tipo de error
     if (errorType == ErrorType.network) {
@@ -75,30 +76,48 @@ class ErrorHandlerService {
   }
 
   /// Obtiene el mensaje de error amigable para el usuario
-  String _getErrorMessage(ErrorType type, dynamic error) {
+  String _getErrorMessage(ErrorType type, BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    if (l10n == null) {
+      // Fallback si no hay localización disponible
+      switch (type) {
+        case ErrorType.network:
+          return 'Error de conexión. Por favor, verifica tu conexión a internet.';
+        case ErrorType.permission:
+          return 'Se necesitan permisos para continuar. Por favor, verifica los permisos en la configuración.';
+        case ErrorType.authentication:
+          return 'Error de autenticación. Por favor, inicia sesión nuevamente.';
+        case ErrorType.database:
+          return 'Error al cargar los datos. Por favor, intenta de nuevo más tarde.';
+        case ErrorType.unknown:
+          return 'Ha ocurrido un error inesperado. Por favor, intenta de nuevo.';
+      }
+    }
+    
     switch (type) {
       case ErrorType.network:
-        return 'Error de conexión. Por favor, verifica tu conexión a internet.';
+        return l10n.errorConnection;
       case ErrorType.permission:
-        return 'Se necesitan permisos para continuar. Por favor, verifica los permisos en la configuración.';
+        return l10n.errorPermissions;
       case ErrorType.authentication:
-        return 'Error de autenticación. Por favor, inicia sesión nuevamente.';
+        return l10n.errorAuthentication;
       case ErrorType.database:
-        return 'Error al cargar los datos. Por favor, intenta de nuevo más tarde.';
+        return l10n.errorDatabase;
       case ErrorType.unknown:
-        return 'Ha ocurrido un error inesperado. Por favor, intenta de nuevo.';
+        return l10n.errorUnknown;
     }
   }
 
   /// Muestra error de red con opción de reintentar
   void _showNetworkError(BuildContext context, String message, VoidCallback? onRetry) {
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 4),
         action: onRetry != null
             ? SnackBarAction(
-                label: 'Reintentar',
+                label: l10n?.retry ?? 'Reintentar',
                 onPressed: onRetry,
               )
             : null,
@@ -130,13 +149,14 @@ class ErrorHandlerService {
 
   /// Muestra error genérico
   void _showGenericError(BuildContext context, String message, VoidCallback? onRetry) {
+    final l10n = AppLocalizations.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
         action: onRetry != null
             ? SnackBarAction(
-                label: 'Reintentar',
+                label: l10n?.retry ?? 'Reintentar',
                 onPressed: onRetry,
               )
             : null,

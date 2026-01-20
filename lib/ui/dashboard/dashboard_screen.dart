@@ -29,6 +29,7 @@ import '../../services/favorites_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
 import '../../providers/dashboard_provider.dart';
+import '../../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
 import '../auth/profile_screen.dart';
@@ -540,9 +541,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (!serviceEnabled) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Por favor, activa los servicios de ubicación en Configuración para usar el modo Radio.'),
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)?.enableLocationServices ?? 'Por favor, activa los servicios de ubicación en Configuración para usar el modo Radio.'),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -562,10 +563,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('Los permisos de ubicación están deshabilitados. Por favor, habilítalos en Configuración para usar el modo Radio.'),
+              content: Text(AppLocalizations.of(context)?.locationPermissionsDisabled ?? 'Los permisos de ubicación están deshabilitados. Por favor, habilítalos en Configuración para usar el modo Radio.'),
               duration: const Duration(seconds: 4),
               action: SnackBarAction(
-                label: 'Configuración',
+                label: AppLocalizations.of(context)?.settings ?? 'Configuración',
                 onPressed: () => Geolocator.openLocationSettings(),
               ),
             ),
@@ -579,9 +580,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (permission == LocationPermission.denied) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Se necesitan permisos de ubicación para usar el modo Radio.'),
-              duration: Duration(seconds: 3),
+            SnackBar(
+              content: Text(AppLocalizations.of(context)?.locationPermissionRequired ?? 'Se necesitan permisos de ubicación para usar el modo Radio.'),
+              duration: const Duration(seconds: 3),
             ),
           );
         }
@@ -1026,9 +1027,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al cargar datos: ${e.toString()}'),
+            content: Text(AppLocalizations.of(context)?.errorLoadingData(e.toString()) ?? 'Error al cargar datos: ${e.toString()}'),
             action: SnackBarAction(
-              label: 'Reintentar',
+              label: AppLocalizations.of(context)?.retry ?? 'Reintentar',
               onPressed: _reloadEvents,
             ),
             duration: const Duration(seconds: 5),
@@ -1327,7 +1328,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       runSpacing: 8,
       children: [
         ChoiceChip(
-          label: Text('Todas', style: Theme.of(context).textTheme.labelLarge),
+          label: Text(AppLocalizations.of(context)?.allCategories ?? 'Todas', style: Theme.of(context).textTheme.labelLarge),
           selected: _selectedCityId == null,
             onSelected: (_) {
               setState(() {
@@ -1371,7 +1372,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   String _getSelectedCategoryName() {
-    if (_selectedCategoryId == null) return 'Todas las categorías';
+    if (_selectedCategoryId == null) return AppLocalizations.of(context)?.allCategoriesLabel ?? 'Todas las categorías';
     final selectedCategory = _categories.firstWhere(
       (c) => c.id == _selectedCategoryId,
       orElse: () => _categories.first,
@@ -1964,7 +1965,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: _buildCompactCategoryChip(
-            label: 'Todas',
+            label: AppLocalizations.of(context)?.allCategories ?? 'Todas',
             icon: Icons.grid_view,
             isSelected: _selectedCategoryId == null,
             categoryColor: Colors.grey,
@@ -2183,7 +2184,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                'Todas',
+                AppLocalizations.of(context)?.allCategories ?? 'Todas',
                 style: TextStyle(
                   fontWeight: isAllSelected ? FontWeight.bold : FontWeight.w600,
                   fontSize: 13,
