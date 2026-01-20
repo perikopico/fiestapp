@@ -184,7 +184,7 @@ class DashboardScreen extends StatefulWidget {
         'categories': categories,
       };
     } catch (e) {
-      debugPrint('Error al pre-cargar datos del dashboard: $e');
+      LoggerService.instance.error('Error al pre-cargar datos del dashboard', error: e);
       return {
         'upcomingEvents': <Event>[],
         'featuredEvents': <Event>[],
