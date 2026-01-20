@@ -27,6 +27,7 @@ import 'package:intl/intl.dart';
 import '../../utils/dashboard_utils.dart';
 import '../../services/favorites_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/logger_service.dart';
 import '../../providers/dashboard_provider.dart';
 import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
@@ -432,7 +433,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error al inicializar video de introducción: $e');
+      LoggerService.instance.error('Error al inicializar video de introducción', error: e);
       // Si hay error, ocultar el overlay inmediatamente y mostrar diálogo
       if (mounted) {
         setState(() {
@@ -1491,6 +1492,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: const Text('Todas'),
             selected: _selectedCategoryId == null,
             onSelected: (_) {
+              final provider = context.read<DashboardProvider>();
+              provider.setSelectedCategory(null);
               setState(() {
                 _selectedCategoryId = null;
               });
@@ -1506,8 +1509,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: Text(category.name),
               selected: isSelected,
               onSelected: (_) {
+                final provider = context.read<DashboardProvider>();
+                final newCategoryId = isSelected ? null : category.id;
+                provider.setSelectedCategory(newCategoryId);
                 setState(() {
-                  _selectedCategoryId = isSelected ? null : category.id;
+                  _selectedCategoryId = newCategoryId;
                 });
                 _reloadEvents();
               },
@@ -1964,6 +1970,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             isSelected: _selectedCategoryId == null,
             categoryColor: Colors.grey,
             onTap: () {
+              final provider = context.read<DashboardProvider>();
+              provider.setSelectedCategory(null);
               _onFilterInteraction();
               setState(() {
                 _selectedCategoryId = null;
@@ -1984,9 +1992,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               isSelected: isSelected,
               categoryColor: categoryColor,
               onTap: () {
+                final provider = context.read<DashboardProvider>();
+                final newCategoryId = isSelected ? null : category.id;
+                provider.setSelectedCategory(newCategoryId);
                 _onFilterInteraction();
                 setState(() {
-                  _selectedCategoryId = isSelected ? null : category.id;
+                  _selectedCategoryId = newCategoryId;
                 });
                 _reloadEvents();
               },
@@ -2132,10 +2143,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final List<Widget> categoryWidgets = [];
 
     // Cuadro "Todas"
-    final isAllSelected = _selectedCategoryId == null;
+    final isAllSelected = selectedCategoryId == null;
     categoryWidgets.add(
       InkWell(
         onTap: () {
+          // Usar Provider si está disponible
+          final provider = context.read<DashboardProvider>();
+          provider.setSelectedCategory(null);
+          // También actualizar estado local para compatibilidad
           setState(() {
             _selectedCategoryId = null;
           });
@@ -2196,8 +2211,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             return InkWell(
               onTap: () {
+                // Usar Provider si está disponible
+                final provider = context.read<DashboardProvider>();
+                final newCategoryId = isSelected ? null : category.id;
+                provider.setSelectedCategory(newCategoryId);
+                // También actualizar estado local para compatibilidad
                 setState(() {
-                  _selectedCategoryId = isSelected ? null : category.id;
+                  _selectedCategoryId = newCategoryId;
                 });
                 _reloadEvents();
               },
@@ -2881,7 +2901,13 @@ class CategoriesSection extends StatelessWidget {
       child: CategoriesGrid(
         categories: categories,
         selectedCategoryId: selectedCategoryId,
-        onCategoryTap: onCategoryTap,
+        onCategoryTap: (categoryId) {
+          // Usar Provider si está disponible
+          final provider = Provider.of<DashboardProvider>(context, listen: false);
+          provider.setSelectedCategory(categoryId);
+          // Llamar callback original también
+          onCategoryTap(categoryId);
+        },
       ),
     );
   }
