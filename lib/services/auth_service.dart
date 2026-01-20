@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'logger_service.dart';
 
 /// Servicio de autenticación usando Supabase Auth
 /// Soporta login con Google OAuth y email/password
@@ -13,7 +14,7 @@ class AuthService {
     try {
       return Supabase.instance.client;
     } catch (e) {
-      debugPrint('⚠️ Supabase no está inicializado: $e');
+      LoggerService.instance.warning('Supabase no está inicializado', error: e);
       return null;
     }
   }
@@ -23,7 +24,7 @@ class AuthService {
     try {
       return _client?.auth.currentUser;
     } catch (e) {
-      debugPrint('⚠️ Error al obtener usuario actual: $e');
+      LoggerService.instance.error('Error al obtener usuario actual', error: e);
       return null;
     }
   }
@@ -49,7 +50,7 @@ class AuthService {
     try {
       return currentUser != null;
     } catch (e) {
-      debugPrint('⚠️ Error al verificar autenticación: $e');
+      LoggerService.instance.error('Error al verificar autenticación', error: e);
       return false;
     }
   }
@@ -92,7 +93,7 @@ class AuthService {
         
         if (deletedCheck != null) {
           // Usuario está marcado como eliminado, cerrar sesión inmediatamente
-          debugPrint('⚠️ Usuario marcado como eliminado, cerrando sesión: ${response.user!.email}');
+          LoggerService.instance.warning('Usuario marcado como eliminado, cerrando sesión', data: {'email': response.user!.email});
           // Cerrar sesión ANTES de lanzar el error
           await client.auth.signOut();
           // Lanzar error con mensaje claro
@@ -106,13 +107,13 @@ class AuthService {
           // Re-lanzar si es nuestro error de cuenta eliminada
           rethrow;
         }
-        debugPrint('⚠️ No se pudo verificar si el usuario está eliminado: $e');
+        LoggerService.instance.warning('No se pudo verificar si el usuario está eliminado', error: e);
         // Continuar con el login si no es nuestro error
       }
       
-      debugPrint('✅ Usuario autenticado: ${response.user!.email}');
+      LoggerService.instance.info('Usuario autenticado', data: {'email': response.user!.email});
     } catch (e) {
-      debugPrint('❌ Error al iniciar sesión: $e');
+      LoggerService.instance.error('Error al iniciar sesión', error: e);
       rethrow;
     }
   }
@@ -147,10 +148,9 @@ class AuthService {
         throw Exception('Error al registrarse: no se pudo crear el usuario');
       }
       
-      debugPrint('✅ Usuario registrado: ${response.user!.email}');
-      debugPrint('📍 URL de redirección para confirmación: $redirectUrl');
+      LoggerService.instance.info('Usuario registrado', data: {'email': response.user!.email, 'redirectUrl': redirectUrl});
     } catch (e) {
-      debugPrint('❌ Error al registrarse: $e');
+      LoggerService.instance.error('Error al registrarse', error: e);
       rethrow;
     }
   }
@@ -174,9 +174,8 @@ class AuthService {
           OAuthProvider.google,
           redirectTo: redirectUrl,
         );
-        debugPrint('✅ Redirigiendo a Google OAuth (Web)');
-        debugPrint('📍 URL de callback: $redirectUrl');
-        debugPrint('⚠️ IMPORTANTE: Asegúrate de que esta URL está en Supabase Dashboard → Authentication → Redirect URLs');
+        LoggerService.instance.info('Redirigiendo a Google OAuth (Web)', data: {'redirectUrl': redirectUrl});
+        LoggerService.instance.warning('IMPORTANTE: Asegúrate de que esta URL está en Supabase Dashboard → Authentication → Redirect URLs');
       } else {
         // En móvil, usar el deep link
         const deepLinkUrl = 'io.supabase.fiestapp://login-callback';
@@ -184,11 +183,10 @@ class AuthService {
           OAuthProvider.google,
           redirectTo: deepLinkUrl,
         );
-        debugPrint('✅ Redirigiendo a Google OAuth (Móvil)');
-        debugPrint('📍 Deep link: $deepLinkUrl');
+        LoggerService.instance.info('Redirigiendo a Google OAuth (Móvil)', data: {'deepLinkUrl': deepLinkUrl});
       }
     } catch (e) {
-      debugPrint('❌ Error al iniciar sesión con Google: $e');
+      LoggerService.instance.error('Error al iniciar sesión con Google', error: e);
       rethrow;
     }
   }
@@ -197,15 +195,15 @@ class AuthService {
   Future<void> signOut() async {
     final client = _client;
     if (client == null) {
-      debugPrint('⚠️ Supabase no está inicializado, no hay sesión que cerrar');
+      LoggerService.instance.warning('Supabase no está inicializado, no hay sesión que cerrar');
       return;
     }
     
     try {
       await client.auth.signOut();
-      debugPrint('✅ Sesión cerrada');
+      LoggerService.instance.info('Sesión cerrada');
     } catch (e) {
-      debugPrint('❌ Error al cerrar sesión: $e');
+      LoggerService.instance.error('Error al cerrar sesión', error: e);
       // No relanzar, solo loggear
     }
   }
@@ -226,7 +224,7 @@ class AuthService {
       );
       debugPrint('✅ Email de restablecimiento enviado a $email');
     } catch (e) {
-      debugPrint('❌ Error al enviar email de restablecimiento: $e');
+      LoggerService.instance.error('Error al enviar email de restablecimiento', error: e);
       rethrow;
     }
   }
@@ -251,7 +249,7 @@ class AuthService {
       
       return response != null;
     } catch (e) {
-      debugPrint('❌ Error al verificar si es admin: $e');
+      LoggerService.instance.error('Error al verificar si es admin', error: e);
       return false;
     }
   }
@@ -269,7 +267,7 @@ class AuthService {
     
     // Funcionalidad deshabilitada temporalmente
     // TODO: Implementar actualización de perfil cuando sea necesario
-    debugPrint('⚠️ Actualización de perfil no implementada aún');
+    LoggerService.instance.warning('Actualización de perfil no implementada aún');
     
     // Código comentado para referencia futura:
     // try {
