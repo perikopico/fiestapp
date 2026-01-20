@@ -222,7 +222,7 @@ class AuthService {
             ? 'io.supabase.fiestapp://reset-password'
             : 'io.supabase.fiestapp://reset-password',
       );
-      debugPrint('✅ Email de restablecimiento enviado a $email');
+      LoggerService.instance.info('Email de restablecimiento enviado', data: {'email': email});
     } catch (e) {
       LoggerService.instance.error('Error al enviar email de restablecimiento', error: e);
       rethrow;
