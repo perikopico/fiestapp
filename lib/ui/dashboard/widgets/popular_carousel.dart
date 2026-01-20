@@ -5,6 +5,7 @@ import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
+import '../../../utils/accessibility_utils.dart';
 import '../../common/glass_card.dart';
 
 class PopularCarousel extends StatefulWidget {
@@ -255,7 +256,10 @@ class _PopularCarouselState extends State<PopularCarousel> {
                       );
                     },
                     borderRadius: BorderRadius.circular(16),
-                    child: GlassCard(
+                    child: AccessibilityUtils.buttonSemantics(
+                      label: 'Ver detalles del evento: ${event.title}',
+                      hint: 'Toca para ver más información sobre este evento',
+                      child: GlassCard(
                       width: 180,
                       blur: 15.0,
                       opacity: 0.25,
@@ -393,28 +397,36 @@ class _PopularCarouselState extends State<PopularCarousel> {
                             Positioned(
                               top: 8,
                               right: 8,
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () async {
-                                    await FavoritesService.instance.toggleFavorite(event.id);
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.5),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      isFavorite ? Icons.favorite : Icons.favorite_border,
-                                      color: isFavorite
-                                          ? Colors.red
-                                          : Colors.white,
-                                      size: 18,
+                              child: AccessibilityUtils.buttonSemantics(
+                                label: isFavorite 
+                                    ? 'Quitar de favoritos: ${event.title}' 
+                                    : 'Agregar a favoritos: ${event.title}',
+                                hint: isFavorite 
+                                    ? 'Toca para quitar este evento de tus favoritos' 
+                                    : 'Toca para agregar este evento a tus favoritos',
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: () async {
+                                      await FavoritesService.instance.toggleFavorite(event.id);
+                                      if (mounted) {
+                                        setState(() {});
+                                      }
+                                    },
+                                    borderRadius: BorderRadius.circular(20),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withOpacity(0.5),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                                        color: isFavorite
+                                            ? Colors.red
+                                            : Colors.white,
+                                        size: 18,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -423,6 +435,7 @@ class _PopularCarouselState extends State<PopularCarousel> {
                           ],
                         ),
                       ),
+                    ),
                     ),
                   );
                 },

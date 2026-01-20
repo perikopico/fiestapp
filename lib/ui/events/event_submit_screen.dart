@@ -16,9 +16,12 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../../services/event_service.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
+import '../../services/error_handler_service.dart';
 import '../../models/category.dart';
 import '../../models/venue.dart';
 import '../../models/event.dart';
+import '../../utils/validation_utils.dart';
+import '../../utils/accessibility_utils.dart';
 import '../common/city_search_field.dart';
 import '../common/venue_search_field.dart';
 import 'image_crop_screen.dart';
@@ -586,17 +589,18 @@ $dayProgram''';
   bool _validateAllFields() {
     bool isValid = true;
 
-    // Validar título
-    if (_titleController.text.trim().isEmpty) {
+    // Validar título usando ValidationUtils
+    final title = _titleController.text.trim();
+    if (!ValidationUtils.isNotEmpty(title)) {
       _titleError = 'El título es obligatorio';
       isValid = false;
     } else {
       _titleError = null;
     }
 
-    // Validar descripción (mínimo 20 caracteres)
+    // Validar descripción (mínimo 20 caracteres) usando ValidationUtils
     final description = _descriptionController.text.trim();
-    if (description.isEmpty) {
+    if (!ValidationUtils.isNotEmpty(description)) {
       _descriptionError = 'La descripción es obligatoria';
       isValid = false;
     } else if (description.length < 20) {
@@ -607,7 +611,7 @@ $dayProgram''';
     }
 
     // Validar lugar - debe haber un lugar seleccionado o texto escrito
-    if (_selectedVenue == null && _placeController.text.trim().isEmpty) {
+    if (_selectedVenue == null && !ValidationUtils.isNotEmpty(_placeController.text)) {
       _placeError = 'Por favor, selecciona o escribe un lugar';
       isValid = false;
     } else {
@@ -636,6 +640,14 @@ $dayProgram''';
       isValid = false;
     } else {
       _startDateError = null;
+    }
+
+    // Validar coordenadas si están presentes
+    if (_lat != null && _lng != null) {
+      if (!ValidationUtils.isValidCoordinates(_lat, _lng)) {
+        _placeError = 'Las coordenadas proporcionadas no son válidas';
+        isValid = false;
+      }
     }
 
     return isValid;
@@ -1586,14 +1598,20 @@ $dayProgram''';
                             }
 
                             try {
+                              // Validar coordenadas antes de crear el evento
+                              if (latToSave != null && lngToSave != null && 
+                                  !ValidationUtils.isValidCoordinates(latToSave, lngToSave)) {
+                                throw ArgumentError('Las coordenadas proporcionadas no son válidas');
+                              }
+
                               await _eventService.submitEvent(
-                                title: _titleController.text,
+                                title: _titleController.text.trim(),
                                 town: _selectedCity!.name,
                                 place: _selectedVenue != null
                                     ? _selectedVenue!.name
                                     : (_placeController.text.trim().isEmpty
                                         ? _selectedCity!.name
-                                        : _placeController.text),
+                                        : _placeController.text.trim()),
                                 startsAt: startsAt,
                                 cityId: _selectedCityId!,
                                 categoryId: _selectedCategory!.id!,
@@ -1607,11 +1625,17 @@ $dayProgram''';
                                 imageUrl: imageUrl,
                                 imageAlignment: _imageAlignment,
                                 venueId: _selectedVenue?.id, // Pasar venue_id si hay un lugar seleccionado
+                                infoUrl: null, // Puede agregarse en el futuro si se añade campo en UI
                               );
                               eventsCreated = 1;
                             } catch (e) {
-                              debugPrint('Error al crear evento: $e');
-                              errorMessage = 'Error al crear el evento: ${e.toString()}';
+                              ErrorHandlerService.instance.handleError(
+                                context,
+                                e,
+                                customMessage: 'Error al crear el evento. Por favor, intenta de nuevo.',
+                                onRetry: () => _handleSubmit(context),
+                              );
+                              errorMessage = 'Error al crear el evento';
                             }
                           } else {
                             // Crear un evento por cada día del rango
@@ -1803,8 +1827,12 @@ $dayProgram''';
                                 );
                                 eventsCreated++;
                               } catch (e) {
-                                errorMessage =
-                                    'Error al crear evento para ${DateFormat('dd/MM/yyyy').format(currentDate)}: $e';
+                                ErrorHandlerService.instance.handleError(
+                                  context,
+                                  e,
+                                  customMessage: 'Error al crear evento para ${DateFormat('dd/MM/yyyy').format(currentDate)}. Por favor, intenta de nuevo.',
+                                );
+                                errorMessage = 'Error al crear evento';
                                 break; // Detener si hay un error
                               }
 

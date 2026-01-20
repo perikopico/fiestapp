@@ -5,6 +5,7 @@ import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
+import '../../../utils/accessibility_utils.dart';
 
 class UpcomingList extends StatefulWidget {
   final List<Event> events;
@@ -255,6 +256,12 @@ class _UpcomingListState extends State<UpcomingList> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(
+                  Icons.search_off,
+                  size: 64,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+                ),
+                const SizedBox(height: 16),
                 Text(
                   'Utiliza los filtros de arriba para localizar tu localidad o evento',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -290,6 +297,12 @@ class _UpcomingListState extends State<UpcomingList> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              Icon(
+                Icons.event_busy,
+                size: 64,
+                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+              ),
+              const SizedBox(height: 16),
               Text(
                 'No se encontraron eventos',
                 style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -323,21 +336,29 @@ class _UpcomingListState extends State<UpcomingList> {
               const SizedBox(height: 16),
               // Botón de búsqueda ampliada (solo en modo radio con radio < 50km)
               if (shouldShowExpandButton)
-                ElevatedButton.icon(
-                  onPressed: widget.onExpandRadius,
-                  icon: const Icon(Icons.search, size: 18),
-                  label: const Text('Buscar en 50km'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
+                AccessibilityUtils.buttonSemantics(
+                  label: 'Buscar eventos en un radio de 50 kilómetros',
+                  hint: 'Amplía la búsqueda a un radio mayor para encontrar más eventos',
+                  child: ElevatedButton.icon(
+                    onPressed: widget.onExpandRadius,
+                    icon: const Icon(Icons.search, size: 18),
+                    label: const Text('Buscar en 50km'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 12,
+                      ),
                     ),
                   ),
                 )
               else if (widget.onClearFilters != null)
-                OutlinedButton(
-                  onPressed: widget.onClearFilters,
-                  child: const Text('Borrar filtros'),
+                AccessibilityUtils.buttonSemantics(
+                  label: 'Borrar filtros de búsqueda',
+                  hint: 'Elimina todos los filtros aplicados para ver todos los eventos',
+                  child: OutlinedButton(
+                    onPressed: widget.onClearFilters,
+                    child: const Text('Borrar filtros'),
+                  ),
                 ),
             ],
           ),
@@ -369,9 +390,13 @@ class _UpcomingListState extends State<UpcomingList> {
             else
               const Spacer(),
             if (widget.onClearFilters != null)
-              TextButton(
-                onPressed: widget.onClearFilters,
-                child: const Text('Borrar filtros'),
+              AccessibilityUtils.buttonSemantics(
+                label: 'Borrar filtros de búsqueda',
+                hint: 'Elimina todos los filtros aplicados para ver todos los eventos',
+                child: TextButton(
+                  onPressed: widget.onClearFilters,
+                  child: const Text('Borrar filtros'),
+                ),
               ),
           ],
         ),
@@ -575,26 +600,34 @@ class _UpcomingListState extends State<UpcomingList> {
                           Positioned(
                             top: 8,
                             right: 8,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () async {
-                                  await FavoritesService.instance.toggleFavorite(event.id);
-                                  if (mounted) {
-                                    setState(() {});
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isFavorite ? Icons.favorite : Icons.favorite_border,
-                                    color: isFavorite ? Colors.red : Colors.white,
-                                    size: 16,
+                            child: AccessibilityUtils.buttonSemantics(
+                              label: isFavorite 
+                                  ? 'Quitar de favoritos: ${event.title}' 
+                                  : 'Agregar a favoritos: ${event.title}',
+                              hint: isFavorite 
+                                  ? 'Toca para quitar este evento de tus favoritos' 
+                                  : 'Toca para agregar este evento a tus favoritos',
+                              child: Material(
+                                color: Colors.transparent,
+                                child: InkWell(
+                                  onTap: () async {
+                                    await FavoritesService.instance.toggleFavorite(event.id);
+                                    if (mounted) {
+                                      setState(() {});
+                                    }
+                                  },
+                                  borderRadius: BorderRadius.circular(20),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withOpacity(0.5),
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: Icon(
+                                      isFavorite ? Icons.favorite : Icons.favorite_border,
+                                      color: isFavorite ? Colors.red : Colors.white,
+                                      size: 16,
+                                    ),
                                   ),
                                 ),
                               ),

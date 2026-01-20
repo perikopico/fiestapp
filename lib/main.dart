@@ -15,6 +15,9 @@ import 'services/favorites_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/fcm_token_service.dart';
 import 'services/notification_handler.dart';
+import 'services/logger_service.dart';
+import 'package:provider/provider.dart';
+import 'providers/dashboard_provider.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -24,14 +27,20 @@ Future<void> main() async {
   // Configurar manejo de errores no capturados
   FlutterError.onError = (FlutterErrorDetails details) {
     FlutterError.presentError(details);
-    debugPrint("❌ ERROR NO CAPTURADO: ${details.exception}");
-    debugPrint("Stack trace: ${details.stack}");
+    LoggerService.instance.fatal(
+      'Error no capturado',
+      error: details.exception,
+      stackTrace: details.stack,
+    );
   };
   
   // Manejar errores de plataforma
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint("❌ ERROR DE PLATAFORMA: $error");
-    debugPrint("Stack trace: $stack");
+    LoggerService.instance.fatal(
+      'Error de plataforma',
+      error: error,
+      stackTrace: stack,
+    );
     return true;
   };
   
@@ -55,14 +64,14 @@ Future<void> main() async {
       dateLocale = 'es'; // Por defecto español
     }
     await initializeDateFormatting(dateLocale, null);
-    debugPrint("✅ Formato de fecha inicializado para idioma: $dateLocale");
+    LoggerService.instance.info('Formato de fecha inicializado', data: {'locale': dateLocale});
   } catch (e) {
     // Si falla, intentar con español
     try {
       await initializeDateFormatting('es', null);
-      debugPrint("✅ Formato de fecha inicializado (fallback a español)");
+      LoggerService.instance.info('Formato de fecha inicializado (fallback a español)');
     } catch (e2) {
-      debugPrint("⚠️ Error al inicializar formato de fecha: $e2");
+      LoggerService.instance.error('Error al inicializar formato de fecha', error: e2);
     }
   }
   
@@ -71,10 +80,10 @@ Future<void> main() async {
   try {
     await dotenv.load(fileName: ".env");
     dotenvLoaded = true;
-    debugPrint("✅ Archivo .env cargado correctamente");
+    LoggerService.instance.info('Archivo .env cargado correctamente');
   } catch (e) {
-    debugPrint("⚠️ Error al cargar .env: $e");
-    debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+    LoggerService.instance.warning('Error al cargar .env', data: {'error': e.toString()});
+    LoggerService.instance.info('La app funcionará sin Supabase (solo modo local)');
   }
 
   // 3. Inicializar Supabase (necesario para la UI, pero puede ser rápido)
@@ -85,20 +94,20 @@ Future<void> main() async {
 
       if (url != null && key != null && url.isNotEmpty && key.isNotEmpty) {
         await Supabase.initialize(url: url, anonKey: key);
-        debugPrint("✅ Supabase inicializado con éxito");
+        LoggerService.instance.info('Supabase inicializado con éxito');
       }
     } catch (e) {
-      debugPrint("⚠️ Error al inicializar Supabase: $e");
-      debugPrint("⚠️ La app funcionará sin Supabase (solo modo local)");
+      LoggerService.instance.warning('Error al inicializar Supabase', data: {'error': e.toString()});
+      LoggerService.instance.info('La app funcionará sin Supabase (solo modo local)');
     }
   }
 
   // 4. Inicializar servicio de favoritos (rápido, necesario para la UI)
   try {
     await FavoritesService.instance.init();
-    debugPrint("✅ FavoritesService inicializado");
+    LoggerService.instance.info('FavoritesService inicializado');
   } catch (e) {
-    debugPrint("⚠️ Error al inicializar FavoritesService: $e");
+    LoggerService.instance.error('Error al inicializar FavoritesService', error: e);
   }
 
   // Ejecutar la app inmediatamente - el resto se inicializa en background
@@ -140,13 +149,13 @@ Future<void> _initializeBackgroundServices() async {
         final session = data.session;
         
         if (event == AuthChangeEvent.signedIn && session != null) {
-          debugPrint("✅ Usuario autenticado: ${session.user.email}");
+          LoggerService.instance.info('Usuario autenticado', data: {'email': session.user.email});
           
           // Sincronizar favoritos locales con Supabase cuando el usuario inicia sesión
           FavoritesService.instance.syncLocalToSupabase().then((_) {
-            debugPrint("✅ Favoritos sincronizados");
+            LoggerService.instance.info('Favoritos sincronizados');
           }).catchError((e) {
-            debugPrint("⚠️ Error al sincronizar favoritos: $e");
+            LoggerService.instance.error('Error al sincronizar favoritos', error: e);
           });
           
           // Guardar token FCM cuando el usuario inicia sesión
@@ -154,27 +163,27 @@ Future<void> _initializeBackgroundServices() async {
             final token = await FCMTokenService.instance.getCurrentToken();
             if (token != null) {
               FCMTokenService.instance.saveTokenToSupabase(token).then((_) {
-                debugPrint("✅ Token FCM guardado después de login");
+                LoggerService.instance.info('Token FCM guardado después de login');
               }).catchError((e) {
-                debugPrint("⚠️ Error al guardar token FCM: $e");
+                LoggerService.instance.error('Error al guardar token FCM', error: e);
               });
             }
           } catch (e) {
-            debugPrint("⚠️ Error al obtener token FCM: $e");
+            LoggerService.instance.error('Error al obtener token FCM', error: e);
           }
         } else if (event == AuthChangeEvent.signedOut) {
-          debugPrint("👋 Usuario cerró sesión");
+          LoggerService.instance.info('Usuario cerró sesión');
           
           // Eliminar token FCM cuando el usuario cierra sesión
           try {
             final token = await FCMTokenService.instance.getCurrentToken();
             if (token != null) {
               FCMTokenService.instance.deleteTokenFromSupabase(token).catchError((e) {
-                debugPrint("⚠️ Error al eliminar token FCM: $e");
+                LoggerService.instance.error('Error al eliminar token FCM', error: e);
               });
             }
           } catch (e) {
-            debugPrint("⚠️ Error al obtener token FCM para eliminar: $e");
+            LoggerService.instance.error('Error al obtener token FCM para eliminar', error: e);
           }
           
           // Recargar favoritos desde local
@@ -183,7 +192,7 @@ Future<void> _initializeBackgroundServices() async {
       });
     }
   } catch (e) {
-    debugPrint("⚠️ Error al configurar listener de autenticación: $e");
+    LoggerService.instance.error('Error al configurar listener de autenticación', error: e);
   }
 }
 
@@ -487,7 +496,13 @@ class _QuePlanState extends State<QuePlan> {
 
           home: _showOnboarding
               ? const PermissionsOnboardingScreen()
-              : const DashboardScreen(),
+              : ChangeNotifierProvider(
+                  create: (_) => DashboardProvider(),
+                  child: const SplashVideoScreen(
+                    nextScreen: DashboardScreen(),
+                    isDashboard: true,
+                  ),
+                ),
         );
       },
     );

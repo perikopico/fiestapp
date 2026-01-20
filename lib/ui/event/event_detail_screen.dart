@@ -12,6 +12,10 @@ import 'fullscreen_image_screen.dart';
 import '../../services/favorites_local_service.dart';
 import '../../services/event_service.dart';
 import '../../services/report_service.dart';
+import '../../services/analytics_service.dart';
+import '../../utils/url_helper.dart';
+import '../../utils/validation_utils.dart';
+import '../../services/logger_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EventDetailScreen extends StatefulWidget {
@@ -32,8 +36,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _loadFavoriteStatus();
     // Incrementar contador de vistas al abrir el evento
     EventService.instance.incrementEventView(widget.event.id);
-    // Debug: verificar si el evento tiene infoUrl
-    debugPrint('🔍 Evento ${widget.event.id} - infoUrl: ${widget.event.infoUrl}');
+    // Trackear visualización de evento
+    AnalyticsService.instance.logEventView(
+      widget.event.id,
+      eventTitle: widget.event.title,
+    );
   }
 
   Future<void> _loadFavoriteStatus() async {
@@ -75,7 +82,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         }
       }
     } catch (e) {
-      debugPrint('Error al extraer coordenadas del mapsUrl: $e');
+      LoggerService.instance.error('Error al extraer coordenadas del mapsUrl', error: e);
     }
     return null;
   }
@@ -85,18 +92,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final coordinates = _extractCoordinatesFromMapsUrl(widget.event.mapsUrl);
     if (coordinates == null) {
       // Si no hay coordenadas, usar el mapsUrl normal
-      if (widget.event.mapsUrl != null && widget.event.mapsUrl!.isNotEmpty) {
-        final uri = Uri.parse(widget.event.mapsUrl!);
-        if (await canLaunchUrl(uri)) {
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
-        }
-      }
+      await UrlHelper.openGoogleMapsUrl(
+        context,
+        widget.event.mapsUrl,
+        errorMessage: 'No se puede abrir la ubicación del evento',
+      );
       return;
     }
 
-    // Construir URL de Google Maps con direcciones
-    final directionsUrl = 'https://www.google.com/maps/dir/?api=1&destination=${coordinates.latitude},${coordinates.longitude}';
-    final uri = Uri.parse(directionsUrl);
+    // Abrir Google Maps con direcciones usando helper seguro
+    await UrlHelper.openGoogleMapsDirections(
+      context,
+      coordinates.latitude,
+      coordinates.longitude,
+      errorMessage: 'No se puede abrir Google Maps con direcciones',
+    );
     
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -556,12 +566,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             children: [
               Expanded(
                 child: FilledButton.icon(
-                  onPressed: () async {
-                    final uri = Uri.parse(widget.event.mapsUrl!);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    }
-                  },
+                  onPressed: () => UrlHelper.openGoogleMapsUrl(
+                    context,
+                    widget.event.mapsUrl,
+                    errorMessage: 'No se puede abrir la ubicación del evento',
+                  ),
                   icon: const Icon(Icons.map, size: 20),
                   label: const Text('Ver en mapa'),
                   style: FilledButton.styleFrom(
@@ -793,19 +802,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget _buildInfoUrlSection(BuildContext context, ThemeData theme) {
     final infoUrl = widget.event.infoUrl;
     
-    // Debug detallado
-    debugPrint('🔍 _buildInfoUrlSection llamado');
-    debugPrint('   Event ID: ${widget.event.id}');
-    debugPrint('   infoUrl value: $infoUrl');
-    debugPrint('   infoUrl is null: ${infoUrl == null}');
-    debugPrint('   infoUrl isEmpty: ${infoUrl?.isEmpty ?? true}');
-    
-    if (infoUrl == null || infoUrl.isEmpty) {
-      debugPrint('⚠️ infoUrl es null o vacío, no se muestra el enlace');
+    // Validar que la URL existe y es válida
+    if (!ValidationUtils.isNotEmpty(infoUrl) || !ValidationUtils.isValidUrl(infoUrl!)) {
+      LoggerService.instance.warning('infoUrl inválido o vacío', data: {'eventId': widget.event.id});
       return const SizedBox.shrink();
     }
-
-    debugPrint('✅ Mostrando enlace: $infoUrl');
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -818,25 +819,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
         const SizedBox(height: 12),
         InkWell(
-          onTap: () async {
-            try {
-              debugPrint('🔗 Abriendo enlace: $infoUrl');
-              final uri = Uri.parse(infoUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
-              } else {
-                if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('No se pudo abrir el enlace: $infoUrl'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            } catch (e) {
-              debugPrint('❌ Error al abrir enlace: $e');
-              if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
+          onTap: () => UrlHelper.launchUrlSafely(
+            context,
+            infoUrl,
+            errorMessage: 'No se puede abrir el enlace de interés',
+          ),
                 SnackBar(
                   content: Text('Error al abrir el enlace'),
                   backgroundColor: Colors.red,

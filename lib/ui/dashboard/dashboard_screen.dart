@@ -27,6 +27,8 @@ import 'package:intl/intl.dart';
 import '../../utils/dashboard_utils.dart';
 import '../../services/favorites_service.dart';
 import '../../services/auth_service.dart';
+import '../../providers/dashboard_provider.dart';
+import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
 import '../auth/profile_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
@@ -269,6 +271,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    // Inicializar Provider con datos pre-cargados si existen
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<DashboardProvider>();
+      provider.initialize(preloadedData: widget.preloadedData);
+    });
+    
     // Establecer filtro por defecto a "1 mes"
     _setDefaultWeekFilter();
     
@@ -278,11 +286,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // IMPORTANTE: Cargar TODOS los datos PRIMERO, luego reproducir el video
       // Esto asegura que cuando el video termine, la app ya esté completamente cargada
       _loadAllDataFirst().then((_) {
+        // Sincronizar estado con Provider después de cargar
+        _syncStateWithProvider();
+        
         // Solo después de cargar todos los datos, inicializar el video
         if (mounted) {
           _initializeIntroVideo();
         }
       });
+    });
+  }
+  
+  /// Sincroniza el estado local con el Provider
+  void _syncStateWithProvider() {
+    if (!mounted) return;
+    
+    final provider = context.read<DashboardProvider>();
+    setState(() {
+      // Sincronizar eventos del Provider con estado local
+      if (provider.upcomingEvents.isNotEmpty) {
+        _upcomingEvents = provider.upcomingEvents;
+      }
+      if (provider.featuredEvents.isNotEmpty) {
+        _featuredEvents = provider.featuredEvents;
+        _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
+      }
+      if (provider.categories.isNotEmpty) {
+        _categories = provider.categories;
+      }
     });
   }
   
@@ -2085,7 +2116,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildCategoriesGrid() {
-    if (_categories.isEmpty) {
+    // Intentar usar Provider si está disponible, sino usar estado local
+    final provider = context.watch<DashboardProvider>();
+    final categories = provider.categories.isNotEmpty ? provider.categories : _categories;
+    final selectedCategoryId = provider.selectedCategoryId ?? _selectedCategoryId;
+    
+    if (categories.isEmpty) {
       return const Text('No hay categorías disponibles');
     }
 

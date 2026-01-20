@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart' show debugPrint;
+import 'logger_service.dart';
 
 class City {
   final int id;
@@ -100,7 +100,7 @@ class CityService {
       }
       return null;
     } catch (e) {
-      debugPrint('Error al obtener ID de provincia Cádiz: $e');
+      LoggerService.instance.error('Error al obtener ID de provincia Cádiz', error: e);
       return null;
     }
   }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../models/category.dart';
 import '../../icons/icon_mapper.dart';
+import '../../../utils/accessibility_utils.dart';
 
 class CategoriesGrid extends StatelessWidget {
   final List<Category> categories;
@@ -100,9 +101,12 @@ class CategoriesGrid extends StatelessWidget {
     required Color categoryColor,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16), // Pill shape más compacto
+    return AccessibilityUtils.buttonSemantics(
+      label: isSelected ? '$label (seleccionado)' : label,
+      hint: 'Toca para filtrar eventos por la categoría $label',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16), // Pill shape más compacto
       child: Container(
         constraints: const BoxConstraints(
           minHeight: 36,
@@ -144,6 +148,7 @@ class CategoriesGrid extends StatelessWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

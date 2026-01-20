@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
+import 'package:provider/provider.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../../providers/dashboard_provider.dart';
 
 class SplashVideoScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -180,7 +182,10 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     
     // Construir la siguiente pantalla con datos pre-cargados si están disponibles
     final nextScreen = widget.isDashboard && _preloadedData != null
-        ? DashboardScreen(preloadedData: _preloadedData)
+        ? ChangeNotifierProvider.value(
+            value: Provider.of<DashboardProvider>(context, listen: false),
+            child: DashboardScreen(preloadedData: _preloadedData),
+          )
         : widget.nextScreen;
     
     // Transición suave con fade continuando el zoom

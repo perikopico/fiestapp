@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/category.dart';
+import 'logger_service.dart';
 
 class CategoryService {
   // Categorías oficiales válidas (7 principales)
@@ -136,6 +137,7 @@ class CategoryService {
 
       return finalCategories;
     } catch (e) {
+      LoggerService.instance.error('Error al obtener categorías', error: e);
       throw Exception('Error al obtener categorías: ${e.toString()}');
     }
   }

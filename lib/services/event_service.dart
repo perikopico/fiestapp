@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 
 import '../models/event.dart';
 import 'auth_service.dart';
+import 'logger_service.dart';
+import '../utils/validation_utils.dart';
 
 class EventService {
   EventService._();
@@ -71,7 +73,7 @@ class EventService {
       });
     } catch (e) {
       // Por ahora solo log, no queremos romper la UI si falla
-      debugPrint('incrementEventView error: $e');
+      LoggerService.instance.error('Error al incrementar vista de evento', error: e);
     }
   }
 
@@ -85,15 +87,17 @@ class EventService {
     String? searchTerm, // término libre para título/descr
     int limit = 50,
   }) async {
-    debugPrint(
-      'fetchEvents(): '
-      'cityIds=$cityIds, '
-      'categoryId=$categoryId, '
-      'from=$from, '
-      'to=$to, '
-      'radiusKm=$radiusKm, '
-      'center=$center, '
-      'searchTerm=$searchTerm',
+    LoggerService.instance.debug(
+      'fetchEvents llamado',
+      data: {
+        'cityIds': cityIds?.toString(),
+        'categoryId': categoryId,
+        'from': from?.toIso8601String(),
+        'to': to?.toIso8601String(),
+        'radiusKm': radiusKm,
+        'center': center?.toString(),
+        'searchTerm': searchTerm,
+      },
     );
     // Usamos la vista/materializada "events_view" (ajústalo si usas otra)
     dynamic qb = supa
@@ -149,49 +153,57 @@ class EventService {
           .map((m) => Event.fromMap(m))
           .toList();
 
-      debugPrint(
-        'fetchEvents() [RPC]: '
-        'radiusKm=$radiusKm, '
-        'searchTerm=$searchTerm -> ${events.length} eventos ANTES de filtros',
+      LoggerService.instance.debug(
+        'fetchEvents RPC completado',
+        data: {
+          'radiusKm': radiusKm,
+          'searchTerm': searchTerm,
+          'eventosAntesFiltros': events.length,
+        },
       );
-
-      // Debug: mostrar algunos eventos antes de filtrar
-      if (events.isNotEmpty) {
-        debugPrint('📅 Primeros 3 eventos ANTES de filtros:');
-        final eventsToShow = events.length > 3 ? 3 : events.length;
-        for (int i = 0; i < eventsToShow; i++) {
-          final e = events[i];
-          debugPrint('   ${i + 1}. ${e.title} - Fecha: ${e.startsAt}, Distancia: ${e.distanceKm}km');
-        }
-      }
 
       // Aplicar filtros adicionales en el cliente
       final beforeCategoryFilter = events.length;
       if (categoryId != null) {
         events = events.where((e) => e.categoryId == categoryId).toList();
-        debugPrint('🔍 Después de filtro categoría ($categoryId): $beforeCategoryFilter -> ${events.length} eventos');
+        LoggerService.instance.debug(
+          'Filtro categoría aplicado',
+          data: {
+            'categoryId': categoryId,
+            'antes': beforeCategoryFilter,
+            'después': events.length,
+          },
+        );
       }
       
       final beforeDateFilter = events.length;
       if (from != null) {
-        debugPrint('📅 Aplicando filtro de fecha FROM: $from');
         events = events
             .where(
               (e) =>
                   e.startsAt.isAfter(from.subtract(const Duration(seconds: 1))),
             )
             .toList();
-        debugPrint('📅 Después de filtro fecha FROM: $beforeDateFilter -> ${events.length} eventos');
-        // Debug: mostrar eventos eliminados por fecha
-        if (beforeDateFilter > events.length) {
-          debugPrint('⚠️ Se eliminaron ${beforeDateFilter - events.length} eventos por fecha FROM');
-        }
+        LoggerService.instance.debug(
+          'Filtro fecha FROM aplicado',
+          data: {
+            'from': from.toIso8601String(),
+            'antes': beforeDateFilter,
+            'después': events.length,
+          },
+        );
       }
       if (to != null) {
         final beforeToFilter = events.length;
-        debugPrint('📅 Aplicando filtro de fecha TO: $to');
         events = events.where((e) => e.startsAt.isBefore(to)).toList();
-        debugPrint('📅 Después de filtro fecha TO: $beforeToFilter -> ${events.length} eventos');
+        LoggerService.instance.debug(
+          'Filtro fecha TO aplicado',
+          data: {
+            'to': to.toIso8601String(),
+            'antes': beforeToFilter,
+            'después': events.length,
+          },
+        );
       }
       if (searchTerm != null && searchTerm.trim().isNotEmpty) {
         final t = searchTerm.trim().toLowerCase();
@@ -228,9 +240,12 @@ class EventService {
     final res = await qb.order('starts_at', ascending: true).limit(limit);
 
     if (res is List) {
-      debugPrint(
-        'fetchEvents() [QUERY]: '
-        'searchTerm=$searchTerm -> ${res.length} eventos',
+      LoggerService.instance.debug(
+        'fetchEvents query completada',
+        data: {
+          'searchTerm': searchTerm,
+          'eventos': res.length,
+        },
       );
       final events = res
           .map((m) => Event.fromMap(m as Map<String, dynamic>))
@@ -319,8 +334,15 @@ class EventService {
     }
 
     // --- Logs de depuración ---
-    debugPrint(
-      '[EVENTS] params -> cityId=$cityId categoryId=$categoryId from=$from to=$to text="$textQuery"',
+    LoggerService.instance.debug(
+      'listEvents llamado',
+      data: {
+        'cityId': cityId,
+        'categoryId': categoryId,
+        'from': from?.toIso8601String(),
+        'to': to?.toIso8601String(),
+        'textQuery': textQuery,
+      },
     );
 
     // --- Ejecución final con orden y límite ---
@@ -334,12 +356,10 @@ class EventService {
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
 
-    debugPrint('[EVENTS] results -> ${events.length} items');
-    for (final e in events.take(10)) {
-      debugPrint(
-        ' - ${e.title} @ ${e.startsAt.toIso8601String()} (cityId=${e.cityId}, catId=${e.categoryId})',
-      );
-    }
+    LoggerService.instance.debug(
+      'listEvents resultados',
+      data: {'total': events.length},
+    );
 
     return events;
   }
@@ -371,12 +391,11 @@ class EventService {
 
       for (int i = 0; i < categoryIds.length; i += batchSize) {
         final batch = categoryIds.skip(i).take(batchSize).toList();
-        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
-
+        // Usar .in_() para mejor rendimiento
         final catRes = await supa
             .from('categories')
             .select('id, name, icon, color')
-            .or(orCondition);
+            .in_('id', batch);
 
         if (catRes is List) {
           for (final cat in catRes) {
@@ -414,7 +433,7 @@ class EventService {
         }
       }
     } catch (e) {
-      debugPrint('Error al enriquecer eventos con categoría: $e');
+      LoggerService.instance.error('Error al enriquecer eventos con categoría', error: e);
     }
   }
 
@@ -437,13 +456,11 @@ class EventService {
 
       for (int i = 0; i < eventIds.length; i += batchSize) {
         final batch = eventIds.skip(i).take(batchSize).toList();
-        // Construir condición OR: (id.eq.value1,id.eq.value2,...)
-        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
-
+        // Usar .in_() para mejor rendimiento que .or()
         final descRes = await supa
             .from('events')
             .select('id, description, info_url')
-            .or(orCondition);
+            .in_('id', batch);
 
         if (descRes is List) {
           for (final item in descRes) {
@@ -489,7 +506,7 @@ class EventService {
         }
       }
     } catch (e) {
-      debugPrint('Error al enriquecer eventos con description: $e');
+      LoggerService.instance.error('Error al enriquecer eventos con description', error: e);
       // No lanzar excepción, simplemente continuar sin description
     }
   }
@@ -508,14 +525,13 @@ class EventService {
 
       for (int i = 0; i < ids.length; i += batchSize) {
         final batch = ids.skip(i).take(batchSize).toList();
-        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
-
+        // Usar .in_() para mejor rendimiento
         final r = await supa
             .from('events_view')
             .select(
               'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url',
             )
-            .or(orCondition);
+            .in_('id', batch);
 
         final events = (r as List)
             .map((e) => Event.fromMap(e as Map<String, dynamic>))
@@ -529,7 +545,7 @@ class EventService {
 
       return allEvents;
     } catch (e) {
-      debugPrint('Error al obtener eventos por IDs: $e');
+      LoggerService.instance.error('Error al obtener eventos por IDs', error: e);
       return [];
     }
   }
@@ -557,7 +573,36 @@ class EventService {
     String? submittedByEmail,
     String? imageAlignment,
     String? venueId, // ID del lugar si se seleccionó uno existente
+    String? infoUrl, // URL de interés relacionada con el evento
   }) async {
+    // Validaciones
+    if (!ValidationUtils.isNotEmpty(title)) {
+      throw ArgumentError('El título del evento es obligatorio');
+    }
+    
+    if (mapsUrl != null && mapsUrl.isNotEmpty && !ValidationUtils.isValidUrl(mapsUrl)) {
+      LoggerService.instance.warning('mapsUrl inválido proporcionado', data: {'mapsUrl': mapsUrl});
+      // No lanzar error, solo loguear y continuar sin mapsUrl
+    }
+    
+    if (imageUrl != null && imageUrl.isNotEmpty && !ValidationUtils.isValidUrl(imageUrl)) {
+      LoggerService.instance.warning('imageUrl inválido proporcionado', data: {'imageUrl': imageUrl});
+      // No lanzar error, solo loguear y continuar sin imageUrl
+    }
+    
+    if (infoUrl != null && infoUrl.isNotEmpty && !ValidationUtils.isValidUrl(infoUrl)) {
+      LoggerService.instance.warning('infoUrl inválido proporcionado', data: {'infoUrl': infoUrl});
+      // No lanzar error, solo loguear y continuar sin infoUrl
+    }
+    
+    if (lat != null && lng != null && !ValidationUtils.isValidCoordinates(lat, lng)) {
+      throw ArgumentError('Las coordenadas proporcionadas no son válidas');
+    }
+    
+    if (submittedByEmail != null && submittedByEmail.isNotEmpty && !ValidationUtils.isValidEmail(submittedByEmail)) {
+      LoggerService.instance.warning('Email inválido proporcionado', data: {'email': submittedByEmail});
+      // No lanzar error, solo loguear
+    }
     // Obtener el ID del usuario si está autenticado
     final userId = AuthService.instance.currentUserId;
     
@@ -580,14 +625,15 @@ class EventService {
       'submitted_by_email': submittedByEmail?.trim(),
       'image_alignment': imageAlignment ?? 'center',
       'venue_id': venueId, // ID del lugar si se seleccionó uno
+      'info_url': infoUrl?.trim(), // URL de interés
     };
 
     // Añadir created_by solo si el usuario está autenticado
     if (userId != null) {
       payload['created_by'] = userId;
-      debugPrint('✅ Evento creado por usuario autenticado: $userId');
+      LoggerService.instance.info('Evento creado por usuario autenticado', data: {'userId': userId});
     } else {
-      debugPrint('⚠️ Evento creado sin usuario autenticado (created_by será null)');
+      LoggerService.instance.warning('Evento creado sin usuario autenticado');
     }
 
     // Eliminar claves con null para no pisar defaults
@@ -613,11 +659,11 @@ class EventService {
 
         if (categoryPayloads.isNotEmpty) {
           await supa.from('event_categories').insert(categoryPayloads);
-          debugPrint('✅ ${categoryPayloads.length} categoría(s) guardada(s) en event_categories para evento $newEventId');
+          LoggerService.instance.info('Categorías guardadas en event_categories', data: {'eventId': newEventId, 'count': categoryPayloads.length});
         }
       } catch (e) {
         // Si la tabla event_categories no existe aún, solo loguear el error
-        debugPrint('⚠️ No se pudieron guardar categorías múltiples (la tabla event_categories puede no existir aún): $e');
+        LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
       }
     }
   }
@@ -639,7 +685,29 @@ class EventService {
     double? lng,
     String? price,
     String? imageAlignment,
+    String? infoUrl, // URL de interés relacionada con el evento
   }) async {
+    // Validaciones
+    if (!ValidationUtils.isNotEmpty(title)) {
+      throw ArgumentError('El título del evento es obligatorio');
+    }
+    
+    if (mapsUrl != null && mapsUrl.isNotEmpty && !ValidationUtils.isValidUrl(mapsUrl)) {
+      LoggerService.instance.warning('mapsUrl inválido proporcionado', data: {'mapsUrl': mapsUrl});
+    }
+    
+    if (imageUrl != null && imageUrl.isNotEmpty && !ValidationUtils.isValidUrl(imageUrl)) {
+      LoggerService.instance.warning('imageUrl inválido proporcionado', data: {'imageUrl': imageUrl});
+    }
+    
+    if (infoUrl != null && infoUrl.isNotEmpty && !ValidationUtils.isValidUrl(infoUrl)) {
+      LoggerService.instance.warning('infoUrl inválido proporcionado', data: {'infoUrl': infoUrl});
+    }
+    
+    if (lat != null && lng != null && !ValidationUtils.isValidCoordinates(lat, lng)) {
+      throw ArgumentError('Las coordenadas proporcionadas no son válidas');
+    }
+    
     final payload = <String, dynamic>{
       'title': title.trim(),
       'town': town.trim(),
@@ -654,6 +722,7 @@ class EventService {
       'lng': lng,
       'price': price?.trim() ?? 'Gratis',
       'image_alignment': imageAlignment ?? 'center',
+      'info_url': infoUrl?.trim(), // URL de interés
     };
 
     // Eliminar claves con null para no pisar valores existentes
@@ -684,11 +753,11 @@ class EventService {
 
         if (categoryPayloads.isNotEmpty) {
           await supa.from('event_categories').insert(categoryPayloads);
-          debugPrint('✅ ${categoryPayloads.length} categoría(s) guardada(s) en event_categories para evento $eventId');
+          LoggerService.instance.info('Categorías actualizadas en event_categories', data: {'eventId': eventId, 'count': categoryPayloads.length});
         }
       } catch (e) {
         // Si la tabla event_categories no existe aún, solo loguear el error
-        debugPrint('⚠️ No se pudieron guardar categorías múltiples (la tabla event_categories puede no existir aún): $e');
+        LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
       }
     }
   }
@@ -787,7 +856,7 @@ class EventService {
             textSimilarEvents.addAll(descEvents);
           }
         } catch (e) {
-          debugPrint('Error en consulta de similitud de texto: $e');
+          LoggerService.instance.error('Error en consulta de similitud de texto', error: e);
           // Continuar sin esta consulta si falla
         }
       }
@@ -852,7 +921,7 @@ class EventService {
 
       return duplicates.take(5).toList();
     } catch (e) {
-      debugPrint('Error al buscar duplicados: $e');
+      LoggerService.instance.error('Error al buscar duplicados', error: e);
       return [];
     }
   }
@@ -862,7 +931,7 @@ class EventService {
   Future<List<Event>> fetchUserCreatedEvents() async {
     final userId = AuthService.instance.currentUserId;
     if (userId == null) {
-      debugPrint('⚠️ Usuario no autenticado, no se pueden obtener eventos del usuario');
+      LoggerService.instance.warning('Usuario no autenticado, no se pueden obtener eventos del usuario');
       return [];
     }
 
@@ -888,7 +957,7 @@ class EventService {
 
       return events;
     } catch (e) {
-      debugPrint('❌ Error al obtener eventos del usuario: $e');
+      LoggerService.instance.error('Error al obtener eventos del usuario', error: e);
       throw Exception('Error al obtener tus eventos: ${e.toString()}');
     }
   }
@@ -913,12 +982,11 @@ class EventService {
       
       for (int i = 0; i < cityIds.length; i += batchSize) {
         final batch = cityIds.skip(i).take(batchSize).toList();
-        // Construir condición OR para múltiples IDs
-        final orCondition = batch.map((id) => 'id.eq.$id').join(',');
+        // Usar .in_() para mejor rendimiento
         final batchResponse = await supa
             .from('cities')
             .select('id, name')
-            .or(orCondition);
+            .in_('id', batch);
         citiesResponse.addAll((batchResponse as List).cast<Map<String, dynamic>>());
       }
 
@@ -953,7 +1021,7 @@ class EventService {
         }
       }
     } catch (e) {
-      debugPrint('⚠️ Error al enriquecer eventos con ciudades: $e');
+      LoggerService.instance.error('Error al enriquecer eventos con ciudades', error: e);
     }
   }
 }
