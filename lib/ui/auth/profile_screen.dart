@@ -18,7 +18,7 @@ import '../venues/my_venues_screen.dart';
 import '../legal/gdpr_consent_screen.dart';
 import '../legal/about_screen.dart';
 import '../../services/venue_ownership_service.dart';
-import '../notifications/notifications_screen.dart';
+import '../notifications/alerts_screen.dart';
 import '../../main.dart' show appThemeMode;
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -330,17 +330,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   );
                                 },
                               ),
-                              // Botón Notificaciones
+                              // Botón Mis Alertas
                               _buildListItem(
                                 context,
-                                icon: Icons.notifications_outlined,
-                                title: 'Notificaciones',
-                                subtitle: 'Gestionar tus notificaciones',
+                                icon: Icons.notifications_active_outlined,
+                                title: 'Mis Alertas',
+                                subtitle: 'Gestionar alertas por categoría',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
-                                      builder: (_) =>
-                                          const NotificationsScreen(),
+                                      builder: (_) => const AlertsScreen(),
                                     ),
                                   );
                                 },

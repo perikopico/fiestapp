@@ -16,7 +16,9 @@ import '../../services/analytics_service.dart';
 import '../../utils/url_helper.dart';
 import '../../utils/validation_utils.dart';
 import '../../services/logger_service.dart';
+import '../../services/notification_alerts_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/services.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -29,11 +31,14 @@ class EventDetailScreen extends StatefulWidget {
 
 class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isFavorite = false;
+  bool _isFollowing = false;
+  final NotificationAlertsService _alertsService = NotificationAlertsService.instance;
 
   @override
   void initState() {
     super.initState();
     _loadFavoriteStatus();
+    _loadFollowingStatus();
     // Incrementar contador de vistas al abrir el evento
     EventService.instance.incrementEventView(widget.event.id);
     // Trackear visualización de evento
@@ -49,6 +54,45 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       setState(() {
         _isFavorite = isFav;
       });
+    }
+  }
+
+  Future<void> _loadFollowingStatus() async {
+    final isFollowed = await _alertsService.isEventFollowed(widget.event.id);
+    if (mounted) {
+      setState(() {
+        _isFollowing = isFollowed;
+      });
+    }
+  }
+
+  Future<void> _toggleFollowing() async {
+    // Feedback háptico
+    HapticFeedback.lightImpact();
+    
+    final newValue = !_isFollowing;
+    
+    // Actualizar estado local inmediatamente
+    setState(() {
+      _isFollowing = newValue;
+    });
+    
+    // Guardar en persistencia
+    await _alertsService.setEventFollowed(widget.event.id, newValue);
+    
+    // Mostrar feedback visual
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? '¡Listo! Te avisaremos de eventos similares'
+                : 'Has dejado de seguir este evento',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     }
   }
 
@@ -107,10 +151,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       coordinates.longitude,
       errorMessage: 'No se puede abrir Google Maps con direcciones',
     );
-    
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
   }
 
   /// Verifica si el evento tiene fecha/hora válida
@@ -149,6 +189,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         elevation: 0,
         backgroundColor: theme.colorScheme.surface,
         actions: [
+          // Icono de campana para seguir evento
+          IconButton(
+            icon: Icon(
+              _isFollowing ? Icons.notifications : Icons.notifications_outlined,
+              color: _isFollowing
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.onSurface,
+            ),
+            onPressed: _toggleFollowing,
+            tooltip: _isFollowing ? 'Dejar de seguir' : 'Seguir evento',
+          ),
+          // Icono de favoritos
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -824,13 +876,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             infoUrl,
             errorMessage: 'No se puede abrir el enlace de interés',
           ),
-                SnackBar(
-                  content: Text('Error al abrir el enlace'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            }
-          },
           borderRadius: BorderRadius.circular(12),
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),

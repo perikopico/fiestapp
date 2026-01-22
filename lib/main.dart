@@ -214,6 +214,8 @@ class QuePlan extends StatefulWidget {
 class _QuePlanState extends State<QuePlan> {
   bool _isCheckingOnboarding = true;
   bool _showOnboarding = false;
+  // Usar una key única para el splash para evitar que se recree múltiples veces
+  final GlobalKey _splashKey = GlobalKey();
 
   @override
   void initState() {
@@ -252,6 +254,18 @@ class _QuePlanState extends State<QuePlan> {
         _isCheckingOnboarding = false;
       });
     }
+  }
+
+  Widget _buildHomeScreen() {
+    // Usar una key única para evitar que se recree el splash cuando el ValueListenableBuilder se reconstruye
+    return ChangeNotifierProvider(
+      create: (_) => DashboardProvider(),
+      child: SplashVideoScreen(
+        key: _splashKey,
+        nextScreen: const DashboardScreen(),
+        isDashboard: true,
+      ),
+    );
   }
 
   @override
@@ -496,13 +510,7 @@ class _QuePlanState extends State<QuePlan> {
 
           home: _showOnboarding
               ? const PermissionsOnboardingScreen()
-              : ChangeNotifierProvider(
-                  create: (_) => DashboardProvider(),
-                  child: const SplashVideoScreen(
-                    nextScreen: DashboardScreen(),
-                    isDashboard: true,
-                  ),
-                ),
+              : _buildHomeScreen(),
         );
       },
     );

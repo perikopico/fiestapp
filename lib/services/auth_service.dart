@@ -14,7 +14,7 @@ class AuthService {
     try {
       return Supabase.instance.client;
     } catch (e) {
-      LoggerService.instance.warning('Supabase no está inicializado', error: e);
+      LoggerService.instance.warning('Supabase no está inicializado', data: {'error': e.toString()});
       return null;
     }
   }
@@ -107,7 +107,7 @@ class AuthService {
           // Re-lanzar si es nuestro error de cuenta eliminada
           rethrow;
         }
-        LoggerService.instance.warning('No se pudo verificar si el usuario está eliminado', error: e);
+        LoggerService.instance.warning('No se pudo verificar si el usuario está eliminado', data: {'error': e.toString()});
         // Continuar con el login si no es nuestro error
       }
       

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/event.dart';
-import '../models/category.dart';
+import '../models/category.dart' as models;
 import '../services/event_service.dart';
 import '../services/category_service.dart';
 import '../services/city_service.dart';
@@ -18,10 +18,13 @@ class DashboardProvider extends ChangeNotifier {
   final CityService _cityService = CityService.instance;
   final CacheService _cacheService = CacheService.instance;
 
+  // Flag para verificar si el provider está disposed
+  bool _isDisposed = false;
+
   // Estados principales
   List<Event> _upcomingEvents = [];
   List<Event> _featuredEvents = [];
-  List<Category> _categories = [];
+  List<models.Category> _categories = [];
   bool _isLoading = false;
   String? _error;
   
@@ -46,7 +49,7 @@ class DashboardProvider extends ChangeNotifier {
   // Getters
   List<Event> get upcomingEvents => _upcomingEvents;
   List<Event> get featuredEvents => _featuredEvents;
-  List<Category> get categories => _categories;
+  List<models.Category> get categories => _categories;
   bool get isLoading => _isLoading;
   String? get error => _error;
   int? get selectedCategoryId => _selectedCategoryId;
@@ -64,18 +67,24 @@ class DashboardProvider extends ChangeNotifier {
 
   /// Inicializa el dashboard con datos pre-cargados
   Future<void> initialize({Map<String, dynamic>? preloadedData}) async {
+    if (_isDisposed) return;
+    
     if (preloadedData != null) {
       _upcomingEvents = preloadedData['upcomingEvents'] as List<Event>? ?? [];
       _featuredEvents = preloadedData['featuredEvents'] as List<Event>? ?? [];
-      _categories = preloadedData['categories'] as List<Category>? ?? [];
-      notifyListeners();
+      _categories = preloadedData['categories'] as List<models.Category>? ?? [];
+      _safeNotifyListeners();
     }
+
+    if (_isDisposed) return;
 
     // Establecer filtro por defecto
     _setDefaultDateFilter();
 
     // Verificar permisos de ubicación
     await _checkLocationPermission();
+
+    if (_isDisposed) return;
 
     // Cargar todos los datos
     await loadAllData();
@@ -91,11 +100,17 @@ class DashboardProvider extends ChangeNotifier {
 
   /// Verifica los permisos de ubicación
   Future<void> _checkLocationPermission() async {
+    // Verificar si el provider está disposed antes de continuar
+    if (_isDisposed) return;
+    
     var permission = await Geolocator.checkPermission();
     
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
     }
+    
+    // Verificar de nuevo después de la operación asíncrona
+    if (_isDisposed) return;
     
     _hasLocationPermission = permission == LocationPermission.whileInUse ||
         permission == LocationPermission.always;
@@ -106,28 +121,43 @@ class DashboardProvider extends ChangeNotifier {
       _mode = LocationMode.city;
     }
     
-    notifyListeners();
+    // Solo notificar si el provider aún está activo
+    _safeNotifyListeners();
   }
 
   /// Obtiene la ubicación del usuario
   Future<void> _getUserLocation() async {
+    // Verificar si el provider está disposed antes de continuar
+    if (_isDisposed) return;
+    
     try {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.medium,
       );
+      
+      // Verificar de nuevo después de la operación asíncrona
+      if (_isDisposed) return;
+      
       _userLat = position.latitude;
       _userLng = position.longitude;
-      notifyListeners();
+      
+      // Solo notificar si el provider aún está activo
+      _safeNotifyListeners();
     } catch (e) {
-      LoggerService.instance.error('Error al obtener ubicación', error: e);
+      // Solo registrar el error si el provider no está disposed
+      if (!_isDisposed) {
+        LoggerService.instance.error('Error al obtener ubicación', error: e);
+      }
     }
   }
 
   /// Carga todos los datos del dashboard
   Future<void> loadAllData({bool forceRefresh = false}) async {
+    if (_isDisposed) return;
+    
     _isLoading = true;
     _error = null;
-    notifyListeners();
+    _safeNotifyListeners();
 
     try {
       // Cargar datos en paralelo
@@ -137,21 +167,27 @@ class DashboardProvider extends ChangeNotifier {
         loadFeaturedEvents(forceRefresh: forceRefresh),
       ], eagerError: false);
 
+      if (_isDisposed) return;
+      
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
+      if (_isDisposed) return;
+      
       _error = e.toString();
       _isLoading = false;
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
 
   /// Carga las categorías (usando caché)
   Future<void> loadCategories({bool forceRefresh = false}) async {
+    if (_isDisposed) return;
+    
     try {
       _categories = await _cacheService.getCategories(forceRefresh: forceRefresh);
-      notifyListeners();
+      _safeNotifyListeners();
     } catch (e) {
       debugPrint('Error al cargar categorías: $e');
     }
@@ -189,10 +225,14 @@ class DashboardProvider extends ChangeNotifier {
         searchTerm: _searchEventTerm,
       );
 
-      notifyListeners();
+      if (_isDisposed) return;
+      
+      _safeNotifyListeners();
     } catch (e) {
+      if (_isDisposed) return;
+      
       _error = e.toString();
-      notifyListeners();
+      _safeNotifyListeners();
       rethrow;
     }
   }
@@ -221,23 +261,29 @@ class DashboardProvider extends ChangeNotifier {
         limit: 7,
       );
 
-      notifyListeners();
+      if (_isDisposed) return;
+      
+      _safeNotifyListeners();
     } catch (e) {
-      LoggerService.instance.error('Error al cargar eventos destacados', error: e);
+      if (!_isDisposed) {
+        LoggerService.instance.error('Error al cargar eventos destacados', error: e);
+      }
     }
   }
 
   /// Establece la categoría seleccionada
   void setSelectedCategory(int? categoryId) {
-    if (_selectedCategoryId == categoryId) return;
+    if (_isDisposed || _selectedCategoryId == categoryId) return;
     
     _selectedCategoryId = categoryId;
-    AnalyticsService.instance.logCategorySelected(
-      categoryId ?? 0,
-      categoryName: categoryId != null
-          ? _categories.firstWhere((c) => c.id == categoryId).name
-          : null,
-    );
+    if (!_isDisposed) {
+      AnalyticsService.instance.logCategorySelected(
+        categoryId ?? 0,
+        categoryName: categoryId != null
+            ? _categories.firstWhere((c) => c.id == categoryId).name
+            : null,
+      );
+    }
     
     loadEvents();
   }
@@ -295,5 +341,25 @@ class DashboardProvider extends ChangeNotifier {
   /// Refresca todos los datos
   Future<void> refresh() async {
     await loadAllData(forceRefresh: true);
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
+  }
+  
+  /// Método auxiliar para notificar listeners de forma segura
+  void _safeNotifyListeners() {
+    if (!_isDisposed) {
+      try {
+        notifyListeners();
+      } catch (e) {
+        // Ignorar errores si el provider está disposed
+        if (!_isDisposed) {
+          rethrow;
+        }
+      }
+    }
   }
 }

@@ -18,7 +18,6 @@ import 'widgets/categories_grid.dart';
 import 'widgets/popular_carousel.dart';
 import 'widgets/featured_events_carousel.dart';
 import 'widgets/unified_search_bar.dart';
-import 'widgets/city_radio_toggle.dart';
 import '../icons/icon_mapper.dart';
 import 'package:fiestapp/ui/common/shimmer_widgets.dart';
 import '../../utils/date_ranges.dart';
@@ -35,9 +34,27 @@ import '../auth/login_screen.dart';
 import '../auth/profile_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/auth_banner.dart';
+import '../event/event_detail_screen.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
+
+// ==== Estructura para eventos agrupados por ciudad ====
+class CityEventGroup {
+  final String cityName;
+  final int? cityId;
+  final double? distanceKm; // Distancia desde el usuario a la ciudad
+  final List<Event> events;
+  final bool isUserLocation; // true si es la ciudad donde está el usuario
+
+  CityEventGroup({
+    required this.cityName,
+    this.cityId,
+    this.distanceKm,
+    required this.events,
+    this.isUserLocation = false,
+  });
+}
 
 // ==== Taglines por mes ====
 final Map<String, List<String>> kMonthlyTaglines = {
@@ -212,6 +229,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Event> _upcomingEvents = [];
   List<Event> _featuredEvents = [];
   List<Category> _categories = [];
+  // Eventos agrupados por ciudad con distancias
+  List<CityEventGroup> _eventsByCity = [];
   bool _isLoading = true;
   String? _error;
   int? _selectedCategoryId;
@@ -274,20 +293,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     // Inicializar Provider con datos pre-cargados si existen
+    // Solo intentar acceder al provider si está disponible
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final provider = context.read<DashboardProvider>();
-      provider.initialize(preloadedData: widget.preloadedData);
+      if (!mounted) return;
+      try {
+        final provider = context.read<DashboardProvider>();
+        provider.initialize(preloadedData: widget.preloadedData);
+      } catch (e) {
+        // Si el provider no está disponible, continuar sin él
+        LoggerService.instance.debug('DashboardProvider no disponible aún', data: {'error': e.toString()});
+      }
     });
-    
-    // Establecer filtro por defecto a "1 mes"
-    _setDefaultWeekFilter();
     
     // IMPORTANTE: Verificar permisos PRIMERO para establecer el modo correcto
     // Si no hay permisos, cambiar a modo Ciudad ANTES de cargar datos
     _checkLocationPermissionAndSetMode().then((_) {
+      if (!mounted) return;
+      // Después de verificar permisos, establecer el filtro por defecto
+      // (7 días si hay permisos, 30 días si no)
+      _setDefaultWeekFilter();
       // IMPORTANTE: Cargar TODOS los datos PRIMERO, luego reproducir el video
       // Esto asegura que cuando el video termine, la app ya esté completamente cargada
       _loadAllDataFirst().then((_) {
+        if (!mounted) return;
         // Sincronizar estado con Provider después de cargar
         _syncStateWithProvider();
         
@@ -303,20 +331,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _syncStateWithProvider() {
     if (!mounted) return;
     
-    final provider = context.read<DashboardProvider>();
-    setState(() {
-      // Sincronizar eventos del Provider con estado local
-      if (provider.upcomingEvents.isNotEmpty) {
-        _upcomingEvents = provider.upcomingEvents;
-      }
-      if (provider.featuredEvents.isNotEmpty) {
-        _featuredEvents = provider.featuredEvents;
-        _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
-      }
-      if (provider.categories.isNotEmpty) {
-        _categories = provider.categories;
-      }
-    });
+    try {
+      final provider = context.read<DashboardProvider>();
+      setState(() {
+        // Sincronizar eventos del Provider con estado local
+        if (provider.upcomingEvents.isNotEmpty) {
+          _upcomingEvents = provider.upcomingEvents;
+        }
+        if (provider.featuredEvents.isNotEmpty) {
+          _featuredEvents = provider.featuredEvents;
+          _featuredEvent = _featuredEvents.isNotEmpty ? _featuredEvents.first : null;
+        }
+        if (provider.categories.isNotEmpty) {
+          _categories = provider.categories;
+        }
+      });
+    } catch (e) {
+      // Si el provider no está disponible, continuar sin sincronizar
+      LoggerService.instance.debug('No se pudo sincronizar con DashboardProvider', data: {'error': e.toString()});
+    }
   }
   
   /// Verifica los permisos de ubicación y establece el modo correcto antes de cargar datos
@@ -343,8 +376,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     });
     
-    // Si tenemos permisos y estamos en modo Radio, obtener la ubicación
-    if (hasPermission && _mode == LocationMode.radius) {
+    // Si tenemos permisos, obtener la ubicación (ya no usamos modo Radio con slider)
+    if (hasPermission) {
       await _getUserLocation();
     }
   }
@@ -505,14 +538,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
   }
 
-  /// Establece el filtro por defecto a "1 Mes" (30 días)
+  /// Establece el filtro por defecto a "7 Días" (próximos 7 días)
   void _setDefaultWeekFilter() {
-    final r = next30DaysRange();
+    // Establecer filtro por defecto a "7 días" (próximos 7 días)
+    final r = next7DaysRange();
     setState(() {
       _isToday = false;
       _isNextWeekend = false;
-      _isNext7Days = false;
-      _isNext30Days = true;
+      _isNext7Days = true; // Activar el filtro de 7 días
+      _isNext30Days = false;
       _fromDate = r.from;
       _toDate = r.to;
     });
@@ -654,12 +688,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   /// Obtiene el valor de 'from' a usar en las consultas
-  /// Si no hay filtro manual, devuelve hoy a las 00:00
-  DateTime? _getEffectiveFromDate() {
-    if (_hasManualDateFilter()) {
-      return _fromDate; // Si hay filtro manual, usar el valor establecido
+  /// Si no hay filtro manual, devuelve hoy a las 00:00 para filtrar eventos pasados
+  DateTime _getEffectiveFromDate() {
+    if (_fromDate != null) {
+      return _fromDate!; // Si hay fecha establecida, usar el valor establecido
     }
-    // Si no hay filtro manual, usar hoy a las 00:00 por defecto
+    // Si no hay fecha establecida, usar hoy a las 00:00 para filtrar eventos pasados
+    // Esto asegura que solo se muestren eventos futuros o del día actual
     return _getTodayStart();
   }
 
@@ -960,32 +995,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
 
     try {
-      // Si estamos en modo Ciudad sin permisos y sin ciudad seleccionada,
-      // cargar eventos de toda la provincia (null = sin filtrar por ciudad)
-      final List<int>? cityIds = _mode == LocationMode.city
-          ? (_selectedCityIds.isNotEmpty
-                ? _selectedCityIds.toList()
-                : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
-          : null;
+      // Si hay una ciudad seleccionada, usar su ID para filtrar eventos
+      // Independientemente del modo de ubicación
+      final List<int>? cityIds = _selectedCityIds.isNotEmpty
+          ? _selectedCityIds.toList()
+          : (_selectedCityId != null ? <int>[_selectedCityId!] : null);
 
-      final double? radius = _mode == LocationMode.radius && _hasLocationPermission && _radiusKm > 0
-          ? _radiusKm
-          : null;
+      // Si hay permisos de ubicación, cargar TODOS los eventos sin límite de km
+      // Si no hay permisos, usar el modo ciudad normal
+      final double? radius = null; // Ya no usamos límite de km
+      dynamic center = null; // Ya no usamos centro de ubicación
 
-      // Crear objeto center para el modo radio
-      // Solo usar radio si tenemos permisos de ubicación
-      dynamic center;
-      if (_mode == LocationMode.radius && _hasLocationPermission) {
-        if (_userLat != null && _userLng != null) {
-          center = {'lat': _userLat, 'lng': _userLng};
-        } else {
-          // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
-          center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
-        }
-      }
-
-      // Obtener la fecha 'from' efectiva (hoy a las 00:00 si no hay filtro manual)
+      // Obtener la fecha 'from' efectiva (hoy a las 00:00 por defecto para filtrar eventos pasados)
       final effectiveFrom = _getEffectiveFromDate();
+      // Si no hay filtro de fecha, usar null para mostrar todos los eventos futuros
+      final effectiveTo = _toDate;
 
       // Calcular provinceId para eventos populares
       final provinceIdForPopular = _getProvinceIdForPopular();
@@ -995,10 +1019,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
           cityIds: cityIds,
           categoryId: _selectedCategoryId,
           from: effectiveFrom,
-          to: _toDate,
+          to: effectiveTo,
           radiusKm: radius,
           center: center,
           searchTerm: _searchEventTerm,
+          limit: 200, // Aumentar límite para mostrar eventos de toda la provincia
         ),
         // Popular esta semana: eventos más vistos de esta semana (usando RPC)
         _eventService.fetchPopularEvents(
@@ -1008,13 +1033,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _categoryService.fetchAll(),
       ]);
 
+      final upcoming = results[0] as List<Event>;
+      final featured = results[1] as List<Event>;
+      final categories = results[2] as List<Category>;
+      
+      // Agrupar eventos por ciudad y calcular distancias
+      final eventsByCity = await _groupEventsByCity(upcoming);
+      
       setState(() {
-        final upcoming = results[0] as List<Event>;
-        final featured = results[1] as List<Event>;
         _upcomingEvents = upcoming;
         _featuredEvents = featured;
         _featuredEvent = featured.isNotEmpty ? featured.first : null;
-        _categories = results[2] as List<Category>;
+        _categories = categories;
+        _eventsByCity = eventsByCity;
         _isLoading = false;
       });
     } catch (e) {
@@ -1037,6 +1068,94 @@ class _DashboardScreenState extends State<DashboardScreen> {
         );
       }
     }
+  }
+
+  /// Agrupa eventos por ciudad y calcula distancias desde el usuario
+  Future<List<CityEventGroup>> _groupEventsByCity(List<Event> events) async {
+    if (events.isEmpty) return [];
+    
+    // Agrupar eventos por cityName
+    final Map<String, List<Event>> eventsByCityName = {};
+    for (final event in events) {
+      final cityName = event.cityName ?? 'Sin ciudad';
+      if (!eventsByCityName.containsKey(cityName)) {
+        eventsByCityName[cityName] = [];
+      }
+      eventsByCityName[cityName]!.add(event);
+    }
+    
+    // Obtener todas las ciudades para tener sus coordenadas
+    final allCities = await _cityService.fetchCities(provinceId: _currentProvinceId);
+    
+    // Crear mapa de nombres de ciudad a coordenadas
+    final Map<String, City> cityMap = {};
+    for (final city in allCities) {
+      cityMap[city.name] = city;
+    }
+    
+    // Crear grupos con distancias
+    final List<CityEventGroup> groups = [];
+    
+    for (final entry in eventsByCityName.entries) {
+      final cityName = entry.key;
+      final cityEvents = entry.value;
+      
+      // Ordenar eventos dentro de la ciudad por fecha (cronológico)
+      cityEvents.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      
+      // Obtener coordenadas de la ciudad
+      final city = cityMap[cityName];
+      double? distanceKm;
+      bool isUserLocation = false;
+      
+      if (_hasLocationPermission && _userLat != null && _userLng != null) {
+        if (city?.lat != null && city?.lng != null) {
+          // Calcular distancia desde el usuario a la ciudad
+          distanceKm = Geolocator.distanceBetween(
+            _userLat!,
+            _userLng!,
+            city!.lat!,
+            city.lng!,
+          ) / 1000; // Convertir metros a kilómetros
+          
+          // Si la distancia es muy pequeña (< 1 km), considerar que es la ciudad del usuario
+          if (distanceKm < 1.0) {
+            isUserLocation = true;
+            distanceKm = 0.0;
+          }
+        }
+      }
+      
+      groups.add(CityEventGroup(
+        cityName: cityName,
+        cityId: city?.id,
+        distanceKm: distanceKm,
+        events: cityEvents,
+        isUserLocation: isUserLocation,
+      ));
+    }
+    
+    // Ordenar grupos por distancia (de menor a mayor)
+    // La ciudad del usuario (distancia ~0) siempre va primero
+    groups.sort((a, b) {
+      // Si una es la ciudad del usuario, va primero
+      if (a.isUserLocation && !b.isUserLocation) return -1;
+      if (!a.isUserLocation && b.isUserLocation) return 1;
+      
+      // Si ambas tienen distancia, ordenar por distancia
+      if (a.distanceKm != null && b.distanceKm != null) {
+        return a.distanceKm!.compareTo(b.distanceKm!);
+      }
+      
+      // Si solo una tiene distancia, la que tiene distancia va primero
+      if (a.distanceKm != null && b.distanceKm == null) return -1;
+      if (a.distanceKm == null && b.distanceKm != null) return 1;
+      
+      // Si ninguna tiene distancia, ordenar alfabéticamente
+      return a.cityName.compareTo(b.cityName);
+    });
+    
+    return groups;
   }
 
   /// Obtiene el título para la sección de eventos populares
@@ -1085,17 +1204,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _cities = cities;
       // Establecer el provinceId inicial
       _currentProvinceId = provId;
-      // si no hay selección, seleccionar la primera o mantener null (tu criterio)
-      _selectedCityId ??= _cities.isNotEmpty ? _cities.first.id : null;
-      if (_selectedCityId != null) {
-        final city = _cities.firstWhere(
-          (c) => c.id == _selectedCityId,
-          orElse: () => _cities.first,
-        );
-        _selectedCityName = city.name;
-        _selectedCityIds = {city.id};
-        _currentProvinceId = city.provinceId ?? provId;
-      }
+      // NO seleccionar ninguna ciudad por defecto
+      // Dejar _selectedCityId, _selectedCityName y _selectedCityIds en null/vacío
+      // para mostrar todos los eventos sin filtrar por ciudad
     });
   }
 
@@ -1143,52 +1254,110 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _reloadWithDateRange({DateTime? from, DateTime? to}) async {
-    setState(() {
-      _fromDate = from;
-      _toDate = to;
-      _isLoading = true;
-    });
+    // Actualizar el estado de los flags de fecha según los parámetros recibidos
+    if (from != null && to != null) {
+      final today = todayRange();
+      final next7 = next7DaysRange();
+      final next30 = next30DaysRange();
+      
+      // Comparar fechas para determinar qué filtro se está aplicando
+      // Usar diferencia en milisegundos para comparar (más preciso que normalizar)
+      final isTodayRange = from.difference(today.from).inDays == 0 && 
+                          to.difference(today.to).inMilliseconds.abs() < 1000; // Permitir diferencia de 1 segundo
+      final is7DaysRange = from.difference(next7.from).inDays == 0 && 
+                          to.difference(next7.to).inMilliseconds.abs() < 1000;
+      final is30DaysRange = from.difference(next30.from).inDays == 0 && 
+                           to.difference(next30.to).inMilliseconds.abs() < 1000;
+      
+      setState(() {
+        _fromDate = from;
+        _toDate = to;
+        _isToday = isTodayRange;
+        _isNext7Days = is7DaysRange;
+        _isNext30Days = is30DaysRange;
+        _isNextWeekend = false; // Por ahora, solo manejar los tres principales
+        _isLoading = true;
+      });
+    } else {
+      setState(() {
+        if (from != null) _fromDate = from;
+        if (to != null) _toDate = to;
+        _isLoading = true;
+      });
+    }
+    
     try {
-      final List<int>? cityIds = _mode == LocationMode.city
-          ? (_selectedCityIds.isNotEmpty
-                ? _selectedCityIds.toList()
-                : (_selectedCityId != null ? <int>[_selectedCityId!] : null))
-          : null;
+      // Si hay una ciudad seleccionada, usar su ID para filtrar eventos
+      // Independientemente del modo de ubicación
+      final List<int>? cityIds = _selectedCityIds.isNotEmpty
+          ? _selectedCityIds.toList()
+          : (_selectedCityId != null ? <int>[_selectedCityId!] : null);
 
-      final double? radius = _mode == LocationMode.radius && _radiusKm > 0
-          ? _radiusKm
-          : null;
-
-      // Crear objeto center para el modo radio
-      // Si estamos en modo radio, siempre necesitamos una ubicación (usar valores por defecto si no hay)
+      // Si hay un searchTerm, no usar radiusKm y center para permitir búsqueda global
+      // Si hay cityIds seleccionados, tampoco usar radiusKm y center
+      final double? radius;
       dynamic center;
-      if (_mode == LocationMode.radius) {
+      
+      if (_searchEventTerm != null && _searchEventTerm!.trim().isNotEmpty) {
+        // Si hay búsqueda de texto, no usar radio para permitir búsqueda global
+        radius = null;
+        center = null;
+      } else if (cityIds != null && cityIds.isNotEmpty) {
+        // Si hay ciudades seleccionadas, no usar radio
+        radius = null;
+        center = null;
+      } else if (_mode == LocationMode.radius && _radiusKm > 0) {
+        // Solo usar radio si estamos en modo radio y no hay búsqueda de texto ni ciudades seleccionadas
+        radius = _radiusKm;
         if (_userLat != null && _userLng != null) {
           center = {'lat': _userLat, 'lng': _userLng};
         } else {
           // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
           center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
         }
+      } else {
+        radius = null;
+        center = null;
       }
 
-      // Obtener la fecha 'from' efectiva (hoy a las 00:00 si no hay filtro manual)
-      // En _reloadWithDateRange, si se pasa from/to explícito, usarlo; si es null, usar hoy
-      final effectiveFrom = (from != null || _hasManualDateFilter()) 
-          ? _fromDate 
-          : _getTodayStart();
+      // Obtener la fecha 'from' efectiva
+      // Si se pasa 'from' explícitamente, usarlo; si no, usar _fromDate o hoy por defecto
+      final effectiveFrom = from ?? _fromDate ?? _getTodayStart();
+      // Si se pasa 'to' explícitamente, usarlo; si no, usar _toDate
+      final effectiveTo = to ?? _toDate;
+
+      LoggerService.instance.debug(
+        '_reloadWithDateRange llamado',
+        data: {
+          'fromParam': from?.toIso8601String(),
+          'toParam': to?.toIso8601String(),
+          '_fromDate': _fromDate?.toIso8601String(),
+          '_toDate': _toDate?.toIso8601String(),
+          'effectiveFrom': effectiveFrom.toIso8601String(),
+          'effectiveTo': effectiveTo?.toIso8601String(),
+          'cityIds': cityIds?.toString(),
+          'searchTerm': _searchEventTerm,
+        },
+      );
 
       final events = await EventService.instance.fetchEvents(
         cityIds: cityIds,
         categoryId: _selectedCategoryId,
         from: effectiveFrom,
-        to: _toDate,
+        to: effectiveTo,
         radiusKm: radius,
         center: center,
         searchTerm: _searchEventTerm,
+        limit: 200, // Aumentar límite para mostrar eventos de toda la provincia
       );
       if (!mounted) return;
+      
+      // Agrupar eventos por ciudad y calcular distancias
+      final eventsByCity = await _groupEventsByCity(events);
+      
       setState(() {
         _upcomingEvents = events; // nunca null
+        _eventsByCity = eventsByCity;
       });
     } catch (e) {
       if (!mounted) return;
@@ -1524,78 +1693,39 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRadiusAndLocationContent() {
-    return _NearbyControlWidget(
-      radiusKm: _radiusKm,
-      onRadiusChanged: (value) async {
-        _onFilterInteraction();
-        setState(() {
-          _radiusKm = value;
-        });
-        // Actualizar eventos cercanos con el nuevo radio
-        if (_userLat != null && _userLng != null) {
-          await _loadNearby();
-          await _loadNearbyCities();
-        } else {
-          // Si no hay ubicación del usuario, usar valores por defecto para cargar eventos cercanos
-          final defaultLat = 36.1927; // Barbate
-          final defaultLng = -5.9219;
-          setState(() => _isNearbyLoading = true);
-          try {
-            // Pasar el 'from' efectivo para filtrar eventos pasados por defecto
-            final list = await _repoNearby.fetchNearby(
-              lat: defaultLat,
-              lng: defaultLng,
-              radiusKm: _radiusKm,
-              from: _getEffectiveFromDate(),
-            );
-            setState(() => _nearbyEvents = list);
-          } finally {
-            if (mounted) setState(() => _isNearbyLoading = false);
-          }
-          // Cargar ciudades cercanas con valores por defecto
-          final cities = await CityService.instance.fetchNearbyCities(
-            lat: defaultLat,
-            lng: defaultLng,
-            radiusKm: _radiusKm,
-          );
-          if (mounted) {
-            setState(() => _nearbyCities = cities);
-          }
-        }
-        // Recargar eventos principales con el nuevo radio
-        _reloadEvents();
-      },
-    );
-  }
-
-  Widget _buildDisabledRadiusContent() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            Icons.location_off,
-            size: 20,
-            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+  /// Construye la barra de búsqueda estilo "Fake Search Bar"
+  Widget _buildFakeSearchBar() {
+    return InkWell(
+      onTap: _openSearchBottomSheet,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
+            width: 1,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              'Permisos de ubicación requeridos para usar el selector de radio',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.search,
+              size: 20,
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Buscar ciudad, artista o evento...',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1732,9 +1862,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
 
   void _openSearchBottomSheet() {
-    final searchController = TextEditingController(
-      text: _searchEventTerm ?? '',
-    );
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1742,70 +1869,41 @@ class _DashboardScreenState extends State<DashboardScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-          left: 16,
-          right: 16,
-          top: 16,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              'Buscar eventos',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: searchController,
-              autofocus: true,
-              textInputAction: TextInputAction.search,
-              style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'Buscar eventos (ej. flamenco, mercadillo...)',
-                prefixIcon: Icon(
-                  Icons.search,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-              onSubmitted: (value) {
-                final query = value.trim();
-                setState(() {
-                  _searchEventTerm = query.isEmpty ? null : query;
-                });
-                _reloadEvents();
-                Navigator.pop(context);
-              },
-            ),
-            const SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancelar'),
-                ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    final query = searchController.text.trim();
-                    setState(() {
-                      _searchEventTerm = query.isEmpty ? null : query;
-                    });
-                    _reloadEvents();
-                    Navigator.pop(context);
-                  },
-                  child: const Text('Buscar'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+      builder: (context) => _SearchSuggestionsBottomSheet(
+        initialQuery: _searchEventTerm ?? _selectedCityName ?? '',
+        selectedCityId: _selectedCityId,
+        onCitySelected: (city) {
+          setState(() {
+            _selectedCityId = city.id;
+            _selectedCityIds = {city.id};
+            _selectedCityName = city.name;
+            _searchEventTerm = null; // Limpiar búsqueda de texto cuando se selecciona ciudad
+          });
+          _updateCurrentProvinceId();
+          _reloadEvents();
+          Navigator.pop(context);
+        },
+        onSearchSubmitted: (query) {
+          // Cuando se busca texto, limpiar selección de ciudad y usar búsqueda de texto
+          setState(() {
+            _searchEventTerm = query;
+            _selectedCityId = null;
+            _selectedCityIds = {};
+            _selectedCityName = null;
+          });
+          _reloadEvents();
+          Navigator.pop(context);
+        },
+        onClear: () {
+          setState(() {
+            _searchEventTerm = null;
+            _selectedCityId = null;
+            _selectedCityIds = {};
+            _selectedCityName = null;
+          });
+          _reloadEvents();
+          Navigator.pop(context);
+        },
       ),
     );
   }
@@ -1816,18 +1914,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Radio y Ciudad siempre visible
-          CityRadioToggle(
-            selectedMode: _mode,
-            onModeChanged: (mode) async {
-              if (mode != _mode) {
-                await _switchMode(mode);
-              }
-            },
-            selectedCityName: _selectedCityName,
-            radiusKm: _radiusKm,
-            hasLocationPermission: _hasLocationPermission,
-          ),
           // Contenido de filtros siempre visible y compacto
           _buildExpandedFilterContent(),
         ],
@@ -1842,19 +1928,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Contenido según el modo - Compacto
-          if (_mode == LocationMode.radius) ...[
-            // Modo Radio: Categorías en slide lateral + selector de radio
-            if (_hasLocationPermission) ...[
-              _buildRadiusAndLocationContent(),
-              const SizedBox(height: 12),
-            ],
-            // Categorías en slide horizontal compacto
-            SizedBox(
-              height: 50,
-              child: _buildHorizontalCategoriesList(),
-            ),
-          ] else ...[
-            // Modo Ciudad: Búsqueda de ciudad + categorías
+          // Categorías en slide horizontal compacto (sin slider de distancia)
+          SizedBox(
+            height: 50,
+            child: _buildHorizontalCategoriesList(),
+          ),
+          if (_mode == LocationMode.city) ...[
+            // Modo Ciudad: Búsqueda de ciudad
             UnifiedSearchBar(
               selectedCityId: _selectedCityId,
               onCitySelected: (city) {
@@ -1864,6 +1944,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _selectedCityId = city.id;
                     _selectedCityIds = {city.id};
                     _selectedCityName = city.name;
+                    // Limpiar searchTerm cuando se selecciona una ciudad
+                    // para evitar conflictos entre cityIds y searchTerm
+                    _searchEventTerm = null;
                   });
                   _updateCurrentProvinceId();
                   _reloadEvents();
@@ -1872,11 +1955,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSearchChanged: null,
             ),
             const SizedBox(height: 12),
-            // Categorías en slide horizontal compacto
-            SizedBox(
-              height: 50,
-              child: _buildHorizontalCategoriesList(),
-            ),
           ],
           const SizedBox(height: 12),
           // Chips de fecha: Hoy, 7 Días, 1 Mes (por defecto), Calendario - Compacto
@@ -2582,6 +2660,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 expandedHeight: 48,
                 actions: const [],
               ),
+              // Barra de búsqueda visible estilo "Fake Search Bar"
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: _buildFakeSearchBar(),
+                ),
+              ),
               SliverToBoxAdapter(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2665,19 +2750,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
                         child: UpcomingEventsSection(
-                          events: _upcomingEvents,
+                          eventsByCity: _eventsByCity,
                           selectedCategoryId: _selectedCategoryId,
-                          // En modo Radio no aplicamos filtro por ciudad
-                          selectedCityId: _mode == LocationMode.city
-                              ? _selectedCityId
-                              : null,
                           onClearFilters: _clearFilters,
                           showCategory: true,
                           dateFilterText: _getDateFilterInfoText(),
-                          // Información para búsqueda ampliada
-                          isRadiusMode: _mode == LocationMode.radius,
-                          currentRadiusKm: _radiusKm,
-                          onExpandRadius: _expandRadiusTo50km,
                           // Información de búsqueda activa (búsqueda de texto o filtros aplicados)
                           hasActiveSearch: (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ||
                               _selectedCategoryId != null ||
@@ -2796,47 +2873,28 @@ class DashboardHero extends StatelessWidget {
 }
 
 class UpcomingEventsSection extends StatelessWidget {
-  final List<Event> events;
+  final List<CityEventGroup> eventsByCity;
   final int? selectedCategoryId;
-  final int? selectedCityId;
   final VoidCallback? onClearFilters;
   final bool showCategory;
   final String? dateFilterText;
-  // Parámetros para búsqueda ampliada
-  final bool isRadiusMode;
-  final double? currentRadiusKm;
-  final VoidCallback? onExpandRadius;
   // Información de búsqueda activa
   final bool hasActiveSearch;
   final String? searchTerm;
 
   const UpcomingEventsSection({
     super.key,
-    required this.events,
+    required this.eventsByCity,
     this.selectedCategoryId,
-    this.selectedCityId,
     this.onClearFilters,
     this.showCategory = true,
     this.dateFilterText,
-    this.isRadiusMode = false,
-    this.currentRadiusKm,
-    this.onExpandRadius,
     this.hasActiveSearch = false,
     this.searchTerm,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Aplicar filtros combinados: ciudad y categoría (null-safe)
-    final filtered = events
-        .where(
-          (e) =>
-              (selectedCityId == null || e.cityId == selectedCityId) &&
-              (selectedCategoryId == null ||
-                  e.categoryId == selectedCategoryId),
-        )
-        .toList();
-
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 20),
       decoration: BoxDecoration(
@@ -2857,15 +2915,12 @@ class UpcomingEventsSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Lista de eventos (el filtro de fecha se muestra dentro de UpcomingList)
+          // Lista de eventos agrupados por ciudad
           UpcomingList(
-            events: filtered,
+            eventsByCity: eventsByCity,
+            selectedCategoryId: selectedCategoryId,
             onClearFilters: onClearFilters,
             showCategory: showCategory,
-            // Información para búsqueda ampliada
-            isRadiusMode: isRadiusMode,
-            currentRadiusKm: currentRadiusKm,
-            onExpandRadius: onExpandRadius,
             // Texto del filtro de fecha activo
             dateFilterText: dateFilterText,
             // Información de búsqueda activa
@@ -3629,5 +3684,354 @@ class _NearbyControlHeaderDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(covariant _NearbyControlHeaderDelegate old) {
     return old.radiusKm != radiusKm;
+  }
+}
+
+// ==== Widget de búsqueda con sugerencias ====
+class _SearchSuggestionsBottomSheet extends StatefulWidget {
+  final String initialQuery;
+  final int? selectedCityId;
+  final ValueChanged<City> onCitySelected;
+  final ValueChanged<String> onSearchSubmitted;
+  final VoidCallback onClear;
+
+  const _SearchSuggestionsBottomSheet({
+    required this.initialQuery,
+    this.selectedCityId,
+    required this.onCitySelected,
+    required this.onSearchSubmitted,
+    required this.onClear,
+  });
+
+  @override
+  State<_SearchSuggestionsBottomSheet> createState() => _SearchSuggestionsBottomSheetState();
+}
+
+class _SearchSuggestionsBottomSheetState extends State<_SearchSuggestionsBottomSheet> {
+  final TextEditingController _searchController = TextEditingController();
+  final CityService _cityService = CityService.instance;
+  final EventService _eventService = EventService.instance;
+
+  Timer? _searchDebouncer;
+  String _searchQuery = '';
+  bool _isSearching = false;
+  List<City> _cityResults = [];
+  List<Event> _eventResults = [];
+  List<String> _placeResults = []; // Lugares únicos
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.text = widget.initialQuery;
+    _searchQuery = widget.initialQuery;
+    if (widget.initialQuery.isNotEmpty) {
+      _performSearch(widget.initialQuery);
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchDebouncer?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _performSearch(String query) async {
+    if (query.trim().isEmpty) {
+      setState(() {
+        _cityResults.clear();
+        _eventResults.clear();
+        _placeResults.clear();
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      // Buscar ciudades, eventos y lugares en paralelo
+      final results = await Future.wait([
+        _cityService.searchCities(query),
+        _eventService.searchEvents(query: query, cityId: widget.selectedCityId),
+      ]);
+
+      if (!mounted) return;
+
+      final cities = results[0] as List<City>;
+      final events = results[1] as List<Event>;
+
+      // Extraer lugares únicos de los eventos
+      final places = <String>{};
+      for (final event in events) {
+        if (event.place != null && event.place!.trim().isNotEmpty) {
+          final placeLower = event.place!.toLowerCase();
+          final queryLower = query.toLowerCase();
+          // Solo incluir lugares que contengan el término de búsqueda
+          if (placeLower.contains(queryLower)) {
+            places.add(event.place!);
+          }
+        }
+      }
+
+      setState(() {
+        _cityResults = cities;
+        _eventResults = events;
+        _placeResults = places.toList()..sort();
+        _isSearching = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSearching = false;
+      });
+    }
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {
+      _searchQuery = value;
+    });
+
+    _searchDebouncer?.cancel();
+    if (value.trim().isNotEmpty) {
+      _searchDebouncer = Timer(const Duration(milliseconds: 400), () {
+        _performSearch(value);
+      });
+    } else {
+      setState(() {
+        _cityResults.clear();
+        _eventResults.clear();
+        _placeResults.clear();
+      });
+    }
+  }
+
+  void _handleCitySelected(City city) {
+    widget.onCitySelected(city);
+  }
+
+  void _handleEventSelected(Event event) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => EventDetailScreen(event: event),
+      ),
+    );
+  }
+
+  void _handlePlaceSelected(String place) {
+    // Cuando se selecciona un lugar, buscar eventos en ese lugar
+    widget.onSearchSubmitted(place);
+  }
+
+  void _handleSearchSubmitted(String query) {
+    if (query.trim().isEmpty) {
+      widget.onClear();
+      return;
+    }
+
+    // Si hay una sola ciudad y no hay eventos ni lugares, seleccionarla
+    if (_cityResults.length == 1 && _eventResults.isEmpty && _placeResults.isEmpty) {
+      _handleCitySelected(_cityResults.first);
+      return;
+    }
+
+    // Si hay un solo evento y no hay ciudades ni lugares, navegar a él
+    if (_eventResults.length == 1 && _cityResults.isEmpty && _placeResults.isEmpty) {
+      _handleEventSelected(_eventResults.first);
+      return;
+    }
+
+    // Si hay un solo lugar y no hay ciudades ni eventos, buscar por ese lugar
+    if (_placeResults.length == 1 && _cityResults.isEmpty && _eventResults.isEmpty) {
+      _handlePlaceSelected(_placeResults.first);
+      return;
+    }
+
+    // En otros casos, hacer búsqueda de texto
+    widget.onSearchSubmitted(query);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasResults = _cityResults.isNotEmpty || _eventResults.isNotEmpty || _placeResults.isNotEmpty;
+    final hasQuery = _searchQuery.trim().isNotEmpty;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Buscar ciudad, artista o evento...',
+            style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _searchController,
+            autofocus: true,
+            textInputAction: TextInputAction.search,
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface),
+            decoration: InputDecoration(
+              hintText: 'Buscar ciudad, artista o evento...',
+              prefixIcon: Icon(
+                Icons.search,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              suffixIcon: hasQuery
+                  ? IconButton(
+                      icon: _isSearching
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        _onSearchChanged('');
+                        widget.onClear();
+                      },
+                    )
+                  : null,
+            ),
+            onChanged: _onSearchChanged,
+            onSubmitted: _handleSearchSubmitted,
+          ),
+          const SizedBox(height: 8),
+          // Mostrar resultados de búsqueda
+          if (hasResults)
+            Flexible(
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 400),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outline.withOpacity(0.2),
+                  ),
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    // Resultados de ciudades
+                    if (_cityResults.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Ciudades',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      ..._cityResults.map((city) {
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.location_city,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          title: Text(city.name),
+                          onTap: () => _handleCitySelected(city),
+                        );
+                      }),
+                      if (_eventResults.isNotEmpty || _placeResults.isNotEmpty)
+                        const Divider(height: 1),
+                    ],
+                    // Resultados de lugares
+                    if (_placeResults.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Lugares',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      ..._placeResults.map((place) {
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.place,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          title: Text(place),
+                          onTap: () => _handlePlaceSelected(place),
+                        );
+                      }),
+                      if (_eventResults.isNotEmpty) const Divider(height: 1),
+                    ],
+                    // Resultados de eventos
+                    if (_eventResults.isNotEmpty) ...[
+                      Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        child: Text(
+                          'Eventos',
+                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      ..._eventResults.take(10).map((event) {
+                        return ListTile(
+                          dense: true,
+                          leading: Icon(
+                            Icons.event,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                          title: Text(
+                            event.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: event.cityName != null || event.place != null
+                              ? Text(
+                                  [
+                                    if (event.cityName != null) event.cityName!,
+                                    if (event.place != null) event.place!,
+                                  ].join(' · '),
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                )
+                              : null,
+                          onTap: () => _handleEventSelected(event),
+                        );
+                      }),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
   }
 }

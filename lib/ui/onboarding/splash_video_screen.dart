@@ -31,10 +31,22 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
   bool _isNextScreenReady = false;
   Map<String, dynamic>? _preloadedData;
   bool _isPreloading = false;
+  static bool _hasPlayedOnce = false; // Flag estático para evitar reproducir múltiples veces
 
   @override
   void initState() {
     super.initState();
+    
+    // Si ya se reprodujo una vez, navegar directamente
+    if (_hasPlayedOnce) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _navigateToNext();
+        }
+      });
+      return;
+    }
+    
     // Inicializar animación de zoom
     _zoomController = AnimationController(
       vsync: this,
@@ -86,6 +98,11 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
   }
 
   Future<void> _initializeVideo() async {
+    // Si ya se reprodujo una vez, no inicializar de nuevo
+    if (_hasPlayedOnce) {
+      return;
+    }
+    
     try {
       // Inicializar el controlador de video
       // NOTA: Debes colocar tu video en assets/videos/splash.mp4
@@ -93,7 +110,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
       
       await _controller!.initialize();
       
-      if (mounted) {
+      if (mounted && !_hasPlayedOnce) {
         setState(() {
           _isInitialized = true;
         });
@@ -122,9 +139,11 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     } catch (e) {
       LoggerService.instance.error('Error al inicializar el video', error: e);
       // Si hay un error, navegar inmediatamente después de un breve delay
-      _timer = Timer(const Duration(milliseconds: 500), () {
-        _navigateToNext();
-      });
+      if (!_hasPlayedOnce) {
+        _timer = Timer(const Duration(milliseconds: 500), () {
+          _navigateToNext();
+        });
+      }
     }
   }
 
@@ -166,6 +185,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     if (!mounted || _hasNavigated) return;
     
     _hasNavigated = true;
+    _hasPlayedOnce = true; // Marcar que ya se reprodujo
     _timer?.cancel();
     _controller?.removeListener(_videoListener);
     _controller?.pause();
@@ -182,12 +202,17 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     if (!mounted) return;
     
     // Construir la siguiente pantalla con datos pre-cargados si están disponibles
-    final nextScreen = widget.isDashboard && _preloadedData != null
-        ? ChangeNotifierProvider.value(
-            value: Provider.of<DashboardProvider>(context, listen: false),
-            child: DashboardScreen(preloadedData: _preloadedData),
-          )
-        : widget.nextScreen;
+    Widget nextScreen;
+    if (widget.isDashboard) {
+      // Siempre crear un nuevo provider para el DashboardScreen
+      // para evitar problemas de contexto al navegar
+      nextScreen = ChangeNotifierProvider(
+        create: (_) => DashboardProvider(),
+        child: DashboardScreen(preloadedData: _preloadedData),
+      );
+    } else {
+      nextScreen = widget.nextScreen;
+    }
     
     // Transición suave con fade continuando el zoom
     Navigator.of(context).pushReplacement(

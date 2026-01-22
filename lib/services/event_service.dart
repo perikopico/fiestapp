@@ -124,13 +124,13 @@ class EventService {
     if (from != null) qb = qb.gte('starts_at', from.toIso8601String());
     if (to != null) qb = qb.lt('starts_at', to.toIso8601String());
 
-    // Búsqueda libre por evento (título/descr)
+    // Búsqueda libre por evento (título, ciudad y lugar/venue)
     if (searchTerm != null && searchTerm.trim().isNotEmpty) {
       final t = searchTerm.trim();
-      // Para búsqueda en título o descripción, usamos ilike en ambos campos
-      // PostgREST permite múltiples filtros, pero si ya hay un 'or', necesitamos combinarlos
-      // Por simplicidad, buscamos solo en title por ahora (se puede mejorar)
-      qb = qb.ilike('title', '%$t%');
+      // Buscar en título, ciudad y lugar usando OR
+      // PostgREST permite múltiples condiciones OR
+      final orCondition = 'title.ilike.%$t%,city_name.ilike.%$t%,place.ilike.%$t%';
+      qb = qb.or(orCondition);
     }
 
     // Radio (si aplica). Si usas RPC, llama a tu función y obvia cityIds.
@@ -208,8 +208,38 @@ class EventService {
       if (searchTerm != null && searchTerm.trim().isNotEmpty) {
         final t = searchTerm.trim().toLowerCase();
         events = events
-            .where((e) => e.title.toLowerCase().contains(t))
+            .where((e) {
+              // Buscar en título, ciudad y lugar
+              final titleMatch = e.title.toLowerCase().contains(t);
+              final cityMatch = e.cityName?.toLowerCase().contains(t) ?? false;
+              final placeMatch = e.place?.toLowerCase().contains(t) ?? false;
+              return titleMatch || cityMatch || placeMatch;
+            })
             .toList();
+      }
+
+      // Filtrar eventos pasados como medida de seguridad adicional
+      // Un evento se considera pasado si ya pasaron más de 5 horas del día siguiente
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final beforePastFilter = events.length;
+      events = events.where((event) {
+        // Si el evento es de hoy o futuro, incluirlo
+        final eventDate = DateTime(event.startsAt.year, event.startsAt.month, event.startsAt.day);
+        if (eventDate.isAfter(todayStart) || eventDate.isAtSameMomentAs(todayStart)) {
+          return true;
+        }
+        // Si el evento es de ayer o anterior, excluirlo
+        return false;
+      }).toList();
+      if (beforePastFilter != events.length) {
+        LoggerService.instance.debug(
+          'Filtro eventos pasados aplicado',
+          data: {
+            'antes': beforePastFilter,
+            'después': events.length,
+          },
+        );
       }
 
       // Ordenar: PRIORIDAD 1 = Fecha (más pronto primero), PRIORIDAD 2 = Distancia (más cercano primero)
@@ -250,9 +280,24 @@ class EventService {
       final events = res
           .map((m) => Event.fromMap(m as Map<String, dynamic>))
           .toList();
+      
+      // Filtrar eventos pasados como medida de seguridad adicional
+      // Un evento se considera pasado si ya pasaron más de 5 horas del día siguiente
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final filteredEvents = events.where((event) {
+        // Si el evento es de hoy o futuro, incluirlo
+        final eventDate = DateTime(event.startsAt.year, event.startsAt.month, event.startsAt.day);
+        if (eventDate.isAfter(todayStart) || eventDate.isAtSameMomentAs(todayStart)) {
+          return true;
+        }
+        // Si el evento es de ayer o anterior, excluirlo
+        return false;
+      }).toList();
+      
       // Obtener description desde la tabla base para cada evento
-      await _enrichEventsWithDescription(events);
-      return events;
+      await _enrichEventsWithDescription(filteredEvents);
+      return filteredEvents;
     }
     return [];
   }
@@ -270,10 +315,11 @@ class EventService {
     // Si no hay query y tampoco filtro por ciudad, devolvemos vacío (UI decide)
     if (q.isEmpty && cityId == null) return [];
 
+    // Usar events_view para tener acceso a city_name
     dynamic qb = supa
-        .from('events')
+        .from('events_view')
         .select(
-          'id, title, place, starts_at, image_url, image_alignment, city_id, category_id, price, is_featured, description, info_url',
+          'id, title, place, starts_at, image_url, image_alignment, city_id, city_name, category_id, category_name, category_icon, category_color, price, is_featured, description, info_url',
         );
 
     // Autocompletado NO debe limitar por ciudad
@@ -281,7 +327,9 @@ class EventService {
     // Por ahora: búsqueda global
 
     if (q.isNotEmpty) {
-      qb = qb.ilike('title', '%$q%');
+      // Buscar en título, ciudad y lugar usando OR
+      final orCondition = 'title.ilike.%$q%,city_name.ilike.%$q%,place.ilike.%$q%';
+      qb = qb.or(orCondition);
     }
 
     qb = qb.order('starts_at');
@@ -391,11 +439,11 @@ class EventService {
 
       for (int i = 0; i < categoryIds.length; i += batchSize) {
         final batch = categoryIds.skip(i).take(batchSize).toList();
-        // Usar .in_() para mejor rendimiento
+        // Usar .filter() con 'in' para mejor rendimiento
         final catRes = await supa
             .from('categories')
             .select('id, name, icon, color')
-            .in_('id', batch);
+            .filter('id', 'in', '(${batch.join(',')})');
 
         if (catRes is List) {
           for (final cat in catRes) {
@@ -456,11 +504,11 @@ class EventService {
 
       for (int i = 0; i < eventIds.length; i += batchSize) {
         final batch = eventIds.skip(i).take(batchSize).toList();
-        // Usar .in_() para mejor rendimiento que .or()
+        // Usar .filter() con 'in' para mejor rendimiento que .or()
         final descRes = await supa
             .from('events')
             .select('id, description, info_url')
-            .in_('id', batch);
+            .filter('id', 'in', '(${batch.join(',')})');
 
         if (descRes is List) {
           for (final item in descRes) {
@@ -525,13 +573,13 @@ class EventService {
 
       for (int i = 0; i < ids.length; i += batchSize) {
         final batch = ids.skip(i).take(batchSize).toList();
-        // Usar .in_() para mejor rendimiento
+        // Usar .filter() con 'in' para mejor rendimiento
         final r = await supa
             .from('events_view')
             .select(
               'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url',
             )
-            .in_('id', batch);
+            .filter('id', 'in', '(${batch.join(',')})');
 
         final events = (r as List)
             .map((e) => Event.fromMap(e as Map<String, dynamic>))
@@ -982,11 +1030,11 @@ class EventService {
       
       for (int i = 0; i < cityIds.length; i += batchSize) {
         final batch = cityIds.skip(i).take(batchSize).toList();
-        // Usar .in_() para mejor rendimiento
+        // Usar .filter() con 'in' para mejor rendimiento
         final batchResponse = await supa
             .from('cities')
             .select('id, name')
-            .in_('id', batch);
+            .filter('id', 'in', '(${batch.join(',')})');
         citiesResponse.addAll((batchResponse as List).cast<Map<String, dynamic>>());
       }
 

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/url_helper.dart';
 import '../../services/gdpr_consent_service.dart';
+import '../../l10n/app_localizations.dart';
 
 class GDPRConsentScreen extends StatefulWidget {
   final bool isFirstTime;
@@ -54,7 +55,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
   Future<void> _saveConsents() async {
     if (!_acceptedTerms || !_acceptedPrivacyPolicy) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(AppLocalizations.of(context)?.mustAcceptTerms ?? 'Debes aceptar los Términos y la Política de Privacidad para continuar'),
           backgroundColor: Colors.orange,
         ),
@@ -77,7 +78,7 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(AppLocalizations.of(context)?.consentsSaved ?? 'Consentimientos guardados correctamente'),
           backgroundColor: Colors.green,
         ),

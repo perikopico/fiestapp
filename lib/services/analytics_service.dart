@@ -71,7 +71,7 @@ class AnalyticsService {
       await _analytics.logShare(
         contentType: 'event',
         itemId: eventId,
-        method: shareMethod,
+        method: shareMethod ?? 'unknown',
       );
       LoggerService.instance.debug('Analytics: Evento compartido', data: {'event_id': eventId});
     } catch (e) {

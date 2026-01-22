@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../models/category.dart';
+import '../models/category.dart' as models;
 import 'category_service.dart';
 import 'city_service.dart';
 
@@ -9,7 +9,7 @@ class CacheService {
   static final instance = CacheService._();
 
   // Caché de categorías
-  List<Category>? _cachedCategories;
+  List<models.Category>? _cachedCategories;
   DateTime? _categoriesCacheTime;
   static const _categoriesCacheTTL = Duration(minutes: 30);
 
@@ -19,7 +19,7 @@ class CacheService {
   static const _citiesCacheTTL = Duration(minutes: 30);
 
   /// Obtiene categorías desde caché o la base de datos
-  Future<List<Category>> getCategories({bool forceRefresh = false}) async {
+  Future<List<models.Category>> getCategories({bool forceRefresh = false}) async {
     // Si hay caché válido y no se fuerza refresh, devolverlo
     if (!forceRefresh &&
         _cachedCategories != null &&

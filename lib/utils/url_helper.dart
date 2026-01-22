@@ -1,7 +1,7 @@
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/material.dart';
 import 'validation_utils.dart';
-import 'logger_service.dart';
+import '../services/logger_service.dart';
 import '../services/error_handler_service.dart';
 
 /// Helper para manejar apertura de URLs de forma segura

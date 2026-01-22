@@ -5,16 +5,17 @@ import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
+import '../../../services/notification_alerts_service.dart';
 import '../../../utils/accessibility_utils.dart';
+import '../dashboard_screen.dart'; // Para CityEventGroup
+import 'package:flutter/services.dart';
 
 class UpcomingList extends StatefulWidget {
-  final List<Event> events;
+  final List<CityEventGroup>? eventsByCity;
+  final List<Event>? events; // Mantener por compatibilidad temporal
+  final int? selectedCategoryId;
   final VoidCallback? onClearFilters;
   final bool showCategory;
-  // Parámetros para búsqueda ampliada
-  final bool isRadiusMode;
-  final double? currentRadiusKm;
-  final VoidCallback? onExpandRadius;
   // Texto del filtro de fecha activo
   final String? dateFilterText;
   // Información de búsqueda activa
@@ -23,12 +24,11 @@ class UpcomingList extends StatefulWidget {
 
   const UpcomingList({
     super.key,
-    required this.events,
+    this.eventsByCity,
+    this.events,
+    this.selectedCategoryId,
     this.onClearFilters,
     this.showCategory = true,
-    this.isRadiusMode = false,
-    this.currentRadiusKm,
-    this.onExpandRadius,
     this.dateFilterText,
     this.hasActiveSearch = false,
     this.searchTerm,
@@ -39,6 +39,7 @@ class UpcomingList extends StatefulWidget {
 }
 
 class _UpcomingListState extends State<UpcomingList> {
+  final NotificationAlertsService _alertsService = NotificationAlertsService.instance;
 
   Color _getColorForCategory(String categoryName) {
     if (categoryName.isEmpty) return Colors.grey;
@@ -244,129 +245,428 @@ class _UpcomingListState extends State<UpcomingList> {
     return hsl.withLightness((hsl.lightness * (1 - amount)).clamp(0.0, 1.0)).toColor();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Estado vacío: mostrar mensaje según si hay búsqueda activa o no
-    if (widget.events.isEmpty) {
-      // Si no hay búsqueda activa, mostrar mensaje de bienvenida
-      if (!widget.hasActiveSearch) {
-        return Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.search_off,
-                  size: 64,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  'Utiliza los filtros de arriba para localizar tu localidad o evento',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
+  /// Construye el header de sección para una ciudad con icono de campana
+  Widget _buildCityHeader(BuildContext context, CityEventGroup group) {
+    String headerText = group.cityName;
+    if (group.isUserLocation) {
+      headerText = '${group.cityName} · Tu ubicación';
+    } else if (group.distanceKm != null) {
+      headerText = '${group.cityName} · ${group.distanceKm!.round()} km';
+    }
+    
+    // Solo mostrar campana si hay cityId
+    if (group.cityId == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+        child: Text(
+          headerText,
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onSurface,
+          ),
+        ),
+      );
+    }
+    
+    return FutureBuilder<bool>(
+      future: _alertsService.isCityFollowed(group.cityId!),
+      builder: (context, snapshot) {
+        final isFollowing = snapshot.data ?? false;
+        
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  headerText,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                     color: Theme.of(context).colorScheme.onSurface,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Selecciona una ciudad, categoría o fecha para encontrar planes',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
+              ),
+              IconButton(
+                icon: Icon(
+                  isFollowing ? Icons.notifications : Icons.notifications_outlined,
+                  color: isFollowing
+                      ? Theme.of(context).colorScheme.primary
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              ],
-            ),
+                onPressed: () => _toggleCityFollowing(context, group.cityId!, !isFollowing),
+                tooltip: isFollowing ? 'Dejar de seguir ciudad' : 'Seguir ciudad',
+              ),
+            ],
           ),
         );
+      },
+    );
+  }
+  
+  Future<void> _toggleCityFollowing(BuildContext context, int cityId, bool newValue) async {
+    // Feedback háptico
+    HapticFeedback.lightImpact();
+    
+    // Guardar en persistencia
+    await _alertsService.setCityFollowed(cityId, newValue);
+    
+    // Actualizar UI
+    setState(() {});
+    
+    // Mostrar feedback visual
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue
+                ? '¡Listo! Te avisaremos de eventos en esta ciudad'
+                : 'Has dejado de seguir esta ciudad',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Usar eventos agrupados por ciudad si están disponibles
+    final eventsByCity = widget.eventsByCity;
+    final events = widget.events ?? [];
+    
+    // Si hay eventos agrupados por ciudad, usar esa estructura
+    if (eventsByCity != null) {
+      // Filtrar grupos que tengan eventos (no mostrar ciudades vacías)
+      final nonEmptyGroups = eventsByCity.where((group) => group.events.isNotEmpty).toList();
+      
+      if (nonEmptyGroups.isEmpty) {
+        return _buildEmptyState(context);
       }
-
-      // Si hay búsqueda activa pero sin resultados, mostrar mensaje con sugerencias
-      // Verificar si debemos mostrar el botón de búsqueda ampliada
-      final shouldShowExpandButton = widget.isRadiusMode &&
-          widget.currentRadiusKm != null &&
-          widget.currentRadiusKm! < 50 &&
-          widget.onExpandRadius != null;
-
+      
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Cabecera con filtro de fecha y botón "Borrar filtros"
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    widget.dateFilterText!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      fontSize: 12,
+                    ),
+                  ),
+                )
+              else
+                const Spacer(),
+              if (widget.onClearFilters != null)
+                TextButton(
+                  onPressed: widget.onClearFilters,
+                  child: const Text('Borrar filtros'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Lista de eventos agrupados por ciudad
+          ...nonEmptyGroups.expand((group) {
+            // Filtrar eventos por categoría si hay filtro activo
+            final filteredEvents = widget.selectedCategoryId == null
+                ? group.events
+                : group.events.where((e) => e.categoryId == widget.selectedCategoryId).toList();
+            
+            if (filteredEvents.isEmpty) return <Widget>[];
+            
+            return [
+              _buildCityHeader(context, group),
+              _buildEventsGrid(context, filteredEvents),
+            ];
+          }),
+        ],
+      );
+    }
+    
+    // Fallback: usar lista plana de eventos (compatibilidad temporal)
+    if (events.isEmpty) {
+      return _buildEmptyState(context);
+    }
+    
+    // Mantener lógica original para eventos planos (compatibilidad)
+    return _buildLegacyEventsList(context, events);
+  }
+  
+  /// Construye el estado vacío
+  Widget _buildEmptyState(BuildContext context) {
+    if (!widget.hasActiveSearch) {
       return Center(
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+          padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                Icons.event_busy,
+                Icons.search_off,
                 size: 64,
                 color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
               ),
               const SizedBox(height: 16),
               Text(
-                'No se encontraron eventos',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                'Utiliza los filtros de arriba para localizar tu localidad o evento',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: Theme.of(context).colorScheme.onSurface,
                 ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
-              if (widget.searchTerm != null && widget.searchTerm!.isNotEmpty) ...[
-                Text(
-                  'No hay resultados para "${widget.searchTerm}"',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
+              Text(
+                'Selecciona una ciudad, categoría o fecha para encontrar planes',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-                const SizedBox(height: 12),
-                _buildSuggestions(context),
-              ] else ...[
-                Text(
-                  shouldShowExpandButton
-                      ? 'No hay planes cerca. ¿Buscar en 50km?'
-                      : 'Prueba cambiando de ciudad o categoría.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 16),
-              // Botón de búsqueda ampliada (solo en modo radio con radio < 50km)
-              if (shouldShowExpandButton)
-                AccessibilityUtils.buttonSemantics(
-                  label: 'Buscar eventos en un radio de 50 kilómetros',
-                  hint: 'Amplía la búsqueda a un radio mayor para encontrar más eventos',
-                  child: ElevatedButton.icon(
-                    onPressed: widget.onExpandRadius,
-                    icon: const Icon(Icons.search, size: 18),
-                    label: const Text('Buscar en 50km'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 20,
-                        vertical: 12,
-                      ),
-                    ),
-                  ),
-                )
-              else if (widget.onClearFilters != null)
-                AccessibilityUtils.buttonSemantics(
-                  label: 'Borrar filtros de búsqueda',
-                  hint: 'Elimina todos los filtros aplicados para ver todos los eventos',
-                  child: OutlinedButton(
-                    onPressed: widget.onClearFilters,
-                    child: const Text('Borrar filtros'),
-                  ),
-                ),
+                textAlign: TextAlign.center,
+              ),
             ],
           ),
         ),
       );
     }
-
-    // Hay eventos: mostramos cabecera con filtro de fecha + botón "Borrar filtros" + grid
+    
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.event_busy,
+              size: 64,
+              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No se encontraron eventos',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            if (widget.searchTerm != null && widget.searchTerm!.isNotEmpty) ...[
+              Text(
+                'No hay resultados para "${widget.searchTerm}"',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              _buildSuggestions(context),
+            ] else ...[
+              Text(
+                'Prueba cambiando de ciudad o categoría.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 16),
+            if (widget.onClearFilters != null)
+              OutlinedButton(
+                onPressed: widget.onClearFilters,
+                child: const Text('Borrar filtros'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  /// Construye el grid de eventos para una sección
+  Widget _buildEventsGrid(BuildContext context, List<Event> events) {
+    return ValueListenableBuilder<Set<String>>(
+      valueListenable: FavoritesService.instance.favoritesNotifier,
+      builder: (context, favorites, _) {
+        return GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 2,
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 8,
+            childAspectRatio: 0.88, // Reducido para dar más espacio vertical al título
+          ),
+          itemCount: events.length,
+          itemBuilder: (context, index) {
+            return _buildEventCard(context, events[index]);
+          },
+        );
+      },
+    );
+  }
+  
+  /// Construye una tarjeta de evento (extraído de la lógica original)
+  Widget _buildEventCard(BuildContext context, Event event) {
+    final isFavorite = FavoritesService.instance.isFavorite(event.id);
+    
+    // Obtener color de categoría
+    Color categoryColor = Colors.grey;
+    if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
+      try {
+        categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+      } catch (e) {
+        if (event.categoryName != null) {
+          categoryColor = _getColorForCategory(event.categoryName!);
+        }
+      }
+    } else if (event.categoryName != null) {
+      categoryColor = _getColorForCategory(event.categoryName!);
+    }
+    
+    final isPast = event.isPast;
+    
+    return Card(
+      margin: EdgeInsets.zero,
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.1),
+      color: Theme.of(context).colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => EventDetailScreen(event: event),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Imagen del evento
+            Expanded(
+              flex: 3,
+              child: Stack(
+                children: [
+                  _buildEventImage(context, event, double.infinity, double.infinity),
+                  // Badge de favorito
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.5),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        isFavorite ? Icons.favorite : Icons.favorite_border,
+                        size: 16,
+                        color: isFavorite ? Colors.red : Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Información del evento
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Título - debe tener espacio prioritario
+                    Expanded(
+                      flex: 2,
+                      child: Text(
+                        event.title,
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                          height: 1.2,
+                          color: isPast
+                              ? Theme.of(context).disabledColor
+                              : Theme.of(context).colorScheme.onSurface,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    // Fecha y categoría en una fila para ahorrar espacio
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          size: 12,
+                          color: isPast
+                              ? Theme.of(context).disabledColor
+                              : Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                        const SizedBox(width: 4),
+                        Flexible(
+                          child: Text(
+                            DateFormat('d MMM', 'es').format(event.startsAt),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: isPast
+                                  ? Theme.of(context).disabledColor
+                                  : Theme.of(context).colorScheme.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        if (widget.showCategory && event.categoryName != null) ...[
+                          const SizedBox(width: 6),
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                event.categoryName!,
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: _getChipTextColor(context, event, categoryColor),
+                                  fontSize: 9,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  /// Construye la lista legacy de eventos (compatibilidad)
+  Widget _buildLegacyEventsList(BuildContext context, List<Event> events) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -376,7 +676,6 @@ class _UpcomingListState extends State<UpcomingList> {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Mostrar filtro de fecha activo si está disponible
             if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
               Expanded(
                 child: Text(
@@ -390,258 +689,14 @@ class _UpcomingListState extends State<UpcomingList> {
             else
               const Spacer(),
             if (widget.onClearFilters != null)
-              AccessibilityUtils.buttonSemantics(
-                label: 'Borrar filtros de búsqueda',
-                hint: 'Elimina todos los filtros aplicados para ver todos los eventos',
-                child: TextButton(
-                  onPressed: widget.onClearFilters,
-                  child: const Text('Borrar filtros'),
-                ),
+              TextButton(
+                onPressed: widget.onClearFilters,
+                child: const Text('Borrar filtros'),
               ),
           ],
         ),
         const SizedBox(height: 8),
-        ValueListenableBuilder<Set<String>>(
-          valueListenable: FavoritesService.instance.favoritesNotifier,
-          builder: (context, favorites, _) {
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 8, // Espaciado entre eventos para mejor separación visual
-                childAspectRatio: 1.02, // Ratio ajustado para eliminar overflow (tarjetas más anchas, menos altas)
-              ),
-              itemCount: widget.events.length,
-              itemBuilder: (context, index) {
-                final event = widget.events[index];
-                final isFavorite = FavoritesService.instance.isFavorite(event.id);
-
-                // Obtener color de categoría
-                Color categoryColor = Colors.grey; // Color por defecto
-                if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
-                  try {
-                    categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
-                  } catch (e) {
-                    // Si falla el parse, usar color por defecto basado en el nombre
-                    if (event.categoryName != null) {
-                      categoryColor = _getColorForCategory(event.categoryName!);
-                    }
-                  }
-                } else if (event.categoryName != null) {
-                  // Si no hay color, usar color por defecto basado en el nombre de la categoría
-                  categoryColor = _getColorForCategory(event.categoryName!);
-                }
-                
-                final isPast = event.isPast;
-                
-                return Card(
-                  margin: EdgeInsets.zero,
-                  elevation: 2, // Sombra sutil para dar profundidad
-                  shadowColor: Colors.black.withOpacity(0.1),
-                  color: Theme.of(context).colorScheme.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => EventDetailScreen(event: event),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Stack(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              // Imagen en la parte superior
-                              Container(
-                                height: 105,
-                                width: double.infinity,
-                                child: _buildEventImage(context, event, double.infinity, 105),
-                              ),
-                              // Título, fecha y categoría debajo con fondo grisáceo
-                              Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.grey.shade900.withOpacity(0.9)
-                                      : Colors.grey.shade100,
-                                  borderRadius: const BorderRadius.only(
-                                    bottomLeft: Radius.circular(16),
-                                    bottomRight: Radius.circular(16),
-                                  ),
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: Theme.of(context).dividerColor.withOpacity(0.1),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                padding: const EdgeInsets.only(left: 10, top: 6, right: 10, bottom: 6), // Padding inferior ajustado para evitar overflow
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          height: 30.0, // Altura fija para 2 líneas (ligeramente reducida para evitar overflow)
-                                          child: Text(
-                                            event.title,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
-                                              height: 1.2,
-                                              color: isPast
-                                                  ? Theme.of(context).disabledColor
-                                                  : Theme.of(context).colorScheme.onSurface,
-                                            ),
-                                            maxLines: 2, // Dos líneas máximo
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4), // Reducido de 5 a 4
-                                        // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
-                                        Text(
-                                          () {
-                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                            final location = event.cityName ?? '';
-                                            if (location.isNotEmpty) {
-                                              return "$fullDate · $fullHour · $location";
-                                            }
-                                            return "$fullDate · $fullHour";
-                                          }(),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            fontSize: 10,
-                                            height: 1.1,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                    // Chips de categoría (discreto, con baja opacidad) - Light Pill Style
-                                    // Reservar espacio para hasta 2 categorías + espacio visual
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 1), // Espacio entre texto y chips
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          // Primera categoría (si existe)
-                                          if (widget.showCategory && event.categoryName != null)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                              decoration: BoxDecoration(
-                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                event.categoryName!,
-                                                style: TextStyle(
-                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 0.1,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          // Espacio entre primera y segunda categoría
-                                          const SizedBox(height: 4), // Espacio entre categorías
-                                          // Segunda categoría (placeholder para futura implementación)
-                                          // Aquí se mostrará la segunda categoría cuando se implemente múltiples categorías
-                                          const SizedBox(height: 4), // Espacio visual adicional para mantener distancia
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Etiqueta FINALIZADO en rojo (si es pasado)
-                          if (isPast)
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'FINALIZADO',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          // Icono de favorito en la esquina superior derecha
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: AccessibilityUtils.buttonSemantics(
-                              label: isFavorite 
-                                  ? 'Quitar de favoritos: ${event.title}' 
-                                  : 'Agregar a favoritos: ${event.title}',
-                              hint: isFavorite 
-                                  ? 'Toca para quitar este evento de tus favoritos' 
-                                  : 'Toca para agregar este evento a tus favoritos',
-                              child: Material(
-                                color: Colors.transparent,
-                                child: InkWell(
-                                  onTap: () async {
-                                    await FavoritesService.instance.toggleFavorite(event.id);
-                                    if (mounted) {
-                                      setState(() {});
-                                    }
-                                  },
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Container(
-                                    padding: const EdgeInsets.all(6),
-                                    decoration: BoxDecoration(
-                                      color: Colors.black.withOpacity(0.5),
-                                      shape: BoxShape.circle,
-                                    ),
-                                    child: Icon(
-                                      isFavorite ? Icons.favorite : Icons.favorite_border,
-                                      color: isFavorite ? Colors.red : Colors.white,
-                                      size: 16,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        ),
+        _buildEventsGrid(context, events),
       ],
     );
   }
