@@ -9,17 +9,22 @@ import GoogleMaps
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
   ) -> Bool {
     // Inicializar Google Maps explícitamente
-    // Primero intentar leer desde Info.plist
-    if let path = Bundle.main.path(forResource: "Info", ofType: "plist"),
+    // La API Key debe venir de un archivo de configuración no versionado
+    // o de variables de entorno en producción
+    if let path = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist"),
        let dict = NSDictionary(contentsOfFile: path),
        let apiKey = dict["GMSApiKey"] as? String, !apiKey.isEmpty {
       GMSServices.provideAPIKey(apiKey)
+      print("✅ Google Maps API Key configurada desde GoogleService-Info.plist")
+    } else if let infoPath = Bundle.main.path(forResource: "Info", ofType: "plist"),
+              let infoDict = NSDictionary(contentsOfFile: infoPath),
+              let apiKey = infoDict["GMSApiKey"] as? String, !apiKey.isEmpty {
+      GMSServices.provideAPIKey(apiKey)
       print("✅ Google Maps API Key configurada desde Info.plist")
     } else {
-      // Si no se encuentra en Info.plist, intentar la key hardcodeada (fallback)
-      let apiKey = "AIzaSyB-LWdftqdYCjv3QgsUJNI2TeyA1ALCPsc"
-      GMSServices.provideAPIKey(apiKey)
-      print("⚠️ Google Maps API Key configurada desde código (fallback)")
+      // En producción, esto debe fallar si no hay key configurada
+      // NO usar fallback hardcodeado por seguridad
+      fatalError("❌ GOOGLE_MAPS_API_KEY no configurada. Configura GMSApiKey en GoogleService-Info.plist o Info.plist")
     }
     
     GeneratedPluginRegistrant.register(with: self)

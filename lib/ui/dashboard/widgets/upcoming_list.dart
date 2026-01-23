@@ -696,7 +696,270 @@ class _UpcomingListState extends State<UpcomingList> {
           ],
         ),
         const SizedBox(height: 8),
-        _buildEventsGrid(context, events),
+        ValueListenableBuilder<Set<String>>(
+          valueListenable: FavoritesService.instance.favoritesNotifier,
+          builder: (context, favorites, _) {
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 8, // Espaciado entre eventos para mejor separación visual
+                childAspectRatio: 1.02, // Ratio ajustado para eliminar overflow (tarjetas más anchas, menos altas)
+              ),
+              itemCount: events.length,
+              itemBuilder: (context, index) {
+                final event = events[index];
+                final isFavorite = FavoritesService.instance.isFavorite(event.id);
+
+                // Obtener color de categoría
+                Color categoryColor = Colors.grey; // Color por defecto
+                if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
+                  try {
+                    categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+                  } catch (e) {
+                    // Si falla el parse, usar color por defecto basado en el nombre
+                    if (event.categoryName != null) {
+                      categoryColor = _getColorForCategory(event.categoryName!);
+                    }
+                  }
+                } else if (event.categoryName != null) {
+                  // Si no hay color, usar color por defecto basado en el nombre de la categoría
+                  categoryColor = _getColorForCategory(event.categoryName!);
+                }
+                
+                final isPast = event.isPast;
+                
+                return Card(
+                  margin: EdgeInsets.zero,
+                  elevation: 2, // Sombra sutil para dar profundidad
+                  shadowColor: Colors.black.withOpacity(0.1),
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EventDetailScreen(event: event),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(16),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.start,
+                            children: [
+                              // Imagen en la parte superior
+                              Container(
+                                height: 105,
+                                width: double.infinity,
+                                child: _buildEventImage(context, event, double.infinity, 105),
+                              ),
+                              // Título, fecha y categoría debajo con fondo grisáceo
+                              Container(
+                                width: double.infinity,
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.grey.shade900.withOpacity(0.9)
+                                      : Colors.grey.shade100,
+                                  borderRadius: const BorderRadius.only(
+                                    bottomLeft: Radius.circular(16),
+                                    bottomRight: Radius.circular(16),
+                                  ),
+                                  border: Border(
+                                    top: BorderSide(
+                                      color: Theme.of(context).dividerColor.withOpacity(0.1),
+                                      width: 0.5,
+                                    ),
+                                  ),
+                                ),
+                                padding: const EdgeInsets.only(left: 10, top: 6, right: 10, bottom: 6), // Padding inferior ajustado para evitar overflow
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        SizedBox(
+                                          height: 30.0, // Altura fija para 2 líneas (ligeramente reducida para evitar overflow)
+                                          child: Text(
+                                            event.title,
+                                            style: TextStyle(
+                                              fontWeight: FontWeight.w600,
+                                              fontSize: 13,
+                                              height: 1.2,
+                                              color: isPast
+                                                  ? Theme.of(context).disabledColor
+                                                  : Theme.of(context).colorScheme.onSurface,
+                                            ),
+                                            maxLines: 2, // Dos líneas máximo
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4), // Reducido de 5 a 4
+                                        // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
+                                        Text(
+                                          () {
+                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
+                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
+                                            final location = event.cityName ?? '';
+                                            if (location.isNotEmpty) {
+                                              return "$fullDate · $fullHour · $location";
+                                            }
+                                            return "$fullDate · $fullHour";
+                                          }(),
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                            fontSize: 10,
+                                            height: 1.1,
+                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                    // Chips de categoría (discreto, con baja opacidad) - Light Pill Style
+                                    // Reservar espacio para hasta 2 categorías + espacio visual
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 1), // Espacio entre texto y chips
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          // Primera categoría (si existe)
+                                          if (widget.showCategory && event.categoryName != null)
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
+                                                borderRadius: BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                event.categoryName!,
+                                                style: TextStyle(
+                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
+                                                  fontSize: 9,
+                                                  fontWeight: FontWeight.w600,
+                                                  letterSpacing: 0.1,
+                                                ),
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          // Espacio entre primera y segunda categoría
+                                          const SizedBox(height: 4), // Espacio entre categorías
+                                          // Segunda categoría (si existe)
+                                          if (widget.showCategory && event.secondaryCategoryName != null)
+                                            Builder(
+                                              builder: (context) {
+                                                Color secondaryCategoryColor = Colors.grey; // Color por defecto
+                                                if (event.secondaryCategoryColor != null && event.secondaryCategoryColor!.isNotEmpty) {
+                                                  try {
+                                                    secondaryCategoryColor = Color(int.parse(event.secondaryCategoryColor!.replaceFirst('#', '0xFF')));
+                                                  } catch (e) {
+                                                    secondaryCategoryColor = Colors.grey;
+                                                  }
+                                                }
+                                                
+                                                return Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: _getChipColor(context, event, secondaryCategoryColor.withOpacity(0.12)),
+                                                    borderRadius: BorderRadius.circular(12),
+                                                  ),
+                                                  child: Text(
+                                                    event.secondaryCategoryName!,
+                                                    style: TextStyle(
+                                                      color: _getChipTextColor(context, event, _darkenColor(secondaryCategoryColor, 0.3)),
+                                                      fontSize: 9,
+                                                      fontWeight: FontWeight.w600,
+                                                      letterSpacing: 0.1,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          const SizedBox(height: 4), // Espacio visual adicional para mantener distancia
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          // Etiqueta FINALIZADO en rojo (si es pasado)
+                          if (isPast)
+                            Positioned(
+                              top: 8,
+                              left: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withOpacity(0.9),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: const Text(
+                                  'FINALIZADO',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 9,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          // Icono de favorito en la esquina superior derecha
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: InkWell(
+                                onTap: () async {
+                                  await FavoritesService.instance.toggleFavorite(event.id);
+                                  if (mounted) {
+                                    setState(() {});
+                                  }
+                                },
+                                borderRadius: BorderRadius.circular(20),
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                                    color: isFavorite ? Colors.red : Colors.white,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ],
     );
   }

@@ -8,6 +8,9 @@ class Event {
   final String? categoryName;
   final String? categoryIcon; // <-- importante
   final String? categoryColor;
+  final String? secondaryCategoryName; // Segunda categoría (opcional)
+  final String? secondaryCategoryIcon;
+  final String? secondaryCategoryColor;
   final DateTime startsAt;
   final String? place;
   final String? imageUrl;
@@ -50,6 +53,9 @@ class Event {
     this.categoryName,
     this.categoryIcon, // <-- importante
     this.categoryColor,
+    this.secondaryCategoryName,
+    this.secondaryCategoryIcon,
+    this.secondaryCategoryColor,
     this.place,
     this.imageUrl,
     this.categoryId,
@@ -76,6 +82,9 @@ class Event {
       categoryName: m['category_name'] as String?,
       categoryIcon: m['category_icon'] as String?, // <-- importante
       categoryColor: m['category_color'] as String?,
+      secondaryCategoryName: m['secondary_category_name'] as String?,
+      secondaryCategoryIcon: m['secondary_category_icon'] as String?,
+      secondaryCategoryColor: m['secondary_category_color'] as String?,
       place: m['place'] as String?,
       imageUrl: m['image_url'] as String?,
       categoryId: (m['category_id'] as num?)?.toInt(),

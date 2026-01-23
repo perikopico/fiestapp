@@ -28,6 +28,7 @@ import '../../services/favorites_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
 import '../../providers/dashboard_provider.dart';
+import '../onboarding/splash_video_screen.dart';
 import '../../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import '../auth/login_screen.dart';
@@ -312,18 +313,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
       // Después de verificar permisos, establecer el filtro por defecto
       // (7 días si hay permisos, 30 días si no)
       _setDefaultWeekFilter();
-      // IMPORTANTE: Cargar TODOS los datos PRIMERO, luego reproducir el video
-      // Esto asegura que cuando el video termine, la app ya esté completamente cargada
-      _loadAllDataFirst().then((_) {
-        if (!mounted) return;
-        // Sincronizar estado con Provider después de cargar
-        _syncStateWithProvider();
-        
-        // Solo después de cargar todos los datos, inicializar el video
-        if (mounted) {
-          _initializeIntroVideo();
-        }
-      });
+        // IMPORTANTE: Cargar TODOS los datos PRIMERO
+        _loadAllDataFirst().then((_) {
+          if (!mounted) return;
+          // Sincronizar estado con Provider después de cargar
+          _syncStateWithProvider();
+          
+          // Solo inicializar el video si NO se mostró ya en SplashVideoScreen
+          // Importar SplashVideoScreen para acceder al flag estático
+          if (mounted) {
+            // Verificar si el video ya se reprodujo en el splash
+            try {
+              // Usar reflexión o importar directamente
+              final hasPlayedOnce = SplashVideoScreen.hasPlayedOnce;
+              if (!hasPlayedOnce) {
+                // Si no se reprodujo, inicializar el video aquí
+                _initializeIntroVideo();
+              } else {
+                // Si ya se reprodujo, ocultar el overlay y mostrar el diálogo directamente
+                setState(() {
+                  _showIntro = false;
+                  _videoFinished = true;
+                });
+                // Mostrar diálogo de autenticación sin video
+                _showAuthDialogAfterVideo();
+              }
+            } catch (e) {
+              // Si hay error accediendo al flag, no mostrar video (por seguridad)
+              LoggerService.instance.debug('No se pudo verificar estado del video splash', data: {'error': e.toString()});
+              setState(() {
+                _showIntro = false;
+                _videoFinished = true;
+              });
+              _showAuthDialogAfterVideo();
+            }
+          }
+        });
     });
   }
   
@@ -1293,32 +1318,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? _selectedCityIds.toList()
           : (_selectedCityId != null ? <int>[_selectedCityId!] : null);
 
-      // Si hay un searchTerm, no usar radiusKm y center para permitir búsqueda global
-      // Si hay cityIds seleccionados, tampoco usar radiusKm y center
-      final double? radius;
-      dynamic center;
-      
-      if (_searchEventTerm != null && _searchEventTerm!.trim().isNotEmpty) {
-        // Si hay búsqueda de texto, no usar radio para permitir búsqueda global
-        radius = null;
-        center = null;
-      } else if (cityIds != null && cityIds.isNotEmpty) {
-        // Si hay ciudades seleccionadas, no usar radio
-        radius = null;
-        center = null;
-      } else if (_mode == LocationMode.radius && _radiusKm > 0) {
-        // Solo usar radio si estamos en modo radio y no hay búsqueda de texto ni ciudades seleccionadas
-        radius = _radiusKm;
-        if (_userLat != null && _userLng != null) {
-          center = {'lat': _userLat, 'lng': _userLng};
-        } else {
-          // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
-          center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
-        }
-      } else {
-        radius = null;
-        center = null;
-      }
+      // Usar la misma lógica que en _reloadEvents:
+      // cargar todos los eventos relevantes y luego ordenar por distancia en _groupEventsByCity.
+      // No aplicamos un radio fijo aquí para que los filtros de fecha (7 días / 1 mes)
+      // no recorten geográficamente los resultados, solo por rango temporal.
+      final double? radius = null;
+      dynamic center = null;
 
       // Obtener la fecha 'from' efectiva
       // Si se pasa 'from' explícitamente, usarlo; si no, usar _fromDate o hoy por defecto

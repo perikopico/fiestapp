@@ -3,7 +3,15 @@ plugins {
     id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services")
+}
+
+// Aplicar plugin de Google Services solo si existe google-services.json
+val googleServicesJson = file("google-services.json")
+if (googleServicesJson.exists()) {
+    apply(plugin = "com.google.gms.google-services")
+} else {
+    println("⚠️  google-services.json no encontrado. Firebase deshabilitado para esta compilación.")
+    println("💡 Para habilitar Firebase, descarga google-services.json desde Firebase Console y colócalo en android/app/")
 }
 
 // Leer API key desde local.properties

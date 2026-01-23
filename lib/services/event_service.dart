@@ -26,6 +26,8 @@ class EventService {
         .toList();
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías secundarias
+    await _enrichEventsWithSecondaryCategories(events);
     return events;
   }
 
@@ -42,6 +44,8 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías secundarias
+    await _enrichEventsWithSecondaryCategories(events);
     return events;
   }
 
@@ -63,6 +67,8 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías secundarias
+    await _enrichEventsWithSecondaryCategories(events);
     return events;
   }
 
@@ -556,6 +562,120 @@ class EventService {
     } catch (e) {
       LoggerService.instance.error('Error al enriquecer eventos con description', error: e);
       // No lanzar excepción, simplemente continuar sin description
+    }
+  }
+
+  /// Enriquece los eventos con categorías secundarias desde event_categories
+  Future<void> _enrichEventsWithSecondaryCategories(List<Event> events) async {
+    if (events.isEmpty) return;
+
+    try {
+      final eventIds = events.map((e) => e.id).toList();
+      if (eventIds.isEmpty) return;
+
+      // Consultar categorías secundarias desde event_categories (is_primary = false)
+      final batchSize = 50;
+      final secondaryCategoriesMap = <String, Map<String, dynamic>>{};
+
+      for (int i = 0; i < eventIds.length; i += batchSize) {
+        final batch = eventIds.skip(i).take(batchSize).toList();
+        final orCondition = batch.map((id) => 'event_id.eq.$id').join(',');
+
+        final res = await supa
+            .from('event_categories')
+            .select('event_id, category_id')
+            .eq('is_primary', false)
+            .or(orCondition);
+
+        if (res != null && res is List) {
+          for (final row in res) {
+            final eventId = row['event_id'] as String;
+            final categoryId = row['category_id'] as int;
+            
+            // Solo guardar si no existe ya una categoría secundaria (máximo 1)
+            if (!secondaryCategoriesMap.containsKey(eventId)) {
+              secondaryCategoriesMap[eventId] = {'category_id': categoryId};
+            }
+          }
+        }
+      }
+
+      // Si hay categorías secundarias, cargar información completa desde categories
+      if (secondaryCategoriesMap.isNotEmpty) {
+        final categoryIds = secondaryCategoriesMap.values
+            .map((m) => m['category_id'] as int)
+            .toSet()
+            .toList();
+
+        if (categoryIds.isNotEmpty) {
+          final categoryOrCondition = categoryIds.map((id) => 'id.eq.$id').join(',');
+          final categoriesRes = await supa
+              .from('categories')
+              .select('id, name, icon, color')
+              .or(categoryOrCondition);
+
+          if (categoriesRes != null && categoriesRes is List) {
+            final categoriesMap = <int, Map<String, dynamic>>{};
+            for (final cat in categoriesRes) {
+              final catId = cat['id'] as int;
+              categoriesMap[catId] = {
+                'name': cat['name'],
+                'icon': cat['icon'],
+                'color': cat['color'],
+              };
+            }
+
+            // Actualizar el mapa de categorías secundarias con la información completa
+            for (final entry in secondaryCategoriesMap.entries) {
+              final categoryId = secondaryCategoriesMap[entry.key]!['category_id'] as int;
+              if (categoriesMap.containsKey(categoryId)) {
+                final catInfo = categoriesMap[categoryId]!;
+                secondaryCategoriesMap[entry.key] = {
+                  'secondary_category_name': catInfo['name'],
+                  'secondary_category_icon': catInfo['icon'],
+                  'secondary_category_color': catInfo['color'],
+                };
+              }
+            }
+          }
+        }
+
+        // Actualizar los eventos con la información de categorías secundarias
+        for (int i = 0; i < events.length; i++) {
+          final event = events[i];
+          if (secondaryCategoriesMap.containsKey(event.id)) {
+            final secCatInfo = secondaryCategoriesMap[event.id]!;
+            // Crear un nuevo evento con la categoría secundaria
+            final updatedMap = {
+              'id': event.id,
+              'title': event.title,
+              'starts_at': event.startsAt.toIso8601String(),
+              'city_name': event.cityName,
+              'category_name': event.categoryName,
+              'category_icon': event.categoryIcon,
+              'category_color': event.categoryColor,
+              'secondary_category_name': secCatInfo['secondary_category_name'],
+              'secondary_category_icon': secCatInfo['secondary_category_icon'],
+              'secondary_category_color': secCatInfo['secondary_category_color'],
+              'place': event.place,
+              'image_url': event.imageUrl,
+              'category_id': event.categoryId,
+              'city_id': event.cityId,
+              'price': event.price,
+              'maps_url': event.mapsUrl,
+              'description': event.description,
+              'image_alignment': event.imageAlignment,
+              'info_url': event.infoUrl,
+            };
+            // Reemplazar el evento en la lista
+            events[i] = Event.fromMap(updatedMap);
+          }
+        }
+      }
+
+      debugPrint('✅ Enriquecidos ${secondaryCategoriesMap.length} eventos con categorías secundarias');
+    } catch (e) {
+      debugPrint('⚠️ Error al cargar categorías secundarias: $e');
     }
   }
 
