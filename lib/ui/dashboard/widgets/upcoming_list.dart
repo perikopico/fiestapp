@@ -78,6 +78,181 @@ class _UpcomingListState extends State<UpcomingList> {
     return Colors.grey;
   }
 
+  /// Construye chips de categorías (soporta múltiples categorías)
+  List<Widget> _buildCategoryChips(BuildContext context, Event event, Color defaultColor) {
+    final List<Widget> chips = [];
+    
+    // Obtener todas las categorías del evento
+    final allCategories = event.allCategories;
+    
+    if (allCategories.isEmpty) {
+      // Fallback a categoría principal si no hay categorías múltiples
+      if (event.categoryName != null) {
+        final categoryColor = event.categoryColor != null && event.categoryColor!.isNotEmpty
+            ? (() {
+                try {
+                  return Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+                } catch (e) {
+                  return _getColorForCategory(event.categoryName!);
+                }
+              })()
+            : _getColorForCategory(event.categoryName!);
+        
+        chips.add(
+          const SizedBox(width: 6),
+        );
+        chips.add(
+          Flexible(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                event.categoryName!,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: _getChipTextColor(context, event, categoryColor),
+                  fontSize: 9,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ),
+        );
+      }
+      return chips;
+    }
+    
+    // Mostrar todas las categorías (máximo 2)
+    for (int i = 0; i < allCategories.length && i < 2; i++) {
+      final category = allCategories[i];
+      final categoryName = category['name'] as String?;
+      final categoryColorStr = category['color'] as String?;
+      
+      if (categoryName == null) continue;
+      
+      final categoryColor = categoryColorStr != null && categoryColorStr.isNotEmpty
+          ? (() {
+              try {
+                return Color(int.parse(categoryColorStr.replaceFirst('#', '0xFF')));
+              } catch (e) {
+                return _getColorForCategory(categoryName);
+              }
+            })()
+          : _getColorForCategory(categoryName);
+      
+      if (i > 0) {
+        chips.add(const SizedBox(width: 4));
+      } else {
+        chips.add(const SizedBox(width: 6));
+      }
+      
+      chips.add(
+        Flexible(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              categoryName,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: _getChipTextColor(context, event, categoryColor),
+                fontSize: 9,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return chips;
+  }
+
+  /// Construye chips de categorías para usar en Wrap (sin Flexible, para que se vean completos)
+  List<Widget> _buildCategoryChipsForWrap(BuildContext context, Event event, Color defaultColor) {
+    final List<Widget> chips = [];
+    
+    // Obtener todas las categorías del evento
+    final allCategories = event.allCategories;
+    
+    if (allCategories.isEmpty) {
+      // Fallback a categoría principal si no hay categorías múltiples
+      if (event.categoryName != null) {
+        final categoryColor = event.categoryColor != null && event.categoryColor!.isNotEmpty
+            ? (() {
+                try {
+                  return Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
+                } catch (e) {
+                  return _getColorForCategory(event.categoryName!);
+                }
+              })()
+            : _getColorForCategory(event.categoryName!);
+        
+        chips.add(
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(
+              event.categoryName!,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: _getChipTextColor(context, event, categoryColor),
+                fontSize: 9,
+              ),
+            ),
+          ),
+        );
+      }
+      return chips;
+    }
+    
+    // Mostrar todas las categorías (máximo 2)
+    for (int i = 0; i < allCategories.length && i < 2; i++) {
+      final category = allCategories[i];
+      final categoryName = category['name'] as String?;
+      final categoryColorStr = category['color'] as String?;
+      
+      if (categoryName == null) continue;
+      
+      final categoryColor = categoryColorStr != null && categoryColorStr.isNotEmpty
+          ? (() {
+              try {
+                return Color(int.parse(categoryColorStr.replaceFirst('#', '0xFF')));
+              } catch (e) {
+                return _getColorForCategory(categoryName);
+              }
+            })()
+          : _getColorForCategory(categoryName);
+      
+      chips.add(
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          decoration: BoxDecoration(
+            color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: Text(
+            categoryName,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: _getChipTextColor(context, event, categoryColor),
+              fontSize: 9,
+            ),
+          ),
+        ),
+      );
+    }
+    
+    return chips;
+  }
+
   /// Construye sugerencias basadas en el término de búsqueda
   Widget _buildSuggestions(BuildContext context) {
     if (widget.searchTerm == null || widget.searchTerm!.isEmpty) {
@@ -502,7 +677,7 @@ class _UpcomingListState extends State<UpcomingList> {
             crossAxisCount: 2,
             crossAxisSpacing: 12,
             mainAxisSpacing: 8,
-            childAspectRatio: 0.88, // Reducido para dar más espacio vertical al título
+            childAspectRatio: 0.72, // Reducido aún más para dar espacio extra al título
           ),
           itemCount: events.length,
           itemBuilder: (context, index) {
@@ -555,65 +730,109 @@ class _UpcomingListState extends State<UpcomingList> {
           children: [
             // Imagen del evento
             Expanded(
-              flex: 3,
+              flex: 5,
               child: Stack(
                 children: [
                   _buildEventImage(context, event, double.infinity, double.infinity),
-                  // Badge de favorito
+                  // Botón de favorito en la esquina superior izquierda
                   Positioned(
                     top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.5),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                        size: 16,
-                        color: isFavorite ? Colors.red : Colors.white,
+                    left: 8,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: () async {
+                          await FavoritesService.instance.toggleFavorite(event.id);
+                          if (mounted) {
+                            setState(() {});
+                          }
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.5),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                            size: 16,
+                            color: isFavorite ? Colors.red : Colors.white,
+                          ),
+                        ),
                       ),
                     ),
                   ),
+                  // Badge de kilómetros en la esquina superior derecha
+                  if (event.distanceKm != null)
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: Colors.white,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              '${event.distanceKm!.round()} km',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),
             // Información del evento
             Expanded(
-              flex: 2,
+              flex: 3,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Título - debe tener espacio prioritario
+                    // Título - doble espacio para el nombre (más líneas permitidas)
                     Expanded(
-                      flex: 2,
+                      flex: 4,
                       child: Text(
                         event.title,
                         style: Theme.of(context).textTheme.titleSmall?.copyWith(
                           fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                          height: 1.2,
+                          fontSize: 14,
+                          height: 1.4, // Aumentado para mejor espaciado entre líneas
                           color: isPast
                               ? Theme.of(context).disabledColor
                               : Theme.of(context).colorScheme.onSurface,
                         ),
-                        maxLines: 2,
+                        maxLines: 3, // Aumentado a 3 líneas para evitar cortes
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    // Fecha y categoría en una fila para ahorrar espacio
+                    const SizedBox(height: 3),
+                    // Fecha en una línea
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
                         Icon(
                           Icons.calendar_today,
-                          size: 12,
+                          size: 11,
                           color: isPast
                               ? Theme.of(context).disabledColor
                               : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -626,35 +845,23 @@ class _UpcomingListState extends State<UpcomingList> {
                               color: isPast
                                   ? Theme.of(context).disabledColor
                                   : Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 11,
+                              fontSize: 10,
                             ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (widget.showCategory && event.categoryName != null) ...[
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              child: Text(
-                                event.categoryName!,
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                  color: _getChipTextColor(context, event, categoryColor),
-                                  fontSize: 9,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
+                    // Categorías en una línea separada debajo
+                    if (widget.showCategory) ...[
+                      const SizedBox(height: 2),
+                      Wrap(
+                        spacing: 4,
+                        runSpacing: 2,
+                        children: _buildCategoryChipsForWrap(context, event, categoryColor),
+                      ),
+                    ],
                   ],
                 ),
               ),

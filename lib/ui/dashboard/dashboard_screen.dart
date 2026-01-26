@@ -39,6 +39,9 @@ import '../event/event_detail_screen.dart';
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
 
+/// Logo de la barra superior. Guarda tu PNG en: assets/logo/queplan_logo.png
+const String _kQuePlanLogoAsset = 'assets/logo/queplan_logo.png';
+
 // ==== Estructura para eventos agrupados por ciudad ====
 class CityEventGroup {
   final String cityName;
@@ -288,6 +291,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isVideoInitialized = false; // Estado para saber si el video está listo
   double _videoOpacity = 1.0;
   bool _videoFinished = false; // Estado para saber si el video terminó
+  bool _isVideoInitializing = false; // Protección para evitar inicialización múltiple
 
   @override
   void initState() {
@@ -431,6 +435,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Inicializa el video de introducción como overlay
   /// IMPORTANTE: Este método solo se llama DESPUÉS de que todos los datos estén cargados
   Future<void> _initializeIntroVideo() async {
+    // Protección: evitar inicialización múltiple
+    if (_isVideoInitializing || _isVideoInitialized || _videoController != null) {
+      LoggerService.instance.debug('Video ya está inicializado o en proceso, ignorando llamada duplicada');
+      return;
+    }
+    
+    _isVideoInitializing = true;
+    
     try {
       // Crear el controlador
       _videoController = VideoPlayerController.asset('assets/videos/splash.mp4');
@@ -449,12 +461,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _videoController!.setLooping(false);
         _videoController!.setVolume(0.0);
         
-        // Añadir listener para detectar cuando termine
+        // Añadir listener para detectar cuando termine (solo una vez)
         _videoController!.addListener(_videoListener);
         
         // Marcar video como inicializado ANTES de reproducir
         setState(() {
           _isVideoInitialized = true;
+          _isVideoInitializing = false;
         });
         
         // Pequeño delay para asegurar que el widget esté completamente renderizado
@@ -462,11 +475,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
         await Future.delayed(const Duration(milliseconds: 100));
         
         if (mounted && _videoController != null && _videoController!.value.isInitialized) {
-          // Reproducir automáticamente
-          await _videoController!.play();
+          // Verificar que el video no esté ya reproduciéndose antes de llamar a play()
+          if (!_videoController!.value.isPlaying) {
+            // Reproducir automáticamente (solo una vez)
+            await _videoController!.play();
+            
+            // Timeout de seguridad: si el video no termina en 30 segundos, forzar el cierre
+            // Esto previene que el video se quede pillado
+            final duration = _videoController!.value.duration;
+            final maxDuration = duration > Duration.zero 
+                ? duration + const Duration(seconds: 2) // 2 segundos después del final
+                : const Duration(seconds: 30); // 30 segundos máximo si no se conoce la duración
+            
+            Future.delayed(maxDuration, () {
+              if (mounted && _videoController != null && !_videoFinished) {
+                LoggerService.instance.warning('Timeout de seguridad: forzando cierre del video');
+                _videoFinished = true;
+                _videoController!.removeListener(_videoListener);
+                _fadeOutVideo();
+              }
+            });
+          }
         }
       }
     } catch (e) {
+      _isVideoInitializing = false;
       LoggerService.instance.error('Error al inicializar video de introducción', error: e);
       // Si hay error, ocultar el overlay inmediatamente y mostrar diálogo
       if (mounted) {
@@ -485,13 +518,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _videoListener() {
     if (_videoController == null || !mounted) return;
     
+    // Si ya se procesó el final del video, no hacer nada más
+    if (_videoFinished) return;
+    
     final position = _videoController!.value.position;
     final duration = _videoController!.value.duration;
     
-    // Si el video terminó, iniciar fade out
-    if (duration > Duration.zero && position >= duration) {
-      _videoController!.removeListener(_videoListener);
-      _fadeOutVideo();
+    // Si el video terminó, iniciar fade out (solo una vez)
+    // Usar una tolerancia de 100ms para asegurar que se detecte el final
+    if (duration > Duration.zero) {
+      final difference = duration - position;
+      // Si la diferencia es menor a 100ms, considerar que el video terminó
+      if (difference <= const Duration(milliseconds: 100)) {
+        LoggerService.instance.debug('Video terminado detectado', data: {
+          'position': position.inMilliseconds,
+          'duration': duration.inMilliseconds,
+          'difference': difference.inMilliseconds,
+        });
+        
+        // Marcar como terminado ANTES de remover listener y llamar a fade out
+        _videoFinished = true;
+        
+        // Pausar el video inmediatamente (sin await, ya que es un listener síncrono)
+        _videoController!.pause().catchError((e) {
+          LoggerService.instance.warning('Error al pausar video al finalizar', data: {'error': e.toString()});
+        });
+        
+        // Remover listener inmediatamente para evitar llamadas múltiples
+        _videoController!.removeListener(_videoListener);
+        
+        // Iniciar fade out
+        _fadeOutVideo();
+      }
     }
   }
 
@@ -499,10 +557,20 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _fadeOutVideo() {
     if (!mounted) return;
     
+    // Si ya se completó el fade out, no hacer nada
+    if (_videoFinished && _videoOpacity == 0.0 && !_showIntro) {
+      LoggerService.instance.debug('Fade out ya completado, ignorando llamada');
+      return;
+    }
+    
     // Marcar que el video terminó
-    setState(() {
-      _videoFinished = true;
-    });
+    if (!_videoFinished) {
+      setState(() {
+        _videoFinished = true;
+      });
+    }
+    
+    LoggerService.instance.debug('Iniciando fade out del video');
     
     // Animar opacidad de 1.0 a 0.0 en 500ms
     setState(() {
@@ -510,19 +578,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     });
     
     // Después de la animación, eliminar el widget del video
-    Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted) {
-        setState(() {
-          _showIntro = false;
-        });
-        // Hacer dispose del controlador
-        _videoController?.removeListener(_videoListener);
-        _videoController?.dispose();
-        _videoController = null;
-        
-        // Mostrar diálogo de autenticación después de que el video termine
-        _showAuthDialogAfterVideo();
-      }
+    Future.delayed(const Duration(milliseconds: 500), () async {
+      if (!mounted) return;
+      
+      LoggerService.instance.debug('Completando fade out: ocultando video y haciendo dispose');
+      
+      setState(() {
+        _showIntro = false;
+      });
+      
+        // Pausar el video antes de hacer dispose
+        if (_videoController != null) {
+          try {
+            if (_videoController!.value.isPlaying) {
+              await _videoController!.pause();
+            }
+          } catch (e) {
+            LoggerService.instance.warning('Error al pausar video antes de dispose', data: {'error': e.toString()});
+          }
+          
+          // Hacer dispose del controlador
+          try {
+            _videoController!.removeListener(_videoListener);
+            await _videoController!.dispose();
+          } catch (e) {
+            LoggerService.instance.warning('Error al hacer dispose del video', data: {'error': e.toString()});
+          }
+          _videoController = null;
+        }
+      
+      // Mostrar diálogo de autenticación después de que el video termine
+      _showAuthDialogAfterVideo();
     });
   }
   
@@ -1001,10 +1087,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ? _selectedCityIds.toList()
           : (_selectedCityId != null ? <int>[_selectedCityId!] : null);
 
-      // Si hay permisos de ubicación, cargar TODOS los eventos sin límite de km
-      // Si no hay permisos, usar el modo ciudad normal
-      final double? radius = null; // Ya no usamos límite de km
-      dynamic center = null; // Ya no usamos centro de ubicación
+      // Determinar si usar radio y centro de ubicación para ordenar por distancia
+      // Si hay un searchTerm, no usar radiusKm y center para permitir búsqueda global
+      // Si hay cityIds seleccionados, tampoco usar radiusKm y center
+      final double? radius;
+      dynamic center;
+      
+      if (_searchEventTerm != null && _searchEventTerm!.trim().isNotEmpty) {
+        // Si hay búsqueda de texto, no usar radio para permitir búsqueda global
+        radius = null;
+        center = null;
+      } else if (cityIds != null && cityIds.isNotEmpty) {
+        // Si hay ciudades seleccionadas, no usar radio
+        radius = null;
+        center = null;
+      } else if (_hasLocationPermission && _userLat != null && _userLng != null) {
+        // Si hay permisos de ubicación y ubicación del usuario, usar un radio amplio para ordenar por distancia
+        // Usar un radio grande (100km) para obtener todos los eventos pero ordenados por distancia
+        radius = 100.0; // Radio amplio para ordenar por distancia sin limitar resultados
+        center = {'lat': _userLat, 'lng': _userLng};
+      } else {
+        // Si no hay ubicación, no usar radio
+        radius = null;
+        center = null;
+      }
 
       // Obtener la fecha 'from' efectiva (hoy a las 00:00 por defecto para filtrar eventos pasados)
       final effectiveFrom = _getEffectiveFromDate();
@@ -1100,8 +1206,27 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final cityName = entry.key;
       final cityEvents = entry.value;
       
-      // Ordenar eventos dentro de la ciudad por fecha (cronológico)
-      cityEvents.sort((a, b) => a.startsAt.compareTo(b.startsAt));
+      // Ordenar eventos dentro de la ciudad con jerarquía estricta:
+      // PRIORIDAD 1: Fecha y Hora (ascendente)
+      // PRIORIDAD 2: Distancia (ascendente, solo si misma fecha)
+      cityEvents.sort((a, b) {
+        // CRITERIO PRINCIPAL: Fecha y hora
+        final dateCompare = a.startsAt.compareTo(b.startsAt);
+        if (dateCompare != 0) return dateCompare;
+        
+        // CRITERIO SECUNDARIO: Distancia (solo si misma fecha)
+        final aDistance = a.distanceKm;
+        final bDistance = b.distanceKm;
+        
+        if (aDistance != null && bDistance != null) {
+          return aDistance.compareTo(bDistance);
+        }
+        
+        if (aDistance != null && bDistance == null) return -1;
+        if (aDistance == null && bDistance != null) return 1;
+        
+        return 0;
+      });
       
       // Obtener coordenadas de la ciudad
       final city = cityMap[cityName];
@@ -1261,13 +1386,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
       final next30 = next30DaysRange();
       
       // Comparar fechas para determinar qué filtro se está aplicando
-      // Usar diferencia en milisegundos para comparar (más preciso que normalizar)
-      final isTodayRange = from.difference(today.from).inDays == 0 && 
-                          to.difference(today.to).inMilliseconds.abs() < 1000; // Permitir diferencia de 1 segundo
-      final is7DaysRange = from.difference(next7.from).inDays == 0 && 
-                          to.difference(next7.to).inMilliseconds.abs() < 1000;
-      final is30DaysRange = from.difference(next30.from).inDays == 0 && 
-                           to.difference(next30.to).inMilliseconds.abs() < 1000;
+      // Normalizar fechas a solo día (sin hora) para comparación más robusta
+      final fromDay = DateTime(from.year, from.month, from.day);
+      final toDay = DateTime(to.year, to.month, to.day);
+      final todayFromDay = DateTime(today.from.year, today.from.month, today.from.day);
+      final todayToDay = DateTime(today.to.year, today.to.month, today.to.day);
+      final next7FromDay = DateTime(next7.from.year, next7.from.month, next7.from.day);
+      final next7ToDay = DateTime(next7.to.year, next7.to.month, next7.to.day);
+      final next30FromDay = DateTime(next30.from.year, next30.from.month, next30.from.day);
+      final next30ToDay = DateTime(next30.to.year, next30.to.month, next30.to.day);
+      
+      final isTodayRange = fromDay == todayFromDay && toDay == todayToDay;
+      final is7DaysRange = fromDay == next7FromDay && toDay == next7ToDay;
+      final is30DaysRange = fromDay == next30FromDay && toDay == next30ToDay;
       
       setState(() {
         _fromDate = from;
@@ -1306,15 +1437,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Si hay ciudades seleccionadas, no usar radio
         radius = null;
         center = null;
-      } else if (_mode == LocationMode.radius && _radiusKm > 0) {
-        // Solo usar radio si estamos en modo radio y no hay búsqueda de texto ni ciudades seleccionadas
-        radius = _radiusKm;
-        if (_userLat != null && _userLng != null) {
-          center = {'lat': _userLat, 'lng': _userLng};
-        } else {
-          // Si no hay ubicación del usuario pero estamos en modo radio, usar valores por defecto
-          center = {'lat': 36.1927, 'lng': -5.9219}; // Barbate por defecto
-        }
+      } else if (_hasLocationPermission && _userLat != null && _userLng != null) {
+        // Si hay permisos de ubicación y ubicación del usuario, usar un radio amplio para ordenar por distancia
+        // Usar un radio grande (100km) para obtener todos los eventos pero ordenados por distancia
+        radius = 100.0; // Radio amplio para ordenar por distancia sin limitar resultados
+        center = {'lat': _userLat, 'lng': _userLng};
       } else {
         radius = null;
         center = null;
@@ -1322,9 +1449,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
       // Obtener la fecha 'from' efectiva
       // Si se pasa 'from' explícitamente, usarlo; si no, usar _fromDate o hoy por defecto
-      final effectiveFrom = from ?? _fromDate ?? _getTodayStart();
+      // IMPORTANTE: Cuando se pasa 'from' explícitamente, usarlo directamente sin fallback
+      final effectiveFrom = from != null ? from : (_fromDate ?? _getTodayStart());
       // Si se pasa 'to' explícitamente, usarlo; si no, usar _toDate
-      final effectiveTo = to ?? _toDate;
+      final effectiveTo = to != null ? to : _toDate;
 
       LoggerService.instance.debug(
         '_reloadWithDateRange llamado',
@@ -1359,8 +1487,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _upcomingEvents = events; // nunca null
         _eventsByCity = eventsByCity;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       if (!mounted) return;
+      LoggerService.instance.error(
+        'Error al recargar eventos con rango de fecha',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -1693,6 +1826,32 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  /// Logo para AppBar/SliverAppBar. Si no existe assets/logo/queplan_logo.png, se muestra "QuePlan".
+  /// Escala y recorta el PNG para reducir el padding transparente y que el icono visible llene el espacio.
+  Widget _buildAppBarLogo() {
+    const double logoHeight = 64;
+    const double scale = 2.2;
+    return Center(
+      child: SizedBox(
+        height: logoHeight,
+        width: 220,
+        child: ClipRect(
+          child: Center(
+            child: Transform.scale(
+              scale: scale,
+              child: Image.asset(
+                _kQuePlanLogoAsset,
+                height: logoHeight,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => const Text('QuePlan'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Construye la barra de búsqueda estilo "Fake Search Bar"
   Widget _buildFakeSearchBar() {
     return InkWell(
@@ -1701,26 +1860,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+          color: Colors.white,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-            width: 1,
+            color: Colors.grey.shade300,
+            width: 1.5,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
         child: Row(
           children: [
             Icon(
               Icons.search,
               size: 20,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+              color: Colors.grey.shade600,
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Text(
                 'Buscar ciudad, artista o evento...',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.6),
+                  color: Colors.grey.shade700,
                 ),
               ),
             ),
@@ -1853,6 +2019,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _userLat = pos.latitude;
       _userLng = pos.longitude;
     });
+    // Recargar eventos para aplicar ordenamiento por distancia
+    await _reloadEvents();
     // Solo cargar eventos cercanos si estamos en modo Ciudad
     if (_mode == LocationMode.city) {
       await _loadNearby();
@@ -1968,13 +2136,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 visualDensity: VisualDensity.compact,
                 onSelected: (_) {
                   _onFilterInteraction();
+                  // Calcular el rango de "Hoy" en el momento del clic para asegurar precisión
                   final r = todayRange();
-                  setState(() {
-                    _isToday = true;
-                    _isNextWeekend = false;
-                    _isNext7Days = false;
-                    _isNext30Days = false;
-                  });
+                  // Recargar inmediatamente con el rango calculado (esto actualizará el estado internamente)
                   _reloadWithDateRange(from: r.from, to: r.to);
                 },
               ),
@@ -2496,7 +2660,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     if (_error != null && !_isLoading) {
       return Scaffold(
-        appBar: AppBar(title: const Text('QuePlan')),
+        appBar: AppBar(
+          centerTitle: true,
+          toolbarHeight: 64,
+          title: _buildAppBarLogo(),
+        ),
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -2647,17 +2815,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
             SafeArea(
               child: RefreshIndicator(
-                onRefresh: _reloadEvents,
+                onRefresh: () {
+                  // Si hay un filtro de fecha activo, usar _reloadWithDateRange
+                  if (_fromDate != null || _toDate != null) {
+                    return _reloadWithDateRange(from: _fromDate, to: _toDate);
+                  }
+                  // Si no hay filtro de fecha, usar _reloadEvents
+                  return _reloadEvents();
+                },
                 child: CustomScrollView(
                   slivers: [
               SliverAppBar(
-                title: const Text('QuePlan'),
+                title: _buildAppBarLogo(),
+                centerTitle: true,
                 floating: true,
                 snap: true,
                 elevation: 0,
-                toolbarHeight: 48,
-                collapsedHeight: 48,
-                expandedHeight: 48,
+                toolbarHeight: 64,
+                collapsedHeight: 64,
+                expandedHeight: 64,
                 actions: const [],
               ),
               // Barra de búsqueda visible estilo "Fake Search Bar"

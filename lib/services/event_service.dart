@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode;
 
 import '../models/event.dart';
 import 'auth_service.dart';
@@ -17,7 +17,7 @@ class EventService {
     final r = await supa
         .from('events_view')
         .select(
-          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url',
+          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url, category_ids, category_names, category_icons, category_colors',
         )
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -26,6 +26,8 @@ class EventService {
         .toList();
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías múltiples
+    await _enrichEventsWithMultipleCategories(events);
     return events;
   }
 
@@ -42,6 +44,8 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías múltiples
+    await _enrichEventsWithMultipleCategories(events);
     return events;
   }
 
@@ -63,6 +67,8 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías múltiples
+    await _enrichEventsWithMultipleCategories(events);
     return events;
   }
 
@@ -103,7 +109,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url',
+          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url,category_ids,category_names,category_icons,category_colors',
         );
 
     // Filtros básicos
@@ -120,9 +126,23 @@ class EventService {
         qb = qb.or(orCondition);
       }
     }
-    if (categoryId != null) qb = qb.eq('category_id', categoryId);
+    // Filtro de categoría: buscar en category_id (principal) o en el array category_ids
+    // Nota: PostgREST no soporta directamente filtros en arrays, así que usamos una condición OR
+    // o filtramos en el cliente después de obtener los resultados
+    if (categoryId != null) {
+      // Filtrar por categoría principal (esto captura la mayoría de casos)
+      qb = qb.eq('category_id', categoryId);
+      // Nota: Los eventos con categoría secundaria también se capturarán si tienen
+      // la categoría como principal. Para eventos que solo tienen la categoría como secundaria,
+      // el filtro se aplicará en el cliente después de obtener los resultados.
+    }
     if (from != null) qb = qb.gte('starts_at', from.toIso8601String());
-    if (to != null) qb = qb.lt('starts_at', to.toIso8601String());
+    if (to != null) {
+      // Incluir eventos hasta el final del día 'to'
+      // Agregar 1 día para incluir todos los eventos del día 'to'
+      final toNextDay = DateTime(to.year, to.month, to.day).add(const Duration(days: 1));
+      qb = qb.lt('starts_at', toNextDay.toIso8601String());
+    }
 
     // Búsqueda libre por evento (título, ciudad y lugar/venue)
     if (searchTerm != null && searchTerm.trim().isNotEmpty) {
@@ -165,7 +185,14 @@ class EventService {
       // Aplicar filtros adicionales en el cliente
       final beforeCategoryFilter = events.length;
       if (categoryId != null) {
-        events = events.where((e) => e.categoryId == categoryId).toList();
+        // Filtrar eventos que tengan la categoría (principal o secundaria)
+        events = events.where((e) {
+          // Verificar categoría principal
+          if (e.categoryId == categoryId) return true;
+          // Verificar categorías secundarias
+          if (e.categoryIds != null && e.categoryIds!.contains(categoryId)) return true;
+          return false;
+        }).toList();
         LoggerService.instance.debug(
           'Filtro categoría aplicado',
           data: {
@@ -178,10 +205,13 @@ class EventService {
       
       final beforeDateFilter = events.length;
       if (from != null) {
+        // Incluir eventos que empiezan en 'from' o después
+        // Usar >= en lugar de > para incluir eventos que empiezan exactamente en 'from'
         events = events
             .where(
               (e) =>
-                  e.startsAt.isAfter(from.subtract(const Duration(seconds: 1))),
+                  e.startsAt.isAfter(from.subtract(const Duration(seconds: 1))) ||
+                  e.startsAt.isAtSameMomentAs(from),
             )
             .toList();
         LoggerService.instance.debug(
@@ -195,13 +225,23 @@ class EventService {
       }
       if (to != null) {
         final beforeToFilter = events.length;
-        events = events.where((e) => e.startsAt.isBefore(to)).toList();
+        // Incluir eventos que empiezan antes o igual a 'to'
+        // Para el filtro "Hoy", 'to' es el final del día (23:59:59.999)
+        // Necesitamos incluir todos los eventos que empiezan en ese día o antes
+        // Usar comparación directa: si el evento empieza antes o igual al final del día siguiente, incluirlo
+        final toNextDay = DateTime(to.year, to.month, to.day).add(const Duration(days: 1));
+        events = events.where((e) {
+          // Incluir si el evento empieza antes del día siguiente a 'to'
+          return e.startsAt.isBefore(toNextDay);
+        }).toList();
         LoggerService.instance.debug(
           'Filtro fecha TO aplicado',
           data: {
             'to': to.toIso8601String(),
+            'toNextDay': toNextDay.toIso8601String(),
             'antes': beforeToFilter,
             'después': events.length,
+            'ejemplo_evento_startsAt': beforeToFilter > 0 ? events.isNotEmpty ? events.first.startsAt.toIso8601String() : 'ninguno' : 'ninguno',
           },
         );
       }
@@ -242,20 +282,36 @@ class EventService {
         );
       }
 
-      // Ordenar: PRIORIDAD 1 = Fecha (más pronto primero), PRIORIDAD 2 = Distancia (más cercano primero)
-      // Esto asegura que un evento "Mañana a 10km" aparezca ANTES que "La semana que viene a 1km"
+      // Ordenar eventos con jerarquía estricta de prioridades:
+      // PRIORIDAD 1 (CRITERIO PRINCIPAL): Fecha y Hora (ascendente - más próximos primero)
+      // PRIORIDAD 2 (TIE-BREAKER): Distancia (ascendente - más cercanos primero, solo si misma fecha)
       events.sort((a, b) {
-        // PRIORIDAD 1: Ordenar primero por fecha (más pronto primero)
+        // CRITERIO PRINCIPAL: Comparar por fecha y hora completa (DateTime ya incluye ambos)
+        // DateTime.compareTo() compara fecha Y hora, retornando:
+        // - negativo si a < b (a es anterior)
+        // - cero si a == b (misma fecha y hora)
+        // - positivo si a > b (a es posterior)
         final dateCompare = a.startsAt.compareTo(b.startsAt);
-        if (dateCompare != 0) return dateCompare;
         
-        // PRIORIDAD 2: Si las fechas son iguales, desempatar por distancia (más cercano primero)
-        if (a.distanceKm != null && b.distanceKm != null) {
-          return a.distanceKm!.compareTo(b.distanceKm!);
+        // Si las fechas son diferentes, retornar inmediatamente (prioridad absoluta)
+        if (dateCompare != 0) {
+          return dateCompare;
         }
-        // Si solo uno tiene distancia, el que tiene distancia va primero
-        if (a.distanceKm != null) return -1;
-        if (b.distanceKm != null) return 1;
+        
+        // CRITERIO SECUNDARIO (TIE-BREAKER): Solo se aplica si las fechas son iguales
+        // Comparar por distancia (menor distancia primero)
+        final aDistance = a.distanceKm;
+        final bDistance = b.distanceKm;
+        
+        // Si ambos tienen distancia, comparar numéricamente
+        if (aDistance != null && bDistance != null) {
+          return aDistance.compareTo(bDistance);
+        }
+        
+        // Si solo uno tiene distancia, priorizar el que tiene distancia (más información)
+        if (aDistance != null && bDistance == null) return -1;
+        if (aDistance == null && bDistance != null) return 1;
+        
         // Si ninguno tiene distancia y tienen la misma fecha, mantener orden original
         return 0;
       });
@@ -264,6 +320,8 @@ class EventService {
       await _enrichEventsWithCategory(limitedEvents);
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(limitedEvents);
+      // Enriquecer con categorías múltiples
+      await _enrichEventsWithMultipleCategories(limitedEvents);
       return limitedEvents;
     }
 
@@ -277,15 +335,40 @@ class EventService {
           'eventos': res.length,
         },
       );
+      // Debug: verificar el primer evento solo si hay eventos y estamos en modo debug
+      if (res is List && res.isNotEmpty && kDebugMode) {
+        final firstEvent = res.first as Map<String, dynamic>;
+        LoggerService.instance.debug(
+          'Primer evento - campos disponibles',
+          data: {
+            'eventId': firstEvent['id'],
+            'tiene_category_ids': firstEvent.containsKey('category_ids'),
+            'tiene_category_names': firstEvent.containsKey('category_names'),
+          },
+        );
+      }
+      
       final events = res
           .map((m) => Event.fromMap(m as Map<String, dynamic>))
           .toList();
+      
+      // Aplicar filtro de categoría adicional si es necesario (para capturar categorías secundarias)
+      List<Event> categoryFilteredEvents = events;
+      if (categoryId != null) {
+        categoryFilteredEvents = events.where((e) {
+          // Verificar categoría principal
+          if (e.categoryId == categoryId) return true;
+          // Verificar categorías secundarias
+          if (e.categoryIds != null && e.categoryIds!.contains(categoryId)) return true;
+          return false;
+        }).toList();
+      }
       
       // Filtrar eventos pasados como medida de seguridad adicional
       // Un evento se considera pasado si ya pasaron más de 5 horas del día siguiente
       final now = DateTime.now();
       final todayStart = DateTime(now.year, now.month, now.day);
-      final filteredEvents = events.where((event) {
+      final filteredEvents = categoryFilteredEvents.where((event) {
         // Si el evento es de hoy o futuro, incluirlo
         final eventDate = DateTime(event.startsAt.year, event.startsAt.month, event.startsAt.day);
         if (eventDate.isAfter(todayStart) || eventDate.isAtSameMomentAs(todayStart)) {
@@ -297,6 +380,8 @@ class EventService {
       
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(filteredEvents);
+      // Enriquecer con categorías múltiples
+      await _enrichEventsWithMultipleCategories(filteredEvents);
       return filteredEvents;
     }
     return [];
@@ -319,7 +404,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id, title, place, starts_at, image_url, image_alignment, city_id, city_name, category_id, category_name, category_icon, category_color, price, is_featured, description, info_url',
+          'id, title, place, starts_at, image_url, image_alignment, city_id, city_name, category_id, category_name, category_icon, category_color, price, is_featured, description, info_url, category_ids, category_names, category_icons, category_colors',
         );
 
     // Autocompletado NO debe limitar por ciudad
@@ -354,7 +439,8 @@ class EventService {
     dynamic qb = supa.from('events_view').select('''
     id, title, image_url, maps_url, place, is_featured, price,
     starts_at, city_id, category_id,
-    city_name, category_name, category_icon, category_color, info_url
+    city_name, category_name, category_icon, category_color, info_url,
+    category_ids, category_names, category_icons, category_colors
   ''');
 
     // --- Fechas (en UTC, rango inclusivo/exclusivo) ---
@@ -373,7 +459,14 @@ class EventService {
 
     // --- Filtros por ciudad y categoría ---
     if (cityId != null) qb = qb.eq('city_id', cityId);
-    if (categoryId != null) qb = qb.eq('category_id', categoryId);
+    // Filtro de categoría: buscar en category_id (principal) o en el array category_ids
+    if (categoryId != null) {
+      // Filtrar por categoría principal (esto captura la mayoría de casos)
+      qb = qb.eq('category_id', categoryId);
+      // Nota: Los eventos con categoría secundaria también se capturarán si tienen
+      // la categoría como principal. Para eventos que solo tienen la categoría como secundaria,
+      // el filtro se aplicará en el cliente después de obtener los resultados.
+    }
 
     // --- Búsqueda por texto ---
     if (textQuery != null && textQuery.trim().isNotEmpty) {
@@ -403,6 +496,8 @@ class EventService {
 
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con categorías múltiples
+    await _enrichEventsWithMultipleCategories(events);
 
     LoggerService.instance.debug(
       'listEvents resultados',
@@ -454,34 +549,213 @@ class EventService {
         }
       }
 
-      // Actualizar eventos con información de categoría usando el mismo patrón que _enrichEventsWithDescription
+      // Actualizar eventos con información de categoría solo si falta
       for (int i = 0; i < events.length; i++) {
         final event = events[i];
         if (event.categoryId != null && categoryMap.containsKey(event.categoryId)) {
           final cat = categoryMap[event.categoryId]!;
-          // Crear un nuevo evento con la información de categoría actualizada
-          final updatedMap = {
-            'id': event.id,
-            'title': event.title,
-            'starts_at': event.startsAt.toIso8601String(),
-            'city_name': event.cityName,
-            'category_name': event.categoryName ?? cat['name'],
-            'category_icon': event.categoryIcon ?? cat['icon'],
-            'category_color': event.categoryColor ?? cat['color'],
-            'place': event.place,
-            'image_url': event.imageUrl,
-            'category_id': event.categoryId,
-            'city_id': event.cityId,
-            'price': event.price,
-            'maps_url': event.mapsUrl,
-            'description': event.description,
-            'image_alignment': event.imageAlignment,
-          };
-          events[i] = Event.fromMap(updatedMap);
+          
+          // Solo actualizar si realmente falta información
+          if (event.categoryName == null || event.categoryIcon == null || event.categoryColor == null) {
+            // Crear un nuevo evento con la información de categoría actualizada
+            final updatedMap = {
+              'id': event.id,
+              'title': event.title,
+              'starts_at': event.startsAt.toIso8601String(),
+              'city_name': event.cityName,
+              'category_name': event.categoryName ?? cat['name'],
+              'category_icon': event.categoryIcon ?? cat['icon'],
+              'category_color': event.categoryColor ?? cat['color'],
+              'place': event.place,
+              'image_url': event.imageUrl,
+              'category_id': event.categoryId,
+              'city_id': event.cityId,
+              'price': event.price,
+              'maps_url': event.mapsUrl,
+              'description': event.description,
+              'image_alignment': event.imageAlignment,
+              'info_url': event.infoUrl,
+              'status': event.status,
+              'venue_id': event.venueId,
+              'owner_approved': event.ownerApproved,
+              'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
+              'owner_rejected_reason': event.ownerRejectedReason,
+              'distance_km': event.distanceKm,
+              'category_ids': event.categoryIds,
+              'category_names': event.categoryNames,
+              'category_icons': event.categoryIcons,
+              'category_colors': event.categoryColors,
+            };
+            events[i] = Event.fromMap(updatedMap);
+          }
         }
       }
-    } catch (e) {
-      LoggerService.instance.error('Error al enriquecer eventos con categoría', error: e);
+    } catch (e, stackTrace) {
+      LoggerService.instance.error(
+        'Error al enriquecer eventos con categoría',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // Continuar sin categorías enriquecidas - los eventos seguirán funcionando
+    }
+  }
+
+  /// Enriquece los eventos con categorías múltiples desde event_categories
+  /// Solo consulta la BD si los eventos no tienen ya las categorías múltiples cargadas
+  Future<void> _enrichEventsWithMultipleCategories(List<Event> events) async {
+    if (events.isEmpty) return;
+
+    try {
+      // Filtrar eventos que ya tienen categorías múltiples cargadas desde la vista
+      final eventsNeedingEnrichment = events.where((e) =>
+        e.categoryIds == null || e.categoryIds!.isEmpty || 
+        e.categoryNames == null || e.categoryNames!.isEmpty
+      ).toList();
+
+      // Si todos los eventos ya tienen categorías múltiples, no hacer nada
+      if (eventsNeedingEnrichment.isEmpty) return;
+
+      // Obtener todos los IDs de eventos que necesitan enriquecimiento
+      final eventIds = eventsNeedingEnrichment.map((e) => e.id).toList();
+      if (eventIds.isEmpty) return;
+
+      // Consultar categorías múltiples desde event_categories
+      final batchSize = 50;
+      final Map<String, List<Map<String, dynamic>>> eventCategoriesMap = {};
+
+      for (int i = 0; i < eventIds.length; i += batchSize) {
+        final batch = eventIds.skip(i).take(batchSize).toList();
+        
+        final categoriesRes = await supa
+            .from('event_categories')
+            .select('event_id, category_id, is_primary')
+            .filter('event_id', 'in', '(${batch.join(',')})')
+            .order('is_primary', ascending: false);
+
+        if (categoriesRes is List) {
+          for (final item in categoriesRes) {
+            final map = item as Map<String, dynamic>;
+            final eventId = map['event_id'] as String;
+            final categoryId = (map['category_id'] as num).toInt();
+            final isPrimary = map['is_primary'] as bool? ?? false;
+            
+            if (!eventCategoriesMap.containsKey(eventId)) {
+              eventCategoriesMap[eventId] = [];
+            }
+            eventCategoriesMap[eventId]!.add({
+              'category_id': categoryId,
+              'is_primary': isPrimary,
+            });
+          }
+        }
+      }
+
+      // Obtener información de las categorías
+      final allCategoryIds = <int>{};
+      for (final categories in eventCategoriesMap.values) {
+        for (final cat in categories) {
+          allCategoryIds.add(cat['category_id'] as int);
+        }
+      }
+
+      if (allCategoryIds.isEmpty) return;
+
+      // Cargar información de todas las categorías
+      final categoryInfoMap = <int, Map<String, dynamic>>{};
+      final categoryBatchSize = 50;
+      final categoryIdsList = allCategoryIds.toList();
+
+      for (int i = 0; i < categoryIdsList.length; i += categoryBatchSize) {
+        final batch = categoryIdsList.skip(i).take(categoryBatchSize).toList();
+        final catRes = await supa
+            .from('categories')
+            .select('id, name, icon, color')
+            .filter('id', 'in', '(${batch.join(',')})');
+
+        if (catRes is List) {
+          for (final cat in catRes) {
+            final catMap = cat as Map<String, dynamic>;
+            final id = (catMap['id'] as num).toInt();
+            categoryInfoMap[id] = catMap;
+          }
+        }
+      }
+
+      // Actualizar solo los eventos que necesitan enriquecimiento
+      for (int i = 0; i < events.length; i++) {
+        final event = events[i];
+        
+        // Si el evento ya tiene categorías múltiples, saltarlo
+        if (event.categoryIds != null && event.categoryIds!.isNotEmpty &&
+            event.categoryNames != null && event.categoryNames!.isNotEmpty) {
+          continue;
+        }
+        
+        final categories = eventCategoriesMap[event.id];
+        
+        if (categories != null && categories.isNotEmpty) {
+          // Ordenar por is_primary (principal primero)
+          categories.sort((a, b) => (b['is_primary'] as bool ? 1 : 0).compareTo(a['is_primary'] as bool ? 1 : 0));
+          
+          final categoryIds = <int>[];
+          final categoryNames = <String>[];
+          final categoryIcons = <String>[];
+          final categoryColors = <String>[];
+
+          for (final cat in categories) {
+            final catId = cat['category_id'] as int;
+            final catInfo = categoryInfoMap[catId];
+            
+            if (catInfo != null) {
+              categoryIds.add(catId);
+              categoryNames.add(catInfo['name'] as String? ?? '');
+              categoryIcons.add(catInfo['icon'] as String? ?? '');
+              categoryColors.add(catInfo['color'] as String? ?? '');
+            }
+          }
+
+          if (categoryIds.isNotEmpty) {
+            // Crear un nuevo evento con las categorías múltiples
+            final updatedMap = {
+              'id': event.id,
+              'title': event.title,
+              'starts_at': event.startsAt.toIso8601String(),
+              'city_name': event.cityName,
+              'category_name': event.categoryName,
+              'category_icon': event.categoryIcon,
+              'category_color': event.categoryColor,
+              'place': event.place,
+              'image_url': event.imageUrl,
+              'category_id': event.categoryId,
+              'city_id': event.cityId,
+              'price': event.price,
+              'maps_url': event.mapsUrl,
+              'description': event.description,
+              'image_alignment': event.imageAlignment,
+              'info_url': event.infoUrl,
+              'status': event.status,
+              'venue_id': event.venueId,
+              'owner_approved': event.ownerApproved,
+              'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
+              'owner_rejected_reason': event.ownerRejectedReason,
+              'distance_km': event.distanceKm,
+              // Agregar categorías múltiples
+              'category_ids': categoryIds,
+              'category_names': categoryNames,
+              'category_icons': categoryIcons,
+              'category_colors': categoryColors,
+            };
+            events[i] = Event.fromMap(updatedMap);
+          }
+        }
+      }
+    } catch (e, stackTrace) {
+      LoggerService.instance.error(
+        'Error al enriquecer eventos con categorías múltiples',
+        error: e,
+        stackTrace: stackTrace,
+      );
+      // Continuar sin categorías múltiples - los eventos seguirán funcionando con categoría principal
     }
   }
 
@@ -522,15 +796,20 @@ class EventService {
         }
       }
 
-      // Actualizar los eventos con sus descripciones e info_url
+      // Actualizar los eventos con sus descripciones e info_url solo si hay cambios
       for (int i = 0; i < events.length; i++) {
         final event = events[i];
         final desc = descMap[event.id];
-        final infoUrl = infoUrlMap[event.id] ?? event.infoUrl; // Usar el de la BD o el que ya tenía
+        final infoUrl = infoUrlMap[event.id];
         
-        if (desc != null || descMap.containsKey(event.id) || infoUrl != null) {
-          // Crear un nuevo evento con la descripción e info_url
-          // IMPORTANTE: Incluir todos los campos del evento original, incluyendo info_url
+        // Solo actualizar si hay cambios reales
+        final needsUpdate = (desc != null && desc != event.description) ||
+            (infoUrl != null && infoUrl != event.infoUrl) ||
+            (descMap.containsKey(event.id) && event.description == null);
+        
+        if (needsUpdate) {
+          // Crear un nuevo evento con la descripción e info_url actualizados
+          // IMPORTANTE: Incluir todos los campos del evento original
           final updatedMap = {
             'id': event.id,
             'title': event.title,
@@ -545,16 +824,30 @@ class EventService {
             'city_id': event.cityId,
             'price': event.price,
             'maps_url': event.mapsUrl,
-            'description': desc ?? event.description, // Usar el de la BD o el que ya tenía
+            'description': desc ?? event.description,
             'image_alignment': event.imageAlignment,
-            'info_url': infoUrl, // ✅ Cargar desde BD o preservar el existente
+            'info_url': infoUrl ?? event.infoUrl,
+            'status': event.status,
+            'venue_id': event.venueId,
+            'owner_approved': event.ownerApproved,
+            'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
+            'owner_rejected_reason': event.ownerRejectedReason,
+            'distance_km': event.distanceKm,
+            'category_ids': event.categoryIds,
+            'category_names': event.categoryNames,
+            'category_icons': event.categoryIcons,
+            'category_colors': event.categoryColors,
           };
           // Reemplazar el evento en la lista
           events[i] = Event.fromMap(updatedMap);
         }
       }
-    } catch (e) {
-      LoggerService.instance.error('Error al enriquecer eventos con description', error: e);
+    } catch (e, stackTrace) {
+      LoggerService.instance.error(
+        'Error al enriquecer eventos con description',
+        error: e,
+        stackTrace: stackTrace,
+      );
       // No lanzar excepción, simplemente continuar sin description
     }
   }
@@ -577,10 +870,23 @@ class EventService {
         final r = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url, category_ids, category_names, category_icons, category_colors',
             )
             .filter('id', 'in', '(${batch.join(',')})');
 
+        // Debug: verificar el primer evento solo si hay eventos y estamos en modo debug
+        if (r is List && r.isNotEmpty && kDebugMode) {
+          final firstEvent = r.first as Map<String, dynamic>;
+          LoggerService.instance.debug(
+            'fetchEventsByIds - Primer evento',
+            data: {
+              'eventId': firstEvent['id'],
+              'tiene_category_ids': firstEvent.containsKey('category_ids'),
+              'tiene_category_names': firstEvent.containsKey('category_names'),
+            },
+          );
+        }
+        
         final events = (r as List)
             .map((e) => Event.fromMap(e as Map<String, dynamic>))
             .toList();
@@ -590,10 +896,16 @@ class EventService {
 
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(allEvents);
+      // Enriquecer con categorías múltiples
+      await _enrichEventsWithMultipleCategories(allEvents);
 
       return allEvents;
-    } catch (e) {
-      LoggerService.instance.error('Error al obtener eventos por IDs', error: e);
+    } catch (e, stackTrace) {
+      LoggerService.instance.error(
+        'Error al obtener eventos por IDs',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return [];
     }
   }
@@ -691,28 +1003,39 @@ class EventService {
     final insertResult = await supa.from('events').insert(payload).select('id').single();
     final newEventId = insertResult['id'] as String;
 
-    // Si se proporcionaron múltiples categorías, guardarlas en event_categories
-    if (categoryIds != null && categoryIds.length > 1) {
-      try {
-        // Insertar todas las categorías con is_primary=true para la primera
-        final categoryPayloads = categoryIds.asMap().entries.map((entry) {
-          final index = entry.key;
-          final catId = entry.value;
-          return {
-            'event_id': newEventId,
-            'category_id': catId,
-            'is_primary': index == 0, // La primera es la principal
-          };
-        }).toList();
-
-        if (categoryPayloads.isNotEmpty) {
-          await supa.from('event_categories').insert(categoryPayloads);
-          LoggerService.instance.info('Categorías guardadas en event_categories', data: {'eventId': newEventId, 'count': categoryPayloads.length});
+    // Guardar categorías en event_categories
+    // Siempre guardar la categoría principal, y si hay categorías adicionales, guardarlas también
+    try {
+      final List<Map<String, dynamic>> categoryPayloads = [];
+      
+      // Primero, agregar la categoría principal
+      categoryPayloads.add({
+        'event_id': newEventId,
+        'category_id': categoryId,
+        'is_primary': true,
+      });
+      
+      // Si hay categorías adicionales, agregarlas también (evitando duplicar la principal)
+      if (categoryIds != null && categoryIds.isNotEmpty) {
+        for (final catId in categoryIds) {
+          // Solo agregar si no es la categoría principal
+          if (catId != categoryId) {
+            categoryPayloads.add({
+              'event_id': newEventId,
+              'category_id': catId,
+              'is_primary': false,
+            });
+          }
         }
-      } catch (e) {
-        // Si la tabla event_categories no existe aún, solo loguear el error
-        LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
       }
+
+      if (categoryPayloads.isNotEmpty) {
+        await supa.from('event_categories').insert(categoryPayloads);
+        LoggerService.instance.info('Categorías guardadas en event_categories', data: {'eventId': newEventId, 'count': categoryPayloads.length});
+      }
+    } catch (e) {
+      // Si la tabla event_categories no existe aún, solo loguear el error
+      LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
     }
   }
 
@@ -779,34 +1102,45 @@ class EventService {
     // Actualizar el evento
     await supa.from('events').update(payload).eq('id', eventId);
 
-    // Si se proporcionaron múltiples categorías, guardarlas en event_categories
-    if (categoryIds != null && categoryIds.length > 1) {
-      try {
-        // Primero, eliminar todas las categorías existentes del evento
-        await supa
-            .from('event_categories')
-            .delete()
-            .eq('event_id', eventId);
+    // Actualizar categorías en event_categories
+    // Si se proporcionaron categoryIds, actualizar; si no, solo asegurar que la principal esté
+    try {
+      // Primero, eliminar todas las categorías existentes del evento
+      await supa
+          .from('event_categories')
+          .delete()
+          .eq('event_id', eventId);
 
-        // Insertar todas las categorías con is_primary=true para la primera
-        final categoryPayloads = categoryIds.asMap().entries.map((entry) {
-          final index = entry.key;
-          final catId = entry.value;
-          return {
-            'event_id': eventId,
-            'category_id': catId,
-            'is_primary': index == 0, // La primera es la principal
-          };
-        }).toList();
-
-        if (categoryPayloads.isNotEmpty) {
-          await supa.from('event_categories').insert(categoryPayloads);
-          LoggerService.instance.info('Categorías actualizadas en event_categories', data: {'eventId': eventId, 'count': categoryPayloads.length});
+      final List<Map<String, dynamic>> categoryPayloads = [];
+      
+      // Siempre agregar la categoría principal
+      categoryPayloads.add({
+        'event_id': eventId,
+        'category_id': categoryId,
+        'is_primary': true,
+      });
+      
+      // Si hay categorías adicionales, agregarlas también (evitando duplicar la principal)
+      if (categoryIds != null && categoryIds.isNotEmpty) {
+        for (final catId in categoryIds) {
+          // Solo agregar si no es la categoría principal
+          if (catId != categoryId) {
+            categoryPayloads.add({
+              'event_id': eventId,
+              'category_id': catId,
+              'is_primary': false,
+            });
+          }
         }
-      } catch (e) {
-        // Si la tabla event_categories no existe aún, solo loguear el error
-        LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
       }
+
+      if (categoryPayloads.isNotEmpty) {
+        await supa.from('event_categories').insert(categoryPayloads);
+        LoggerService.instance.info('Categorías actualizadas en event_categories', data: {'eventId': eventId, 'count': categoryPayloads.length});
+      }
+    } catch (e) {
+      // Si la tabla event_categories no existe aún, solo loguear el error
+      LoggerService.instance.warning('No se pudieron guardar categorías múltiples', data: {'error': e.toString()});
     }
   }
 
@@ -852,7 +1186,7 @@ class EventService {
       final sameDateQuery = supa
           .from('events_view')
           .select(
-            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url',
+            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url, category_ids, category_names, category_icons, category_colors',
           )
           .eq('city_id', event.cityId!)
           .neq('id', event.id)
@@ -949,6 +1283,8 @@ class EventService {
 
       // Enriquecer con descripciones
       await _enrichEventsWithDescription(duplicates);
+      // Enriquecer con categorías múltiples
+      await _enrichEventsWithMultipleCategories(duplicates);
 
       // Ordenar por proximidad de fecha (mismo día primero, luego por diferencia de días)
       duplicates.sort((a, b) {

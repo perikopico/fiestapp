@@ -1,17 +1,23 @@
 import 'package:intl/intl.dart';
+import 'dart:convert';
 import '../services/favorites_service.dart';
 
 class Event {
   final String id;
   final String title;
   final String? cityName;
-  final String? categoryName;
-  final String? categoryIcon; // <-- importante
-  final String? categoryColor;
+  final String? categoryName; // Categoría principal (para compatibilidad)
+  final String? categoryIcon; // Icono de categoría principal (para compatibilidad)
+  final String? categoryColor; // Color de categoría principal (para compatibilidad)
   final DateTime startsAt;
   final String? place;
   final String? imageUrl;
-  final int? categoryId;
+  final int? categoryId; // ID de categoría principal (para compatibilidad)
+  // Soporte para múltiples categorías (máximo 2)
+  final List<int>? categoryIds; // IDs de todas las categorías (1-2)
+  final List<String>? categoryNames; // Nombres de todas las categorías (1-2)
+  final List<String>? categoryIcons; // Iconos de todas las categorías (1-2)
+  final List<String>? categoryColors; // Colores de todas las categorías (1-2)
   final int? cityId;
   final String? price; // Precio del evento (ej: "Gratis", "18€", "Desde 10€", etc.)
   final String? mapsUrl;
@@ -65,9 +71,70 @@ class Event {
     this.ownerApprovedAt,
     this.ownerRejectedReason,
     this.distanceKm,
+    this.categoryIds,
+    this.categoryNames,
+    this.categoryIcons,
+    this.categoryColors,
   });
 
   factory Event.fromMap(Map<String, dynamic> m) {
+    // Procesar categorías múltiples si vienen como array
+    // Helper function para parsear arrays de diferentes formatos
+    List<T>? _parseArray<T>(dynamic value, T? Function(dynamic) converter) {
+      if (value == null) return null;
+      
+      if (value is List) {
+        return value.map(converter).whereType<T>().toList();
+      }
+      
+      if (value is String) {
+        try {
+          // Intentar parsear como JSON array primero (formato ["1","2"])
+          if (value.startsWith('[') && value.endsWith(']')) {
+            final decoded = jsonDecode(value) as List;
+            return decoded.map(converter).whereType<T>().toList();
+          }
+          // Si no es JSON, intentar formato PostgreSQL array {1,2}
+          else if (value.startsWith('{') && value.endsWith('}')) {
+            final cleaned = value.substring(1, value.length - 1);
+            if (cleaned.isNotEmpty) {
+              return cleaned.split(',').map((e) => converter(e.trim().replaceAll('"', ''))).whereType<T>().toList();
+            }
+          }
+        } catch (e) {
+          // Error silenciado - usar categoría principal si está disponible
+          return null;
+        }
+      }
+      
+      return null;
+    }
+    
+    // Parsear arrays de categorías múltiples de forma optimizada
+    final categoryIds = _parseArray<int>(
+      m['category_ids'],
+      (e) {
+        if (e is num) return e.toInt();
+        if (e is int) return e;
+        return int.tryParse(e.toString());
+      },
+    );
+    
+    final categoryNames = _parseArray<String>(
+      m['category_names'],
+      (e) => e.toString(),
+    );
+    
+    final categoryIcons = _parseArray<String>(
+      m['category_icons'],
+      (e) => e.toString(),
+    );
+    
+    final categoryColors = _parseArray<String>(
+      m['category_colors'],
+      (e) => e.toString(),
+    );
+    
     return Event(
       id: m['id'] as String,
       title: m['title'] as String,
@@ -93,7 +160,55 @@ class Event {
           : null,
       ownerRejectedReason: m['owner_rejected_reason'] as String?,
       distanceKm: (m['distance_km'] as num?)?.toDouble(),
+      categoryIds: categoryIds,
+      categoryNames: categoryNames,
+      categoryIcons: categoryIcons,
+      categoryColors: categoryColors,
     );
+  }
+  
+  /// Obtiene todas las categorías del evento (principal + secundarias)
+  /// Retorna una lista con 1-2 categorías
+  List<Map<String, dynamic>> get allCategories {
+    final List<Map<String, dynamic>> categories = [];
+    
+    // Si tenemos arrays de categorías múltiples, usarlos (ya incluyen todas las categorías)
+    if (categoryIds != null && categoryNames != null && categoryIds!.isNotEmpty) {
+      for (int i = 0; i < categoryIds!.length; i++) {
+        final catId = categoryIds![i];
+        final catName = i < categoryNames!.length ? categoryNames![i] : null;
+        final catIcon = categoryIcons != null && i < categoryIcons!.length ? categoryIcons![i] : null;
+        final catColor = categoryColors != null && i < categoryColors!.length ? categoryColors![i] : null;
+        
+        if (catId != null && catName != null) {
+          categories.add({
+            'id': catId,
+            'name': catName,
+            'icon': catIcon,
+            'color': catColor,
+          });
+        }
+      }
+    }
+    
+    // Si no hay arrays pero sí categoría principal, usar solo esa
+    if (categories.isEmpty && categoryId != null && categoryName != null) {
+      categories.add({
+        'id': categoryId,
+        'name': categoryName,
+        'icon': categoryIcon,
+        'color': categoryColor,
+      });
+    }
+    
+    return categories;
+  }
+  
+  /// Verifica si el evento tiene una categoría específica (por ID)
+  bool hasCategory(int categoryIdToCheck) {
+    if (categoryId == categoryIdToCheck) return true;
+    if (categoryIds != null && categoryIds!.contains(categoryIdToCheck)) return true;
+    return false;
   }
   
   /// Indica si el evento requiere aprobación del dueño del venue
