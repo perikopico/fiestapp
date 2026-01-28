@@ -52,17 +52,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSAppTransportSecurity</key>
-	<dict>
-		<key>NSAllowsArbitraryLoads</key>
-		<true/>
-	</dict>
 	<!-- Google Maps API Key para iOS -->
 	<!-- NOTA: Esta debe ser una API Key DIFERENTE a la de Android -->
-	<!-- Crea una nueva API Key en Google Cloud Console con restricciones solo para iOS -->
+	<!-- La API Key se configura en AppDelegate.swift desde variable de entorno -->
 	<!-- Ver guía: docs/CONFIGURAR_API_KEYS_SEPARADAS.md -->
-	<key>GMSApiKey</key>
-	<string>AIzaSyB-LWdftqdYCjv3QgsUJNI2TeyA1ALCPsc</string>
+	<!-- IMPORTANTE: La API Key ya no debe estar aquí para mayor seguridad -->
 	<!-- Deep Links para OAuth (Supabase) -->
 	<key>CFBundleURLTypes</key>
 	<array>

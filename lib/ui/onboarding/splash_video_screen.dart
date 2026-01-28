@@ -10,6 +10,17 @@ class SplashVideoScreen extends StatefulWidget {
   final Widget nextScreen;
   final bool isDashboard;
   
+  // Flag estático para evitar reproducir múltiples veces
+  static bool _hasPlayedOnce = false;
+  
+  /// Getter público para verificar si el video ya se reprodujo
+  static bool get hasPlayedOnce => _hasPlayedOnce;
+  
+  /// Método para marcar que el video ya se reprodujo (usado internamente)
+  static void markAsPlayed() {
+    _hasPlayedOnce = true;
+  }
+  
   const SplashVideoScreen({
     super.key,
     required this.nextScreen,
@@ -31,14 +42,13 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
   bool _isNextScreenReady = false;
   Map<String, dynamic>? _preloadedData;
   bool _isPreloading = false;
-  static bool _hasPlayedOnce = false; // Flag estático para evitar reproducir múltiples veces
 
   @override
   void initState() {
     super.initState();
     
     // Si ya se reprodujo una vez, navegar directamente
-    if (_hasPlayedOnce) {
+    if (SplashVideoScreen.hasPlayedOnce) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _navigateToNext();
@@ -99,7 +109,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
 
   Future<void> _initializeVideo() async {
     // Si ya se reprodujo una vez, no inicializar de nuevo
-    if (_hasPlayedOnce) {
+    if (SplashVideoScreen.hasPlayedOnce) {
       return;
     }
     
@@ -110,7 +120,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
       
       await _controller!.initialize();
       
-      if (mounted && !_hasPlayedOnce) {
+      if (mounted && !SplashVideoScreen.hasPlayedOnce) {
         setState(() {
           _isInitialized = true;
         });
@@ -139,7 +149,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     } catch (e) {
       LoggerService.instance.error('Error al inicializar el video', error: e);
       // Si hay un error, navegar inmediatamente después de un breve delay
-      if (!_hasPlayedOnce) {
+      if (!SplashVideoScreen.hasPlayedOnce) {
         _timer = Timer(const Duration(milliseconds: 500), () {
           _navigateToNext();
         });
@@ -185,7 +195,7 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     if (!mounted || _hasNavigated) return;
     
     _hasNavigated = true;
-    _hasPlayedOnce = true; // Marcar que ya se reprodujo
+    SplashVideoScreen.markAsPlayed(); // Marcar que ya se reprodujo
     _timer?.cancel();
     _controller?.removeListener(_videoListener);
     _controller?.pause();
