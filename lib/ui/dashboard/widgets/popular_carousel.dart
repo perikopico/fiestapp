@@ -342,22 +342,24 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                             ],
                                           ),
                                         ),
-                                        // Chip de categoría (siempre abajo) - Light Pill Style
+                                        // Chip de categoría (siempre abajo) - Premium: gray-100, gray-600, uniforme
                                         if (event.categoryName != null)
                                           Padding(
                                             padding: const EdgeInsets.only(top: 2),
                                             child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                               decoration: BoxDecoration(
-                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
+                                                color: const Color(0xFFF3F4F6),
                                                 borderRadius: BorderRadius.circular(12),
                                               ),
                                               child: Text(
                                                 event.categoryName!,
                                                 style: TextStyle(
-                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
+                                                  color: event.isPast
+                                                      ? Theme.of(context).disabledColor
+                                                      : const Color(0xFF4B5563),
                                                   fontSize: 8.5,
-                                                  fontWeight: FontWeight.w600,
+                                                  fontWeight: FontWeight.w500,
                                                   letterSpacing: 0.05,
                                                   height: 1.0,
                                                 ),

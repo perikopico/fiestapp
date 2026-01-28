@@ -253,4 +253,13 @@ extension EventFormatting on Event {
   String get formattedTimeOnly {
     return DateFormat('HH:mm').format(startsAt);
   }
+
+  /// Fecha con día de la semana. Ejemplo: "Vie 15 marzo, 20:30"
+  String get formattedDateWithWeekday {
+    try {
+      return DateFormat('EEE d MMM, HH:mm', 'es').format(startsAt);
+    } catch (e) {
+      return DateFormat('EEE d MMM, HH:mm').format(startsAt);
+    }
+  }
 }

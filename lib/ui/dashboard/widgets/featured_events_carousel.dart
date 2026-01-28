@@ -120,18 +120,19 @@ class _FeaturedEventsCarouselState extends State<FeaturedEventsCarousel> {
           children: [
             // Imagen de fondo que ocupa toda la tarjeta
             _buildEventImage(event),
-            // Overlay degradado negro de abajo hacia arriba
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment.topCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.8), // Opaco abajo
-                    Colors.black.withOpacity(0.4), // Medio
-                    Colors.black.withOpacity(0.0), // Transparente arriba
-                  ],
-                  stops: const [0.0, 0.5, 1.0],
+            // Overlay lineal: transparente (arriba) → black/80 (abajo). Protege legibilidad del texto sobre imágenes claras.
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black.withOpacity(0.8),
+                    ],
+                    stops: const [0.0, 1.0],
+                  ),
                 ),
               ),
             ),

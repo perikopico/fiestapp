@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
@@ -44,8 +42,6 @@ class UpcomingList extends StatefulWidget {
 class _UpcomingListState extends State<UpcomingList> {
   final NotificationAlertsService _alertsService = NotificationAlertsService.instance;
   final CategoryService _categoryService = CategoryService();
-  // Cache para distancias calculadas (evita recalcular en cada rebuild)
-  final Map<String, Future<double?>> _distanceCache = {};
 
   Color _getColorForCategory(String categoryName) {
     if (categoryName.isEmpty) return Colors.grey;
@@ -109,22 +105,7 @@ class _UpcomingListState extends State<UpcomingList> {
         );
         chips.add(
           Flexible(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-              decoration: BoxDecoration(
-                color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                event.categoryName!,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: _getChipTextColor(context, event, categoryColor),
-                  fontSize: 9,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            child: _buildPremiumCategoryChip(context, event, event.categoryName!),
           ),
         );
       }
@@ -135,44 +116,12 @@ class _UpcomingListState extends State<UpcomingList> {
     for (int i = 0; i < allCategories.length && i < 2; i++) {
       final category = allCategories[i];
       final categoryName = category['name'] as String?;
-      final categoryColorStr = category['color'] as String?;
-      
       if (categoryName == null) continue;
-      
-      final categoryColor = categoryColorStr != null && categoryColorStr.isNotEmpty
-          ? (() {
-              try {
-                return Color(int.parse(categoryColorStr.replaceFirst('#', '0xFF')));
-              } catch (e) {
-                return _getColorForCategory(categoryName);
-              }
-            })()
-          : _getColorForCategory(categoryName);
-      
-      if (i > 0) {
-        chips.add(const SizedBox(width: 4));
-      } else {
-        chips.add(const SizedBox(width: 6));
-      }
-      
+      if (i > 0) chips.add(const SizedBox(width: 4));
+      else chips.add(const SizedBox(width: 6));
       chips.add(
         Flexible(
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              categoryName,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: _getChipTextColor(context, event, categoryColor),
-                fontSize: 9,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
+          child: _buildPremiumCategoryChip(context, event, categoryName),
         ),
       );
     }
@@ -180,80 +129,44 @@ class _UpcomingListState extends State<UpcomingList> {
     return chips;
   }
 
+  /// Chip de categoría estilo Premium: bg gray-100, text gray-600, uniforme y limpio.
+  Widget _buildPremiumCategoryChip(BuildContext context, Event event, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: event.isPast ? Theme.of(context).disabledColor : const Color(0xFF4B5563),
+          fontSize: 9,
+          fontWeight: FontWeight.w500,
+        ),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
   /// Construye chips de categorías para usar en Wrap (sin Flexible, para que se vean completos)
   List<Widget> _buildCategoryChipsForWrap(BuildContext context, Event event, Color defaultColor) {
     final List<Widget> chips = [];
-    
-    // Obtener todas las categorías del evento
     final allCategories = event.allCategories;
     
     if (allCategories.isEmpty) {
-      // Fallback a categoría principal si no hay categorías múltiples
       if (event.categoryName != null) {
-        final categoryColor = event.categoryColor != null && event.categoryColor!.isNotEmpty
-            ? (() {
-                try {
-                  return Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
-                } catch (e) {
-                  return _getColorForCategory(event.categoryName!);
-                }
-              })()
-            : _getColorForCategory(event.categoryName!);
-        
-        chips.add(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-            decoration: BoxDecoration(
-              color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              event.categoryName!,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: _getChipTextColor(context, event, categoryColor),
-                fontSize: 9,
-              ),
-            ),
-          ),
-        );
+        chips.add(_buildPremiumCategoryChip(context, event, event.categoryName!));
       }
       return chips;
     }
     
-    // Mostrar todas las categorías (máximo 2)
     for (int i = 0; i < allCategories.length && i < 2; i++) {
       final category = allCategories[i];
       final categoryName = category['name'] as String?;
-      final categoryColorStr = category['color'] as String?;
-      
       if (categoryName == null) continue;
-      
-      final categoryColor = categoryColorStr != null && categoryColorStr.isNotEmpty
-          ? (() {
-              try {
-                return Color(int.parse(categoryColorStr.replaceFirst('#', '0xFF')));
-              } catch (e) {
-                return _getColorForCategory(categoryName);
-              }
-            })()
-          : _getColorForCategory(categoryName);
-      
-      chips.add(
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-          decoration: BoxDecoration(
-            color: _getChipColor(context, event, categoryColor).withOpacity(0.2),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: Text(
-            categoryName,
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: _getChipTextColor(context, event, categoryColor),
-              fontSize: 9,
-            ),
-          ),
-        ),
-      );
+      chips.add(_buildPremiumCategoryChip(context, event, categoryName));
     }
     
     return chips;
@@ -837,65 +750,6 @@ class _UpcomingListState extends State<UpcomingList> {
     );
   }
   
-  /// Obtiene la distancia desde el cache o la calcula si no existe
-  Future<double?> _getCachedDistance(Event event) {
-    // Si ya está en cache, retornar el Future existente
-    if (_distanceCache.containsKey(event.id)) {
-      return _distanceCache[event.id]!;
-    }
-    
-    // Calcular y guardar en cache
-    final future = _calculateEventDistance(event);
-    _distanceCache[event.id] = future;
-    return future;
-  }
-  
-  /// Calcula la distancia desde el usuario al evento específico
-  /// IMPORTANTE: Solo calcula usando las coordenadas del evento (event.lat, event.lng)
-  /// NO usa event.distanceKm que es la distancia a la ciudad, no al evento
-  Future<double?> _calculateEventDistance(Event event) async {
-    // SOLO calcular si el evento tiene coordenadas específicas
-    // Si no tiene coordenadas, retornar null (no mostrar distancia)
-    debugPrint('🔍 Calculando distancia para evento ${event.id} - lat: ${event.lat}, lng: ${event.lng}');
-    if (event.lat == null || event.lng == null) {
-      debugPrint('⚠️ Evento ${event.id} (${event.title}) no tiene coordenadas (lat: ${event.lat}, lng: ${event.lng})');
-      return null;
-    }
-    
-    try {
-      // Verificar permisos de ubicación
-      final permission = await Geolocator.checkPermission();
-      if (permission != LocationPermission.whileInUse && 
-          permission != LocationPermission.always) {
-        debugPrint('⚠️ Sin permisos de ubicación para calcular distancia del evento ${event.id}');
-        return null;
-      }
-      
-      // Obtener ubicación actual del usuario
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.medium,
-      );
-      
-      // Calcular distancia en metros y convertir a kilómetros
-      // Usar las coordenadas específicas del evento (event.lat, event.lng)
-      // Esto calcula la distancia al lugar marcado en maps del evento, no a la ciudad
-      final distanceInMeters = Geolocator.distanceBetween(
-        position.latitude,
-        position.longitude,
-        event.lat!,
-        event.lng!,
-      );
-      
-      final distanceKm = distanceInMeters / 1000; // Convertir a km
-      debugPrint('✅ Distancia calculada para evento ${event.id}: ${distanceKm.toStringAsFixed(2)} km');
-      return distanceKm;
-    } catch (e) {
-      // Si hay error al obtener ubicación, no mostrar distancia
-      debugPrint('❌ Error al calcular distancia para evento ${event.id}: $e');
-      return null;
-    }
-  }
-  
   /// Construye una tarjeta de evento con layout horizontal
   Widget _buildEventCard(BuildContext context, Event event) {
     final isFavorite = FavoritesService.instance.isFavorite(event.id);
@@ -1065,93 +919,48 @@ class _UpcomingListState extends State<UpcomingList> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        // Distancia (como chip/pastilla pequeña)
-                        // Verificar primero si el evento tiene coordenadas antes de calcular
-                        Builder(
-                          builder: (context) {
-                            // Si el evento no tiene coordenadas, no mostrar nada
-                            if (event.lat == null || event.lng == null) {
-                              if (kDebugMode) {
-                                debugPrint('⚠️ Evento ${event.id} (${event.title.substring(0, event.title.length > 30 ? 30 : event.title.length)}...) no tiene coordenadas');
-                              }
-                              return const SizedBox.shrink();
-                            }
-                            
-                            // Si tiene coordenadas, calcular y mostrar distancia
-                            return FutureBuilder<double?>(
-                              future: _getCachedDistance(event),
-                              builder: (context, snapshot) {
-                                // Mostrar mientras carga
-                                if (snapshot.connectionState == ConnectionState.waiting) {
-                                  return const SizedBox(
-                                    width: 16,
-                                    height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  );
-                                }
-                                
-                                // Si hay error, mostrar un indicador de debug (solo en modo debug)
-                                if (snapshot.hasError) {
-                                  debugPrint('❌ Error en FutureBuilder de distancia para evento ${event.id}: ${snapshot.error}');
-                                  return const SizedBox.shrink();
-                                }
-                                
-                                final distanceKm = snapshot.data;
-                                if (distanceKm != null && distanceKm > 0) {
-                                  if (kDebugMode) {
-                                    debugPrint('✅ Mostrando chip de distancia: ${distanceKm.toStringAsFixed(2)} km para evento ${event.id}');
-                                  }
-                                  final chipColor = isPast
-                                      ? Theme.of(context).disabledColor.withOpacity(0.15)
-                                      : const Color(0xFF2563EB).withOpacity(0.15); // Azul más visible
-                                  final textColor = isPast
-                                      ? Theme.of(context).disabledColor
-                                      : const Color(0xFF1D4ED8); // Azul un poco más intenso
-                                  
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: chipColor,
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(
-                                        color: isPast
-                                            ? Theme.of(context).disabledColor.withOpacity(0.3)
-                                            : const Color(0xFF2563EB).withOpacity(0.3),
-                                        width: 1,
+                        // Distancia (chip): solo si el API devolvió distanceKm, p. ej. events_within_radius
+                        if (event.distanceKm != null && event.distanceKm! > 0) ...[
+                          Builder(
+                            builder: (context) {
+                              final distanceKm = event.distanceKm!;
+                              final chipColor = isPast
+                                  ? Theme.of(context).disabledColor.withOpacity(0.15)
+                                  : const Color(0xFF2563EB).withOpacity(0.15);
+                              final textColor = isPast
+                                  ? Theme.of(context).disabledColor
+                                  : const Color(0xFF1D4ED8);
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: chipColor,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: isPast
+                                        ? Theme.of(context).disabledColor.withOpacity(0.3)
+                                        : const Color(0xFF2563EB).withOpacity(0.3),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.location_on, size: 13, color: textColor),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${distanceKm.round()} km',
+                                      style: TextStyle(
+                                        color: textColor,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
                                       ),
                                     ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.location_on,
-                                          size: 13,
-                                          color: textColor,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${distanceKm.round()} km',
-                                          style: TextStyle(
-                                            color: textColor,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                }
-                                // Si no hay distancia calculada (permisos denegados, error, etc.)
-                                if (kDebugMode) {
-                                  debugPrint('⚠️ No se pudo calcular distancia para evento ${event.id} (permisos o error)');
-                                }
-                                return const SizedBox.shrink();
-                              },
-                            );
-                          },
-                        ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ],
                     ),
                   ],
@@ -1328,70 +1137,21 @@ class _UpcomingListState extends State<UpcomingList> {
                                         ),
                                       ],
                                     ),
-                                    // Chips de categoría (discreto, con baja opacidad) - Light Pill Style
-                                    // Reservar espacio para hasta 2 categorías + espacio visual
+                                    // Chips de categoría - Premium: gray-100, gray-600, uniformes
                                     Padding(
-                                      padding: const EdgeInsets.only(top: 1), // Espacio entre texto y chips
+                                      padding: const EdgeInsets.only(top: 1),
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          // Primera categoría (si existe)
                                           if (widget.showCategory && event.categoryName != null)
-                                            Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                              decoration: BoxDecoration(
-                                                color: _getChipColor(context, event, categoryColor.withOpacity(0.12)),
-                                                borderRadius: BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                event.categoryName!,
-                                                style: TextStyle(
-                                                  color: _getChipTextColor(context, event, _darkenColor(categoryColor, 0.3)),
-                                                  fontSize: 9,
-                                                  fontWeight: FontWeight.w600,
-                                                  letterSpacing: 0.1,
-                                                ),
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          // Espacio entre primera y segunda categoría
-                                          const SizedBox(height: 4), // Espacio entre categorías
-                                          // Segunda categoría (si existe)
-                                          if (widget.showCategory && event.secondaryCategoryName != null)
-                                            Builder(
-                                              builder: (context) {
-                                                Color secondaryCategoryColor = Colors.grey; // Color por defecto
-                                                if (event.secondaryCategoryColor != null && event.secondaryCategoryColor!.isNotEmpty) {
-                                                  try {
-                                                    secondaryCategoryColor = Color(int.parse(event.secondaryCategoryColor!.replaceFirst('#', '0xFF')));
-                                                  } catch (e) {
-                                                    secondaryCategoryColor = Colors.grey;
-                                                  }
-                                                }
-                                                
-                                                return Container(
-                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                                                  decoration: BoxDecoration(
-                                                    color: _getChipColor(context, event, secondaryCategoryColor.withOpacity(0.12)),
-                                                    borderRadius: BorderRadius.circular(12),
-                                                  ),
-                                                  child: Text(
-                                                    event.secondaryCategoryName!,
-                                                    style: TextStyle(
-                                                      color: _getChipTextColor(context, event, _darkenColor(secondaryCategoryColor, 0.3)),
-                                                      fontSize: 9,
-                                                      fontWeight: FontWeight.w600,
-                                                      letterSpacing: 0.1,
-                                                    ),
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          const SizedBox(height: 4), // Espacio visual adicional para mantener distancia
+                                            _buildPremiumCategoryChip(context, event, event.categoryName!),
+                                          const SizedBox(height: 4),
+                                          if (widget.showCategory &&
+                                              event.categoryNames != null &&
+                                              event.categoryNames!.length > 1)
+                                            _buildPremiumCategoryChip(context, event, event.categoryNames![1]),
+                                          const SizedBox(height: 4),
                                         ],
                                       ),
                                     ),

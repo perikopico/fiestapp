@@ -2246,7 +2246,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       onTap: _clearFilters,
                       borderRadius: BorderRadius.circular(16),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
                         decoration: BoxDecoration(
                           color: const Color(0xFFFEF2F2), // bg-red-50
                           border: Border.all(

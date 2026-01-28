@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -174,6 +175,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasMapsUrl = widget.event.mapsUrl != null && widget.event.mapsUrl!.isNotEmpty;
+    final hasInfoUrl = widget.event.infoUrl != null &&
+        widget.event.infoUrl!.isNotEmpty &&
+        ValidationUtils.isValidUrl(widget.event.infoUrl!);
+    final showStickyFooter = hasInfoUrl || hasMapsUrl;
     final shareText = [
       '${widget.event.title} - ${widget.event.cityName ?? ''}'.trim(),
       (widget.event.place ?? '').trim(),
@@ -189,7 +194,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         elevation: 0,
         backgroundColor: theme.colorScheme.surface,
         actions: [
-          // Icono de campana para seguir evento
           IconButton(
             icon: Icon(
               _isFollowing ? Icons.notifications : Icons.notifications_outlined,
@@ -200,7 +204,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             onPressed: _toggleFollowing,
             tooltip: _isFollowing ? 'Dejar de seguir' : 'Seguir evento',
           ),
-          // Icono de favoritos
           IconButton(
             icon: Icon(
               _isFavorite ? Icons.favorite : Icons.favorite_border,
@@ -231,9 +234,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
-              if (value == 'report') {
-                _showReportDialog();
-              }
+              if (value == 'report') _showReportDialog();
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
@@ -250,231 +251,323 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Hero image
-            _buildHeroImage(context, theme),
-            const SizedBox(height: 16),
-
-            // 2. Title + chips
-            Text(
-              widget.event.title,
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 8),
-
-            // Chips o pill para eventos sin fecha
-            if (_hasValidDateTime) ...[
-              _buildChipsRow(context, theme),
-            ] else ...[
-              _buildNoDatePill(context, theme),
-            ],
-            const SizedBox(height: 16),
-
-            // 3. Description block
-            _buildDescriptionSection(context, widget.event),
-
-            // 3.5. Info URL block (si existe) - justo después de la descripción
-            if (widget.event.infoUrl != null && widget.event.infoUrl!.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              _buildInfoUrlSection(context, theme),
-            ],
-
-            const SizedBox(height: 16),
-
-            // 4. Location / Map block
-            _buildLocationSection(context, theme, hasMapsUrl),
-
-            const SizedBox(height: 16),
-
-            // 5. Compartir y añadir al calendario
-            _buildActionButtons(context, theme, shareText),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildHeroImage(BuildContext context, ThemeData theme) {
-    if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) {
-      return Builder(
-        builder: (context) {
-          final size = MediaQuery.of(context).size;
-          final isMobile = size.width < 600;
-          final headerHeight = isMobile ? 320.0 : 260.0;
-          
-          return GestureDetector(
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
-                ),
-              );
-            },
-            child: SizedBox(
-              height: headerHeight,
-              width: double.infinity,
-              child: Stack(
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(0),
-                    child: Hero(
-                      tag: 'event-img-${widget.event.id}',
-                      child: Image.network(
-                        widget.event.imageUrl!,
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.cover,
-                        alignment: _alignmentFromString(widget.event.imageAlignment),
-                        errorBuilder: (context, error, stackTrace) {
-                          return Container(
-                            color: theme.colorScheme.surfaceVariant,
-                            alignment: Alignment.center,
-                            child: Icon(
-                              Icons.event,
-                              size: 56,
-                              color: theme.colorScheme.onSurfaceVariant,
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                  ),
-                  // Banner "Ampliar" encima de la imagen
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(
-                            Icons.fullscreen,
-                            color: Colors.white,
-                            size: 16,
+                  _buildHeroImage(context, theme),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          widget.event.title,
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w800,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            'Ampliar',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                        const SizedBox(height: 10),
+                        _buildBlockA(context, theme),
+                        const SizedBox(height: 16),
+                        _buildBlockB(context, theme),
+                        const SizedBox(height: 20),
+                        _buildDescriptionSection(context, widget.event),
+                        const SizedBox(height: 20),
+                        _buildActionButtons(context, theme, shareText),
+                        if (!showStickyFooter) const SizedBox(height: 24),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          );
-        },
-      );
-    } else {
-      return Builder(
-        builder: (context) {
-          final size = MediaQuery.of(context).size;
-          final isMobile = size.width < 600;
-          final headerHeight = isMobile ? 320.0 : 260.0;
-          
-          return SizedBox(
-            height: headerHeight,
-            width: double.infinity,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(0),
-              child: Container(
-                color: theme.colorScheme.surfaceVariant,
-                alignment: Alignment.center,
-                child: Icon(
-                  Icons.event,
-                  size: 56,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
+          ),
+          if (showStickyFooter) _buildStickyFooter(context, theme, hasInfoUrl, hasMapsUrl),
+        ],
+      ),
+    );
+  }
+
+  static const double _heroHeight = 288; // h-72, más inmersiva
+  static const double _heroRadius = 20;  // rounded-b-xl
+
+  Widget _buildHeroImage(BuildContext context, ThemeData theme) {
+    final radius = BorderRadius.only(
+      bottomLeft: Radius.circular(_heroRadius),
+      bottomRight: Radius.circular(_heroRadius),
+    );
+    if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) {
+      return GestureDetector(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
             ),
           );
         },
+        child: SizedBox(
+          height: _heroHeight,
+          width: double.infinity,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ClipRRect(
+                borderRadius: radius,
+                child: Hero(
+                  tag: 'event-img-${widget.event.id}',
+                  child: Image.network(
+                    widget.event.imageUrl!,
+                    width: double.infinity,
+                    height: double.infinity,
+                    fit: BoxFit.cover,
+                    alignment: _alignmentFromString(widget.event.imageAlignment),
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        color: theme.colorScheme.surfaceContainerLowest,
+                        alignment: Alignment.center,
+                        child: Icon(
+                          Icons.event,
+                          size: 56,
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 8,
+                right: 8,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.fullscreen, color: Colors.white, size: 16),
+                      SizedBox(width: 4),
+                      Text(
+                        'Ampliar',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
+    return SizedBox(
+      height: _heroHeight,
+      width: double.infinity,
+      child: ClipRRect(
+        borderRadius: radius,
+        child: Container(
+          color: theme.colorScheme.surfaceContainerLowest,
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.event,
+            size: 56,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    );
   }
 
-  Widget _buildChipsRow(BuildContext context, ThemeData theme) {
+  /// Bloque A: chips pequeños – solo Categoría y Estado/Precio (text-xs, bg-gray-100).
+  Widget _buildBlockA(BuildContext context, ThemeData theme) {
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       children: [
-        if (widget.event.cityName != null)
-          Chip(
-            label: Text(
-              widget.event.cityName!,
-              style: theme.textTheme.bodySmall,
-            ),
-            avatar: const Icon(Icons.place, size: 18),
-            backgroundColor: theme.colorScheme.surfaceVariant,
-            visualDensity: VisualDensity.compact,
-          ),
         if (widget.event.categoryName != null)
-          Chip(
-            label: Text(
-              widget.event.categoryName!,
-              style: theme.textTheme.bodySmall,
-            ),
-            avatar: Icon(iconFromName(widget.event.categoryIcon), size: 18),
-            backgroundColor: theme.colorScheme.surfaceVariant,
-            visualDensity: VisualDensity.compact,
+          _smallChip(
+            theme,
+            icon: iconFromName(widget.event.categoryIcon),
+            label: widget.event.categoryName!,
           ),
-        Chip(
-          label: Text(
-            widget.event.formattedDateTime,
-            style: theme.textTheme.bodySmall,
-          ),
-          avatar: const Icon(Icons.calendar_today, size: 18),
-          backgroundColor: theme.colorScheme.surfaceVariant,
-          visualDensity: VisualDensity.compact,
-        ),
-        // Precio - siempre mostrarlo si existe
         if (widget.event.price != null && widget.event.price!.isNotEmpty)
-          Chip(
-            label: Text(
-              widget.event.price!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: _isPriceFree(widget.event.price!)
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-            avatar: Icon(
-              _isPriceFree(widget.event.price!)
-                  ? Icons.check_circle
-                  : Icons.euro,
-              size: 18,
-              color: _isPriceFree(widget.event.price!)
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurfaceVariant,
-            ),
-            backgroundColor: _isPriceFree(widget.event.price!)
-                ? theme.colorScheme.primary.withOpacity(0.12)
-                : theme.colorScheme.surfaceVariant,
-            visualDensity: VisualDensity.compact,
+          _smallChip(
+            theme,
+            icon: _isPriceFree(widget.event.price!)
+                ? Icons.check_circle_outline
+                : Icons.euro,
+            label: widget.event.price!,
           ),
       ],
+    );
+  }
+
+  Widget _smallChip(ThemeData theme, {required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: const Color(0xFF4B5563)),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: const Color(0xFF4B5563),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Bloque B: filas con iconos – Fecha+Hora y Lugar+Ciudad.
+  Widget _buildBlockB(BuildContext context, ThemeData theme) {
+    final primary = theme.colorScheme.primary;
+    final onSurface = theme.colorScheme.onSurface;
+    final muted = theme.colorScheme.onSurfaceVariant;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_hasValidDateTime) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.calendar_today, size: 24, color: primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    children: [
+                      TextSpan(
+                        text: DateFormat('EEE, d MMM', 'es').format(widget.event.startsAt),
+                      ),
+                      TextSpan(
+                        text: ' · ${DateFormat('HH:mm', 'es').format(widget.event.startsAt)}',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                          color: muted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ] else
+          _buildNoDatePill(context, theme),
+        if (widget.event.place != null && widget.event.place!.isNotEmpty) ...[
+          if (_hasValidDateTime) const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.location_on, size: 24, color: primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: RichText(
+                  text: TextSpan(
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      color: onSurface,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    children: [
+                      TextSpan(text: widget.event.place!),
+                      if (widget.event.cityName != null &&
+                          widget.event.cityName!.isNotEmpty)
+                        TextSpan(
+                          text: ' · ${widget.event.cityName!}',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w500,
+                            color: muted,
+                          ),
+                        ),
+                    ],
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Sticky footer: Más información + Cómo llegar (si aplica).
+  Widget _buildStickyFooter(
+    BuildContext context,
+    ThemeData theme,
+    bool hasInfoUrl,
+    bool hasMapsUrl,
+  ) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        border: Border(top: BorderSide(color: theme.dividerColor)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            if (hasInfoUrl) ...[
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: () => UrlHelper.launchUrlSafely(
+                    context,
+                    widget.event.infoUrl!,
+                    errorMessage: 'No se puede abrir el enlace',
+                  ),
+                  icon: const Icon(Icons.link, size: 20),
+                  label: const Text('Más información'),
+                  style: FilledButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              if (hasMapsUrl) const SizedBox(width: 12),
+            ],
+            if (hasMapsUrl)
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _openDirections,
+                  icon: const Icon(Icons.directions, size: 20),
+                  label: const Text('Cómo llegar'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -506,151 +599,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildLocationSection(BuildContext context, ThemeData theme, bool hasMapsUrl) {
-    final coordinates = _extractCoordinatesFromMapsUrl(widget.event.mapsUrl);
-    
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Título de la sección
-        Text(
-          'Ubicación',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-
-        // Mapa embebido (si hay coordenadas)
-        if (coordinates != null) ...[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              height: 180,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: theme.colorScheme.outline.withOpacity(0.2),
-                ),
-              ),
-              child: GoogleMap(
-                initialCameraPosition: CameraPosition(
-                  target: coordinates,
-                  zoom: 15.0,
-                ),
-                markers: {
-                  Marker(
-                    markerId: MarkerId(widget.event.id),
-                    position: coordinates,
-                  ),
-                },
-                zoomControlsEnabled: false,
-                myLocationButtonEnabled: false,
-                mapToolbarEnabled: false,
-                scrollGesturesEnabled: false,
-                zoomGesturesEnabled: false,
-                tiltGesturesEnabled: false,
-                rotateGesturesEnabled: false,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Información del lugar
-        if (widget.event.place != null && widget.event.place!.isNotEmpty) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.location_on,
-                  size: 20,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Lugar',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        widget.event.place!,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      if (widget.event.cityName != null) ...[
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.event.cityName!,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant.withOpacity(0.7),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 12),
-        ],
-
-        // Botones de acción de mapa
-        if (hasMapsUrl) ...[
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: () => UrlHelper.openGoogleMapsUrl(
-                    context,
-                    widget.event.mapsUrl,
-                    errorMessage: 'No se puede abrir la ubicación del evento',
-                  ),
-                  icon: const Icon(Icons.map, size: 20),
-                  label: const Text('Ver en mapa'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: _openDirections,
-                  icon: const Icon(Icons.directions, size: 20),
-                  label: const Text('Cómo llegar'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ],
     );
   }
 
@@ -766,7 +714,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (mainDesc != null && mainDesc.isNotEmpty) ...[
-          const SizedBox(height: 8),
           Text(
             'Descripción',
             style: theme.textTheme.titleMedium?.copyWith(
@@ -774,18 +721,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              mainDesc,
-              style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
-              softWrap: true,
-              textAlign: TextAlign.start,
-            ),
+          Text(
+            mainDesc,
+            style: theme.textTheme.bodyLarge?.copyWith(height: 1.5),
+            softWrap: true,
+            textAlign: TextAlign.start,
           ),
           const SizedBox(height: 16),
         ],
@@ -797,14 +737,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
           const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.surfaceVariant,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: _buildProgrammingItems(theme, programBlock),
-          ),
+          _buildProgrammingItems(theme, programBlock),
           const SizedBox(height: 16),
         ],
       ],
@@ -849,95 +782,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         );
       }).toList(),
     );
-  }
-
-  Widget _buildInfoUrlSection(BuildContext context, ThemeData theme) {
-    final infoUrl = widget.event.infoUrl;
-    
-    // Validar que la URL existe y es válida
-    if (!ValidationUtils.isNotEmpty(infoUrl) || !ValidationUtils.isValidUrl(infoUrl!)) {
-      LoggerService.instance.warning('infoUrl inválido o vacío', data: {'eventId': widget.event.id});
-      return const SizedBox.shrink();
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Enlace de interés',
-          style: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 12),
-        InkWell(
-          onTap: () => UrlHelper.launchUrlSafely(
-            context,
-            infoUrl,
-            errorMessage: 'No se puede abrir el enlace de interés',
-          ),
-          borderRadius: BorderRadius.circular(12),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: theme.colorScheme.primary.withOpacity(0.3),
-                width: 1.5,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  Icons.link,
-                  color: theme.colorScheme.onPrimaryContainer,
-                  size: 24,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Más información',
-                        style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: theme.colorScheme.onPrimaryContainer,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _getDomainFromUrl(infoUrl),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  Icons.open_in_new,
-                  color: theme.colorScheme.onPrimaryContainer.withOpacity(0.7),
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  String _getDomainFromUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      return uri.host;
-    } catch (e) {
-      return url;
-    }
   }
 
   Future<void> _showReportDialog() async {
