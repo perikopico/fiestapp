@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode;
 import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:geolocator/geolocator.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
 import '../../../services/notification_alerts_service.dart';
+import '../../../services/category_service.dart';
 import '../../../utils/accessibility_utils.dart';
 import '../dashboard_screen.dart'; // Para CityEventGroup
 import 'package:flutter/services.dart';
@@ -40,6 +43,9 @@ class UpcomingList extends StatefulWidget {
 
 class _UpcomingListState extends State<UpcomingList> {
   final NotificationAlertsService _alertsService = NotificationAlertsService.instance;
+  final CategoryService _categoryService = CategoryService();
+  // Cache para distancias calculadas (evita recalcular en cada rebuild)
+  final Map<String, Future<double?>> _distanceCache = {};
 
   Color _getColorForCategory(String categoryName) {
     if (categoryName.isEmpty) return Colors.grey;
@@ -421,18 +427,17 @@ class _UpcomingListState extends State<UpcomingList> {
   }
 
   /// Construye el header de sección para una ciudad con icono de campana
-  Widget _buildCityHeader(BuildContext context, CityEventGroup group) {
+  Widget _buildCityHeader(BuildContext context, CityEventGroup group, {bool isFirst = false}) {
+    // Solo mostrar el nombre de la ciudad (sin distancia)
     String headerText = group.cityName;
-    if (group.isUserLocation) {
-      headerText = '${group.cityName} · Tu ubicación';
-    } else if (group.distanceKm != null) {
-      headerText = '${group.cityName} · ${group.distanceKm!.round()} km';
-    }
+    
+    // Margen superior reducido para el primer grupo (16px) y normal para los demás (24px)
+    final topPadding = isFirst ? 16.0 : 24.0;
     
     // Solo mostrar campana si hay cityId
     if (group.cityId == null) {
       return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+        padding: EdgeInsets.fromLTRB(12, topPadding, 12, 12), // Padding horizontal alineado con tarjetas
         child: Text(
           headerText,
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
@@ -449,7 +454,7 @@ class _UpcomingListState extends State<UpcomingList> {
         final isFollowing = snapshot.data ?? false;
         
         return Padding(
-          padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+          padding: EdgeInsets.fromLTRB(12, topPadding, 12, 12), // Padding horizontal alineado con tarjetas
           child: Row(
             children: [
               Expanded(
@@ -482,25 +487,188 @@ class _UpcomingListState extends State<UpcomingList> {
     // Feedback háptico
     HapticFeedback.lightImpact();
     
-    // Guardar en persistencia
-    await _alertsService.setCityFollowed(cityId, newValue);
-    
-    // Actualizar UI
-    setState(() {});
-    
-    // Mostrar feedback visual
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            newValue
-                ? '¡Listo! Te avisaremos de eventos en esta ciudad'
-                : 'Has dejado de seguir esta ciudad',
+    // Si está desmarcando (newValue = false), siempre desuscribir directamente
+    if (!newValue) {
+      await _alertsService.setCityFollowed(cityId, false);
+      // NOTA: NO desactivar la categoría automáticamente, ya que puede estar activa
+      // para otras ciudades. La categoría se gestiona independientemente.
+      
+      if (!mounted) return;
+      setState(() {});
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Has dejado de seguir esta ciudad'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
           ),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
+        );
+      }
+      return;
+    }
+    
+    // Si está marcando (newValue = true):
+    // CASO A: No hay filtro de categoría activo
+    if (widget.selectedCategoryId == null) {
+      // Suscribir directamente a la ciudad
+      await _alertsService.setCityFollowed(cityId, true);
+      
+      if (!mounted) return;
+      // Actualizar UI
+      setState(() {});
+      
+      // Mostrar feedback visual
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Listo! Te avisaremos de eventos en esta ciudad'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      // CASO B: Hay filtro de categoría activo
+      // Mostrar diálogo con opciones
+      await _showNotificationOptionsDialog(context, cityId, newValue);
+    }
+  }
+  
+  /// Muestra un diálogo modal con opciones de suscripción cuando hay filtro de categoría
+  Future<void> _showNotificationOptionsDialog(
+    BuildContext context,
+    int cityId,
+    bool isCurrentlyFollowing,
+  ) async {
+    // Obtener nombre de la categoría
+    String categoryName = 'esta categoría';
+    try {
+      final categories = await _categoryService.fetchAll();
+      if (categories.isNotEmpty) {
+        final selectedCategory = categories.firstWhere(
+          (c) => c.id == widget.selectedCategoryId,
+          orElse: () => categories.first,
+        );
+        categoryName = selectedCategory.name;
+      }
+    } catch (e) {
+      // Si hay error, usar texto genérico
+    }
+    
+    if (!context.mounted) return;
+    
+    final result = await showModalBottomSheet<String>(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Header
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '¿Cómo quieres recibir notificaciones?',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const Divider(height: 1),
+            // Opción 1: Solo categoría actual
+            ListTile(
+              leading: const Icon(Icons.category),
+              title: Text('Avisarme solo de eventos de $categoryName'),
+              subtitle: const Text('Solo recibirás notificaciones de esta categoría en esta ciudad'),
+              onTap: () => Navigator.of(context).pop('category_only'),
+            ),
+            const Divider(height: 1),
+            // Opción 2: Todos los eventos
+            ListTile(
+              leading: const Icon(Icons.notifications),
+              title: const Text('Avisarme de TODOS los eventos en esta ciudad'),
+              subtitle: const Text('Recibirás notificaciones de todas las categorías'),
+              onTap: () => Navigator.of(context).pop('all_events'),
+            ),
+            const Divider(height: 1),
+            // Opción 3: Cancelar
+            ListTile(
+              leading: const Icon(Icons.cancel),
+              title: const Text('Cancelar'),
+              onTap: () => Navigator.of(context).pop('cancel'),
+            ),
+            const SizedBox(height: 8),
+          ],
         ),
-      );
+      ),
+    );
+    
+    if (!context.mounted || result == null || result == 'cancel') {
+      return;
+    }
+    
+    // Procesar la opción seleccionada
+    if (result == 'category_only') {
+      // Suscribir a la categoría específica en esta ciudad
+      await _subscribeToCategoryInCity(context, cityId, widget.selectedCategoryId!, categoryName);
+    } else if (result == 'all_events') {
+      // Suscribir a todos los eventos de la ciudad
+      await _alertsService.setCityFollowed(cityId, true);
+      if (!mounted) return;
+      setState(() {});
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('¡Listo! Te avisaremos de todos los eventos en esta ciudad'),
+            duration: Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+  
+  /// Suscribe al usuario a notificaciones de una categoría específica en una ciudad
+  Future<void> _subscribeToCategoryInCity(
+    BuildContext context,
+    int cityId,
+    int categoryId,
+    String categoryName,
+  ) async {
+    try {
+      // Suscribir a la categoría
+      await _alertsService.setCategoryAlertEnabled(categoryId, true);
+      
+      // También suscribir a la ciudad (necesario para recibir notificaciones)
+      await _alertsService.setCityFollowed(cityId, true);
+      
+      if (!mounted) return;
+      setState(() {});
+      
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Listo! Te avisaremos de eventos de $categoryName en esta ciudad'),
+            duration: const Duration(seconds: 2),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al configurar notificaciones: ${e.toString()}'),
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -523,42 +691,28 @@ class _UpcomingListState extends State<UpcomingList> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Cabecera con filtro de fecha y botón "Borrar filtros"
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
-                Expanded(
-                  child: Text(
-                    widget.dateFilterText!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                      fontSize: 12,
-                    ),
-                  ),
-                )
-              else
-                const Spacer(),
-              if (widget.onClearFilters != null)
-                TextButton(
-                  onPressed: widget.onClearFilters,
-                  child: const Text('Borrar filtros'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          // Lista de eventos agrupados por ciudad
-          ...nonEmptyGroups.expand((group) {
+          // Lista de eventos agrupados por ciudad (texto redundante eliminado)
+          ...nonEmptyGroups.asMap().entries.expand((entry) {
+            final index = entry.key;
+            final group = entry.value;
+            final isFirst = index == 0;
+            
             // Filtrar eventos por categoría si hay filtro activo
+            // Verificar tanto la categoría principal como las secundarias
             final filteredEvents = widget.selectedCategoryId == null
                 ? group.events
-                : group.events.where((e) => e.categoryId == widget.selectedCategoryId).toList();
+                : group.events.where((e) {
+                    // Verificar categoría principal
+                    if (e.categoryId == widget.selectedCategoryId) return true;
+                    // Verificar categorías secundarias
+                    if (e.categoryIds != null && e.categoryIds!.contains(widget.selectedCategoryId)) return true;
+                    return false;
+                  }).toList();
             
             if (filteredEvents.isEmpty) return <Widget>[];
             
             return [
-              _buildCityHeader(context, group),
+              _buildCityHeader(context, group, isFirst: isFirst),
               _buildEventsGrid(context, filteredEvents),
             ];
           }),
@@ -664,22 +818,17 @@ class _UpcomingListState extends State<UpcomingList> {
     );
   }
   
-  /// Construye el grid de eventos para una sección
+  /// Construye la lista de eventos para una sección (layout horizontal)
   Widget _buildEventsGrid(BuildContext context, List<Event> events) {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: FavoritesService.instance.favoritesNotifier,
       builder: (context, favorites, _) {
-        return GridView.builder(
+        return ListView.separated(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 8,
-            childAspectRatio: 0.72, // Reducido aún más para dar espacio extra al título
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12), // mx-3 (12px) para maximizar ancho
           itemCount: events.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             return _buildEventCard(context, events[index]);
           },
@@ -688,7 +837,66 @@ class _UpcomingListState extends State<UpcomingList> {
     );
   }
   
-  /// Construye una tarjeta de evento (extraído de la lógica original)
+  /// Obtiene la distancia desde el cache o la calcula si no existe
+  Future<double?> _getCachedDistance(Event event) {
+    // Si ya está en cache, retornar el Future existente
+    if (_distanceCache.containsKey(event.id)) {
+      return _distanceCache[event.id]!;
+    }
+    
+    // Calcular y guardar en cache
+    final future = _calculateEventDistance(event);
+    _distanceCache[event.id] = future;
+    return future;
+  }
+  
+  /// Calcula la distancia desde el usuario al evento específico
+  /// IMPORTANTE: Solo calcula usando las coordenadas del evento (event.lat, event.lng)
+  /// NO usa event.distanceKm que es la distancia a la ciudad, no al evento
+  Future<double?> _calculateEventDistance(Event event) async {
+    // SOLO calcular si el evento tiene coordenadas específicas
+    // Si no tiene coordenadas, retornar null (no mostrar distancia)
+    debugPrint('🔍 Calculando distancia para evento ${event.id} - lat: ${event.lat}, lng: ${event.lng}');
+    if (event.lat == null || event.lng == null) {
+      debugPrint('⚠️ Evento ${event.id} (${event.title}) no tiene coordenadas (lat: ${event.lat}, lng: ${event.lng})');
+      return null;
+    }
+    
+    try {
+      // Verificar permisos de ubicación
+      final permission = await Geolocator.checkPermission();
+      if (permission != LocationPermission.whileInUse && 
+          permission != LocationPermission.always) {
+        debugPrint('⚠️ Sin permisos de ubicación para calcular distancia del evento ${event.id}');
+        return null;
+      }
+      
+      // Obtener ubicación actual del usuario
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.medium,
+      );
+      
+      // Calcular distancia en metros y convertir a kilómetros
+      // Usar las coordenadas específicas del evento (event.lat, event.lng)
+      // Esto calcula la distancia al lugar marcado en maps del evento, no a la ciudad
+      final distanceInMeters = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        event.lat!,
+        event.lng!,
+      );
+      
+      final distanceKm = distanceInMeters / 1000; // Convertir a km
+      debugPrint('✅ Distancia calculada para evento ${event.id}: ${distanceKm.toStringAsFixed(2)} km');
+      return distanceKm;
+    } catch (e) {
+      // Si hay error al obtener ubicación, no mostrar distancia
+      debugPrint('❌ Error al calcular distancia para evento ${event.id}: $e');
+      return null;
+    }
+  }
+  
+  /// Construye una tarjeta de evento con layout horizontal
   Widget _buildEventCard(BuildContext context, Event event) {
     final isFavorite = FavoritesService.instance.isFavorite(event.id);
     
@@ -712,7 +920,7 @@ class _UpcomingListState extends State<UpcomingList> {
       margin: EdgeInsets.zero,
       elevation: 2,
       shadowColor: Colors.black.withOpacity(0.1),
-      color: Theme.of(context).colorScheme.surface,
+      color: Colors.white, // Fondo blanco explícito para contraste con fondo gris
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
       ),
@@ -725,148 +933,232 @@ class _UpcomingListState extends State<UpcomingList> {
           );
         },
         borderRadius: BorderRadius.circular(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Imagen del evento
-            Expanded(
-              flex: 5,
-              child: Stack(
-                children: [
-                  _buildEventImage(context, event, double.infinity, double.infinity),
-                  // Botón de favorito en la esquina superior izquierda
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () async {
-                          await FavoritesService.instance.toggleFavorite(event.id);
-                          if (mounted) {
-                            setState(() {});
-                          }
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.5),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isFavorite ? Icons.favorite : Icons.favorite_border,
-                            size: 16,
-                            color: isFavorite ? Colors.red : Colors.white,
-                          ),
-                        ),
-                      ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // IZQUIERDA: Imagen del evento (cuadrada, ratio 4:3)
+              SizedBox(
+                width: 100,
+                height: 100,
+                child: Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: _buildEventImage(context, event, 100, 100),
                     ),
-                  ),
-                  // Badge de kilómetros en la esquina superior derecha
-                  if (event.distanceKm != null)
+                    // Botón de favorito en la esquina superior izquierda
                     Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.7),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.location_on,
+                      top: 4,
+                      left: 4,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () async {
+                            final wasFavorite = FavoritesService.instance.isFavorite(event.id);
+                            await FavoritesService.instance.toggleFavorite(event.id);
+                            if (mounted) {
+                              setState(() {});
+                              // Mostrar mensaje de confirmación
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    wasFavorite
+                                        ? 'Eliminado de favoritos'
+                                        : 'Guardado en favoritos. Te avisaremos antes del evento',
+                                  ),
+                                  duration: const Duration(seconds: 2),
+                                ),
+                              );
+                            }
+                          },
+                          borderRadius: BorderRadius.circular(20),
+                          child: Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(
+                              color: Colors.black.withOpacity(0.5),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Icon(
+                              isFavorite ? Icons.favorite : Icons.favorite_border,
                               size: 14,
-                              color: Colors.white,
+                              color: isFavorite ? Colors.red : Colors.white,
                             ),
-                            const SizedBox(width: 2),
-                            Text(
-                              '${event.distanceKm!.round()} km',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            // Información del evento
-            Expanded(
-              flex: 3,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              const SizedBox(width: 12),
+              // DERECHA: Columna de información
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Título - doble espacio para el nombre (más líneas permitidas)
-                    Expanded(
-                      flex: 4,
-                      child: Text(
-                        event.title,
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                          height: 1.4, // Aumentado para mejor espaciado entre líneas
-                          color: isPast
-                              ? Theme.of(context).disabledColor
-                              : Theme.of(context).colorScheme.onSurface,
-                        ),
-                        maxLines: 3, // Aumentado a 3 líneas para evitar cortes
-                        overflow: TextOverflow.ellipsis,
+                    // Línea 1: Título del evento (Font-bold, text-gray-900)
+                    Text(
+                      event.title,
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        height: 1.3,
+                        color: isPast
+                            ? Theme.of(context).disabledColor
+                            : const Color(0xFF111827), // text-gray-900
                       ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
-                    // Fecha en una línea
+                    const SizedBox(height: 6),
+                    // Línea 2: Chips de categoría (si showCategory es true)
+                    if (widget.showCategory && (event.categoryName != null || event.allCategories.isNotEmpty))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Wrap(
+                          spacing: 4,
+                          runSpacing: 4,
+                          children: _buildCategoryChipsForWrap(context, event, categoryColor),
+                        ),
+                      ),
+                    // Línea 3: Icono de Pin + Nombre del Lugar (text-gray-500, text-xs)
+                    if (event.place != null && event.place!.isNotEmpty)
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.place,
+                            size: 14,
+                            color: const Color(0xFF6B7280).withOpacity(0.8), // text-gray-500
+                          ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              event.place!,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: const Color(0xFF6B7280), // text-gray-500
+                                fontSize: 12, // text-xs
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    const SizedBox(height: 8),
+                    // Línea 3 (Footer): Fecha formateada + Distancia (chip minimalista)
                     Row(
-                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        Icon(
-                          Icons.calendar_today,
-                          size: 11,
-                          color: isPast
-                              ? Theme.of(context).disabledColor
-                              : Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(width: 4),
-                        Flexible(
-                          child: Text(
-                            DateFormat('d MMM', 'es').format(event.startsAt),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: isPast
-                                  ? Theme.of(context).disabledColor
-                                  : Theme.of(context).colorScheme.onSurfaceVariant,
-                              fontSize: 10,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                        // Fecha con día de la semana (text-gray-600, nítida)
+                        Text(
+                          event.formattedDateWithWeekday,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: isPast
+                                ? Theme.of(context).disabledColor
+                                : const Color(0xFF4B5563), // text-gray-600
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
                           ),
+                        ),
+                        // Distancia (como chip/pastilla pequeña)
+                        // Verificar primero si el evento tiene coordenadas antes de calcular
+                        Builder(
+                          builder: (context) {
+                            // Si el evento no tiene coordenadas, no mostrar nada
+                            if (event.lat == null || event.lng == null) {
+                              if (kDebugMode) {
+                                debugPrint('⚠️ Evento ${event.id} (${event.title.substring(0, event.title.length > 30 ? 30 : event.title.length)}...) no tiene coordenadas');
+                              }
+                              return const SizedBox.shrink();
+                            }
+                            
+                            // Si tiene coordenadas, calcular y mostrar distancia
+                            return FutureBuilder<double?>(
+                              future: _getCachedDistance(event),
+                              builder: (context, snapshot) {
+                                // Mostrar mientras carga
+                                if (snapshot.connectionState == ConnectionState.waiting) {
+                                  return const SizedBox(
+                                    width: 16,
+                                    height: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  );
+                                }
+                                
+                                // Si hay error, mostrar un indicador de debug (solo en modo debug)
+                                if (snapshot.hasError) {
+                                  debugPrint('❌ Error en FutureBuilder de distancia para evento ${event.id}: ${snapshot.error}');
+                                  return const SizedBox.shrink();
+                                }
+                                
+                                final distanceKm = snapshot.data;
+                                if (distanceKm != null && distanceKm > 0) {
+                                  if (kDebugMode) {
+                                    debugPrint('✅ Mostrando chip de distancia: ${distanceKm.toStringAsFixed(2)} km para evento ${event.id}');
+                                  }
+                                  final chipColor = isPast
+                                      ? Theme.of(context).disabledColor.withOpacity(0.15)
+                                      : const Color(0xFF2563EB).withOpacity(0.15); // Azul más visible
+                                  final textColor = isPast
+                                      ? Theme.of(context).disabledColor
+                                      : const Color(0xFF1D4ED8); // Azul un poco más intenso
+                                  
+                                  return Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: chipColor,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isPast
+                                            ? Theme.of(context).disabledColor.withOpacity(0.3)
+                                            : const Color(0xFF2563EB).withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.location_on,
+                                          size: 13,
+                                          color: textColor,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${distanceKm.round()} km',
+                                          style: TextStyle(
+                                            color: textColor,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }
+                                // Si no hay distancia calculada (permisos denegados, error, etc.)
+                                if (kDebugMode) {
+                                  debugPrint('⚠️ No se pudo calcular distancia para evento ${event.id} (permisos o error)');
+                                }
+                                return const SizedBox.shrink();
+                              },
+                            );
+                          },
                         ),
                       ],
                     ),
-                    // Categorías en una línea separada debajo
-                    if (widget.showCategory) ...[
-                      const SizedBox(height: 2),
-                      Wrap(
-                        spacing: 4,
-                        runSpacing: 2,
-                        children: _buildCategoryChipsForWrap(context, event, categoryColor),
-                      ),
-                    ],
                   ],
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

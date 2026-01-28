@@ -287,7 +287,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // Video splash overlay state
   VideoPlayerController? _videoController;
-  bool _showIntro = true;
+  bool _showIntro = false; // Por defecto false - solo se activa si no viene desde SplashVideoScreen
   bool _isVideoInitialized = false; // Estado para saber si el video está listo
   double _videoOpacity = 1.0;
   bool _videoFinished = false; // Estado para saber si el video terminó
@@ -324,8 +324,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _syncStateWithProvider();
         
         // Solo después de cargar todos los datos, inicializar el video
-        if (mounted) {
+        // IMPORTANTE: Solo reproducir el video si NO viene desde SplashVideoScreen
+        // Si viene desde SplashVideoScreen, el video ya se reprodujo allí
+        if (mounted && widget.preloadedData == null) {
+          // Solo reproducir video si NO hay datos pre-cargados (no viene desde SplashVideoScreen)
+          setState(() {
+            _showIntro = true; // Activar overlay solo si no viene desde SplashVideoScreen
+          });
           _initializeIntroVideo();
+        } else {
+          // Si viene desde SplashVideoScreen, el video ya se reprodujo, solo mostrar diálogo de auth
+          if (mounted) {
+            _showAuthDialogAfterVideo();
+          }
         }
       });
     });
@@ -1349,6 +1360,30 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Verifica si hay filtros activos (categoría, ciudad, fecha, búsqueda)
+  /// El botón "Borrar filtros" solo aparece si hay filtros que no sean el predeterminado
+  bool _hasActiveFilters() {
+    // Si hay búsqueda de texto, categoría o ciudad seleccionada, mostrar botón
+    if ((_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ||
+        _selectedCategoryId != null ||
+        _selectedCityId != null) {
+      return true;
+    }
+    
+    // Si hay fechas personalizadas, mostrar botón
+    if (_fromDate != null || _toDate != null) {
+      return true;
+    }
+    
+    // Si hay un filtro de fecha diferente al predeterminado (1 Mes), mostrar botón
+    if (_isToday || _isNext7Days || _isNextWeekend) {
+      return true;
+    }
+    
+    // Si solo está activo "1 Mes" (predeterminado) y no hay otros filtros, no mostrar botón
+    return false;
+  }
+
   void _clearFilters() {
     setState(() {
       // Ciudad
@@ -1794,8 +1829,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
             label: const Text('Todas'),
             selected: _selectedCategoryId == null,
             onSelected: (_) {
-              final provider = context.read<DashboardProvider>();
-              provider.setSelectedCategory(null);
+              // Intentar usar Provider si está disponible, sino usar solo estado local
+              try {
+                final provider = context.read<DashboardProvider>();
+                provider.setSelectedCategory(null);
+              } catch (e) {
+                debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+              }
               setState(() {
                 _selectedCategoryId = null;
               });
@@ -1811,11 +1851,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: Text(category.name),
               selected: isSelected,
               onSelected: (_) {
-                final provider = context.read<DashboardProvider>();
-                final newCategoryId = isSelected ? null : category.id;
-                provider.setSelectedCategory(newCategoryId);
+                // Intentar usar Provider si está disponible, sino usar solo estado local
+                try {
+                  final provider = context.read<DashboardProvider>();
+                  final newCategoryId = isSelected ? null : category.id;
+                  provider.setSelectedCategory(newCategoryId);
+                } catch (e) {
+                  debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+                }
                 setState(() {
-                  _selectedCategoryId = newCategoryId;
+                  _selectedCategoryId = isSelected ? null : category.id;
                 });
                 _reloadEvents();
               },
@@ -2126,68 +2171,115 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
           const SizedBox(height: 12),
           // Chips de fecha: Hoy, 7 Días, 1 Mes (por defecto), Calendario - Compacto
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              FilterChip(
-                label: const Text('Hoy'),
-                selected: _isToday,
-                visualDensity: VisualDensity.compact,
-                onSelected: (_) {
-                  _onFilterInteraction();
-                  // Calcular el rango de "Hoy" en el momento del clic para asegurar precisión
-                  final r = todayRange();
-                  // Recargar inmediatamente con el rango calculado (esto actualizará el estado internamente)
-                  _reloadWithDateRange(from: r.from, to: r.to);
-                },
+          // ScrollView horizontal para evitar que se rompa el layout
+          SizedBox(
+            height: 40, // Altura fija para los chips
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Row(
+                children: [
+                  FilterChip(
+                    label: const Text('Hoy'),
+                    selected: _isToday,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) {
+                      _onFilterInteraction();
+                      // Calcular el rango de "Hoy" en el momento del clic para asegurar precisión
+                      final r = todayRange();
+                      // Recargar inmediatamente con el rango calculado (esto actualizará el estado internamente)
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  FilterChip(
+                    label: const Text('7 Días'),
+                    selected: _isNext7Days,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) {
+                      _onFilterInteraction();
+                      final r = next7DaysRange();
+                      setState(() {
+                        _isToday = false;
+                        _isNextWeekend = false;
+                        _isNext7Days = true;
+                        _isNext30Days = false;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  FilterChip(
+                    label: const Text('1 Mes'),
+                    selected: _isNext30Days,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (_) {
+                      _onFilterInteraction();
+                      final r = next30DaysRange();
+                      setState(() {
+                        _isToday = false;
+                        _isNextWeekend = false;
+                        _isNext7Days = false;
+                        _isNext30Days = true;
+                      });
+                      _reloadWithDateRange(from: r.from, to: r.to);
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.calendar_today, size: 14),
+                    label: const Text('Calendario'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      minimumSize: const Size(0, 32),
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      _onFilterInteraction();
+                      _showDateRangePicker();
+                    },
+                  ),
+                  // Chip "Borrar filtros" estilo galleta roja solo si hay filtros activos
+                  if (_hasActiveFilters()) ...[
+                    const SizedBox(width: 6),
+                    InkWell(
+                      onTap: _clearFilters,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFEF2F2), // bg-red-50
+                          border: Border.all(
+                            color: const Color(0xFFFCA5A5), // border-red-300
+                            width: 1,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.close,
+                              size: 14,
+                              color: const Color(0xFFEF4444), // text-red-500
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              'Borrar filtros',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFFEF4444), // text-red-500
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
-              FilterChip(
-                label: const Text('7 Días'),
-                selected: _isNext7Days,
-                visualDensity: VisualDensity.compact,
-                onSelected: (_) {
-                  _onFilterInteraction();
-                  final r = next7DaysRange();
-                  setState(() {
-                    _isToday = false;
-                    _isNextWeekend = false;
-                    _isNext7Days = true;
-                    _isNext30Days = false;
-                  });
-                  _reloadWithDateRange(from: r.from, to: r.to);
-                },
-              ),
-              FilterChip(
-                label: const Text('1 Mes'),
-                selected: _isNext30Days,
-                visualDensity: VisualDensity.compact,
-                onSelected: (_) {
-                  _onFilterInteraction();
-                  final r = next30DaysRange();
-                  setState(() {
-                    _isToday = false;
-                    _isNextWeekend = false;
-                    _isNext7Days = false;
-                    _isNext30Days = true;
-                  });
-                  _reloadWithDateRange(from: r.from, to: r.to);
-                },
-              ),
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today, size: 14),
-                label: const Text('Calendario'),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                  minimumSize: const Size(0, 32),
-                  visualDensity: VisualDensity.compact,
-                ),
-                onPressed: () {
-                  _onFilterInteraction();
-                  _showDateRangePicker();
-                },
-              ),
-            ],
+            ),
           ),
         ],
       ),
@@ -2212,8 +2304,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
             isSelected: _selectedCategoryId == null,
             categoryColor: Colors.grey,
             onTap: () {
-              final provider = context.read<DashboardProvider>();
-              provider.setSelectedCategory(null);
+              // Intentar usar Provider si está disponible, sino usar solo estado local
+              try {
+                final provider = context.read<DashboardProvider>();
+                provider.setSelectedCategory(null);
+              } catch (e) {
+                // Si el Provider no está disponible, continuar solo con estado local
+                debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+              }
               _onFilterInteraction();
               setState(() {
                 _selectedCategoryId = null;
@@ -2234,12 +2332,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
               isSelected: isSelected,
               categoryColor: categoryColor,
               onTap: () {
-                final provider = context.read<DashboardProvider>();
-                final newCategoryId = isSelected ? null : category.id;
-                provider.setSelectedCategory(newCategoryId);
+                // Intentar usar Provider si está disponible, sino usar solo estado local
+                try {
+                  final provider = context.read<DashboardProvider>();
+                  final newCategoryId = isSelected ? null : category.id;
+                  provider.setSelectedCategory(newCategoryId);
+                } catch (e) {
+                  // Si el Provider no está disponible, continuar solo con estado local
+                  debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+                }
                 _onFilterInteraction();
                 setState(() {
-                  _selectedCategoryId = newCategoryId;
+                  _selectedCategoryId = isSelected ? null : category.id;
                 });
                 _reloadEvents();
               },
@@ -2370,9 +2474,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCategoriesGrid() {
     // Intentar usar Provider si está disponible, sino usar estado local
-    final provider = context.watch<DashboardProvider>();
-    final categories = provider.categories.isNotEmpty ? provider.categories : _categories;
-    final selectedCategoryId = provider.selectedCategoryId ?? _selectedCategoryId;
+    DashboardProvider? provider;
+    try {
+      provider = context.watch<DashboardProvider>();
+    } catch (e) {
+      debugPrint('⚠️ DashboardProvider no disponible en _buildCategoriesGrid, usando solo estado local: $e');
+    }
+    final categories = (provider != null && provider.categories.isNotEmpty) ? provider.categories : _categories;
+    final selectedCategoryId = provider?.selectedCategoryId ?? _selectedCategoryId;
     
     if (categories.isEmpty) {
       return const Text('No hay categorías disponibles');
@@ -2389,9 +2498,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     categoryWidgets.add(
       InkWell(
         onTap: () {
-          // Usar Provider si está disponible
-          final provider = context.read<DashboardProvider>();
-          provider.setSelectedCategory(null);
+          // Intentar usar Provider si está disponible, sino usar solo estado local
+          try {
+            final provider = context.read<DashboardProvider>();
+            provider.setSelectedCategory(null);
+          } catch (e) {
+            debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+          }
           // También actualizar estado local para compatibilidad
           setState(() {
             _selectedCategoryId = null;
@@ -2453,13 +2566,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
             return InkWell(
               onTap: () {
-                // Usar Provider si está disponible
-                final provider = context.read<DashboardProvider>();
-                final newCategoryId = isSelected ? null : category.id;
-                provider.setSelectedCategory(newCategoryId);
+                // Intentar usar Provider si está disponible, sino usar solo estado local
+                try {
+                  final provider = context.read<DashboardProvider>();
+                  final newCategoryId = isSelected ? null : category.id;
+                  provider.setSelectedCategory(newCategoryId);
+                } catch (e) {
+                  debugPrint('⚠️ DashboardProvider no disponible, usando solo estado local: $e');
+                }
                 // También actualizar estado local para compatibilidad
                 setState(() {
-                  _selectedCategoryId = newCategoryId;
+                  _selectedCategoryId = isSelected ? null : category.id;
                 });
                 _reloadEvents();
               },
@@ -2741,21 +2858,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           extendBody: true, // Permite que el body se extienda detrás del bottom navigation bar
           backgroundColor: Colors.transparent, // Fondo transparente del Scaffold
           body: Container(
-        // Fondo con efecto espejo y diferentes transparencias
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            stops: const [0.0, 0.25, 0.5, 0.75, 1.0],
-            colors: [
-              Theme.of(context).scaffoldBackgroundColor,
-              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.98),
-              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.95),
-              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.92),
-              Theme.of(context).scaffoldBackgroundColor.withOpacity(0.88),
-            ],
-          ),
-        ),
+        // Fondo gris más oscuro (#F3F4F6) para mejor contraste y efecto de tarjetas flotantes
+        color: const Color(0xFFF3F4F6),
         child: Stack(
           children: [
             // Capas de espejo con diferentes opacidades
@@ -2924,7 +3028,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                        padding: const EdgeInsets.fromLTRB(0, 12, 0, 20), // Sin padding horizontal, la lista maneja su propio padding
                         child: UpcomingEventsSection(
                           eventsByCity: _eventsByCity,
                           selectedCategoryId: _selectedCategoryId,
@@ -3071,40 +3175,18 @@ class UpcomingEventsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outline.withOpacity(0.08),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Theme.of(context).colorScheme.shadow.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Lista de eventos agrupados por ciudad
-          UpcomingList(
-            eventsByCity: eventsByCity,
-            selectedCategoryId: selectedCategoryId,
-            onClearFilters: onClearFilters,
-            showCategory: showCategory,
-            // Texto del filtro de fecha activo
-            dateFilterText: dateFilterText,
-            // Información de búsqueda activa
-            hasActiveSearch: hasActiveSearch,
-            searchTerm: searchTerm,
-          ),
-        ],
-      ),
+    // Eliminado el contenedor blanco envolvente para diseño moderno estilo Airbnb
+    // La lista fluye directamente sobre el fondo de la pantalla
+    return UpcomingList(
+      eventsByCity: eventsByCity,
+      selectedCategoryId: selectedCategoryId,
+      onClearFilters: onClearFilters,
+      showCategory: showCategory,
+      // Texto del filtro de fecha activo
+      dateFilterText: dateFilterText,
+      // Información de búsqueda activa
+      hasActiveSearch: hasActiveSearch,
+      searchTerm: searchTerm,
     );
   }
 }
@@ -3133,9 +3215,13 @@ class CategoriesSection extends StatelessWidget {
         categories: categories,
         selectedCategoryId: selectedCategoryId,
         onCategoryTap: (categoryId) {
-          // Usar Provider si está disponible
-          final provider = Provider.of<DashboardProvider>(context, listen: false);
-          provider.setSelectedCategory(categoryId);
+          // Intentar usar Provider si está disponible, sino usar solo estado local
+          try {
+            final provider = Provider.of<DashboardProvider>(context, listen: false);
+            provider.setSelectedCategory(categoryId);
+          } catch (e) {
+            debugPrint('⚠️ DashboardProvider no disponible en CategoriesSection, usando solo callback: $e');
+          }
           // Llamar callback original también
           onCategoryTap(categoryId);
         },
