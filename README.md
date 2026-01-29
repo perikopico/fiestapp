@@ -74,6 +74,8 @@ Crea un archivo `.env` en la raíz del proyecto con:
 SUPABASE_URL=your_supabase_url
 SUPABASE_ANON_KEY=your_supabase_anon_key
 GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+# Opcional: bucket público de videos de splash (video_1.mp4 … video_12.mp4). Por defecto: splash-videos
+SPLASH_VIDEO_BUCKET=splash-videos
 ```
 
 ### Firebase

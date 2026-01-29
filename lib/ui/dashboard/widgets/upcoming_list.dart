@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../models/event.dart';
 import '../../icons/icon_mapper.dart';
@@ -8,6 +7,7 @@ import '../../../services/favorites_service.dart';
 import '../../../services/notification_alerts_service.dart';
 import '../../../services/category_service.dart';
 import '../../../utils/accessibility_utils.dart';
+import '../../../utils/distance_utils.dart';
 import '../dashboard_screen.dart'; // Para CityEventGroup
 import 'package:flutter/services.dart';
 
@@ -22,6 +22,11 @@ class UpcomingList extends StatefulWidget {
   // Información de búsqueda activa
   final bool hasActiveSearch;
   final String? searchTerm;
+  /// Si true, la lista hace scroll (p. ej. pantalla de favoritos). Si false, expande (dashboard dentro de CustomScrollView).
+  final bool scrollable;
+  /// Ubicación del usuario (GPS). Para cálculo Haversine × 1.5 en lista. No se usan APIs externas.
+  final double? userLat;
+  final double? userLng;
 
   const UpcomingList({
     super.key,
@@ -33,6 +38,9 @@ class UpcomingList extends StatefulWidget {
     this.dateFilterText,
     this.hasActiveSearch = false,
     this.searchTerm,
+    this.scrollable = false,
+    this.userLat,
+    this.userLng,
   });
 
   @override
@@ -626,7 +634,12 @@ class _UpcomingListState extends State<UpcomingList> {
             
             return [
               _buildCityHeader(context, group, isFirst: isFirst),
-              _buildEventsGrid(context, filteredEvents),
+              _buildEventsGrid(
+                context,
+                filteredEvents,
+                cityLat: group.cityLat,
+                cityLng: group.cityLng,
+              ),
             ];
           }),
         ],
@@ -731,27 +744,45 @@ class _UpcomingListState extends State<UpcomingList> {
     );
   }
   
-  /// Construye la lista de eventos para una sección (layout horizontal)
-  Widget _buildEventsGrid(BuildContext context, List<Event> events) {
+  /// Construye la lista de eventos para una sección (layout horizontal, misma visión que dashboard).
+  /// [cityLat]/[cityLng]: fallback para distancia cuando el evento no tiene venueCoordinates.
+  Widget _buildEventsGrid(
+    BuildContext context,
+    List<Event> events, {
+    bool scrollable = false,
+    double? cityLat,
+    double? cityLng,
+  }) {
     return ValueListenableBuilder<Set<String>>(
       valueListenable: FavoritesService.instance.favoritesNotifier,
       builder: (context, favorites, _) {
         return ListView.separated(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 12), // mx-3 (12px) para maximizar ancho
+          shrinkWrap: !scrollable,
+          physics: scrollable ? const AlwaysScrollableScrollPhysics() : const NeverScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           itemCount: events.length,
           separatorBuilder: (context, index) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
-            return _buildEventCard(context, events[index]);
+            return _buildEventCard(
+              context,
+              events[index],
+              fallbackLat: cityLat,
+              fallbackLng: cityLng,
+            );
           },
         );
       },
     );
   }
   
-  /// Construye una tarjeta de evento con layout horizontal
-  Widget _buildEventCard(BuildContext context, Event event) {
+  /// Construye una tarjeta de evento con layout horizontal.
+  /// [fallbackLat]/[fallbackLng]: coordenadas de la ciudad para distancia si el evento no tiene venue.
+  Widget _buildEventCard(
+    BuildContext context,
+    Event event, {
+    double? fallbackLat,
+    double? fallbackLng,
+  }) {
     final isFavorite = FavoritesService.instance.isFavorite(event.id);
     
     // Obtener color de categoría
@@ -919,48 +950,15 @@ class _UpcomingListState extends State<UpcomingList> {
                             fontWeight: FontWeight.w500,
                           ),
                         ),
-                        // Distancia (chip): solo si el API devolvió distanceKm, p. ej. events_within_radius
-                        if (event.distanceKm != null && event.distanceKm! > 0) ...[
-                          Builder(
-                            builder: (context) {
-                              final distanceKm = event.distanceKm!;
-                              final chipColor = isPast
-                                  ? Theme.of(context).disabledColor.withOpacity(0.15)
-                                  : const Color(0xFF2563EB).withOpacity(0.15);
-                              final textColor = isPast
-                                  ? Theme.of(context).disabledColor
-                                  : const Color(0xFF1D4ED8);
-                              return Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: chipColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(
-                                    color: isPast
-                                        ? Theme.of(context).disabledColor.withOpacity(0.3)
-                                        : const Color(0xFF2563EB).withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.location_on, size: 13, color: textColor),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      '${distanceKm.round()} km',
-                                      style: TextStyle(
-                                        color: textColor,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
-                        ],
+                        // Distancia estimada (Haversine × 1.5): user → venueCoordinates o fallback ciudad.
+                        // Sin APIs en lista. Icono navegación = aproximada. >100 km → sin decimales.
+                        ..._estimatedDistanceChip(
+                          context,
+                          event,
+                          isPast,
+                          fallbackLat: fallbackLat,
+                          fallbackLng: fallbackLng,
+                        ),
                       ],
                     ),
                   ],
@@ -972,253 +970,111 @@ class _UpcomingListState extends State<UpcomingList> {
       ),
     );
   }
-  
-  /// Construye la lista legacy de eventos (compatibilidad)
-  Widget _buildLegacyEventsList(BuildContext context, List<Event> events) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Cabecera con filtro de fecha y botón "Borrar filtros"
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
+
+  /// Distancia estimada (Haversine × 1.5) para la lista. Sin APIs.
+  /// Destino: event.venueCoordinates; si no hay, fallback a ciudad (fallbackLat/Lng) cuando exista.
+  List<Widget> _estimatedDistanceChip(
+    BuildContext context,
+    Event event,
+    bool isPast, {
+    double? fallbackLat,
+    double? fallbackLng,
+  }) {
+    if (widget.userLat == null || widget.userLng == null) return [];
+    final v = event.venueCoordinates;
+    double? destLat;
+    double? destLng;
+    if (v != null) {
+      destLat = v.lat;
+      destLng = v.lng;
+    } else if (fallbackLat != null && fallbackLng != null) {
+      destLat = fallbackLat;
+      destLng = fallbackLng;
+    }
+    if (destLat == null || destLng == null) return [];
+    final km = DistanceUtils.estimatedRoadDistanceKm(
+      widget.userLat,
+      widget.userLng,
+      destLat,
+      destLng,
+    );
+    if (km == null || km <= 0) return [];
+    final chipColor = isPast
+        ? Theme.of(context).disabledColor.withOpacity(0.15)
+        : const Color(0xFF2563EB).withOpacity(0.15);
+    final textColor = isPast
+        ? Theme.of(context).disabledColor
+        : const Color(0xFF1D4ED8);
+    return [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        decoration: BoxDecoration(
+          color: chipColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isPast
+                ? Theme.of(context).disabledColor.withOpacity(0.3)
+                : const Color(0xFF2563EB).withOpacity(0.3),
+            width: 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
-              Expanded(
-                child: Text(
-                  widget.dateFilterText!,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                    fontSize: 12,
-                  ),
-                ),
-              )
-            else
-              const Spacer(),
-            if (widget.onClearFilters != null)
-              TextButton(
-                onPressed: widget.onClearFilters,
-                child: const Text('Borrar filtros'),
+            Icon(Icons.navigation, size: 13, color: textColor),
+            const SizedBox(width: 4),
+            Text(
+              DistanceUtils.formatDistanceDisplay(km),
+              style: TextStyle(
+                color: textColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
               ),
+            ),
           ],
         ),
-        const SizedBox(height: 8),
-        ValueListenableBuilder<Set<String>>(
-          valueListenable: FavoritesService.instance.favoritesNotifier,
-          builder: (context, favorites, _) {
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 8, // Espaciado entre eventos para mejor separación visual
-                childAspectRatio: 1.02, // Ratio ajustado para eliminar overflow (tarjetas más anchas, menos altas)
-              ),
-              itemCount: events.length,
-              itemBuilder: (context, index) {
-                final event = events[index];
-                final isFavorite = FavoritesService.instance.isFavorite(event.id);
-
-                // Obtener color de categoría
-                Color categoryColor = Colors.grey; // Color por defecto
-                if (event.categoryColor != null && event.categoryColor!.isNotEmpty) {
-                  try {
-                    categoryColor = Color(int.parse(event.categoryColor!.replaceFirst('#', '0xFF')));
-                  } catch (e) {
-                    // Si falla el parse, usar color por defecto basado en el nombre
-                    if (event.categoryName != null) {
-                      categoryColor = _getColorForCategory(event.categoryName!);
-                    }
-                  }
-                } else if (event.categoryName != null) {
-                  // Si no hay color, usar color por defecto basado en el nombre de la categoría
-                  categoryColor = _getColorForCategory(event.categoryName!);
-                }
-                
-                final isPast = event.isPast;
-                
-                return Card(
-                  margin: EdgeInsets.zero,
-                  elevation: 2, // Sombra sutil para dar profundidad
-                  shadowColor: Colors.black.withOpacity(0.1),
-                  color: Theme.of(context).colorScheme.surface,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: InkWell(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => EventDetailScreen(event: event),
-                        ),
-                      );
-                    },
-                    borderRadius: BorderRadius.circular(16),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: Stack(
-                        children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            mainAxisAlignment: MainAxisAlignment.start,
-                            children: [
-                              // Imagen en la parte superior
-                              Container(
-                                height: 105,
-                                width: double.infinity,
-                                child: _buildEventImage(context, event, double.infinity, 105),
-                              ),
-                              // Título, fecha y categoría debajo con fondo grisáceo
-                              Container(
-                                width: double.infinity,
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).brightness == Brightness.dark
-                                      ? Colors.grey.shade900.withOpacity(0.9)
-                                      : Colors.grey.shade100,
-                                  borderRadius: const BorderRadius.only(
-                                    bottomLeft: Radius.circular(16),
-                                    bottomRight: Radius.circular(16),
-                                  ),
-                                  border: Border(
-                                    top: BorderSide(
-                                      color: Theme.of(context).dividerColor.withOpacity(0.1),
-                                      width: 0.5,
-                                    ),
-                                  ),
-                                ),
-                                padding: const EdgeInsets.only(left: 10, top: 6, right: 10, bottom: 6), // Padding inferior ajustado para evitar overflow
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisAlignment: MainAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        SizedBox(
-                                          height: 30.0, // Altura fija para 2 líneas (ligeramente reducida para evitar overflow)
-                                          child: Text(
-                                            event.title,
-                                            style: TextStyle(
-                                              fontWeight: FontWeight.w600,
-                                              fontSize: 13,
-                                              height: 1.2,
-                                              color: isPast
-                                                  ? Theme.of(context).disabledColor
-                                                  : Theme.of(context).colorScheme.onSurface,
-                                            ),
-                                            maxLines: 2, // Dos líneas máximo
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4), // Reducido de 5 a 4
-                                        // Fecha/Hora y Ubicación (Ciudad) con tamaño menor y color gris medio
-                                        Text(
-                                          () {
-                                            final fullDate = DateFormat('dd MMM', 'es').format(event.startsAt);
-                                            final fullHour = DateFormat('HH:mm').format(event.startsAt);
-                                            final location = event.cityName ?? '';
-                                            if (location.isNotEmpty) {
-                                              return "$fullDate · $fullHour · $location";
-                                            }
-                                            return "$fullDate · $fullHour";
-                                          }(),
-                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                            fontSize: 10,
-                                            height: 1.1,
-                                            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                    // Chips de categoría - Premium: gray-100, gray-600, uniformes
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 1),
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (widget.showCategory && event.categoryName != null)
-                                            _buildPremiumCategoryChip(context, event, event.categoryName!),
-                                          const SizedBox(height: 4),
-                                          if (widget.showCategory &&
-                                              event.categoryNames != null &&
-                                              event.categoryNames!.length > 1)
-                                            _buildPremiumCategoryChip(context, event, event.categoryNames![1]),
-                                          const SizedBox(height: 4),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          // Etiqueta FINALIZADO en rojo (si es pasado)
-                          if (isPast)
-                            Positioned(
-                              top: 8,
-                              left: 8,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withOpacity(0.9),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: const Text(
-                                  'FINALIZADO',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 9,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          // Icono de favorito en la esquina superior derecha
-                          Positioned(
-                            top: 8,
-                            right: 8,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: () async {
-                                  await FavoritesService.instance.toggleFavorite(event.id);
-                                  if (mounted) {
-                                    setState(() {});
-                                  }
-                                },
-                                borderRadius: BorderRadius.circular(20),
-                                child: Container(
-                                  padding: const EdgeInsets.all(6),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.5),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    isFavorite ? Icons.favorite : Icons.favorite_border,
-                                    color: isFavorite ? Colors.red : Colors.white,
-                                    size: 16,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+      ),
+    ];
+  }
+  
+  /// Construye la lista de eventos planos con la misma visión que el dashboard
+  /// (tarjetas horizontales _buildEventCard, igual que eventsByCity)
+  Widget _buildLegacyEventsList(BuildContext context, List<Event> events) {
+    return Column(
+      mainAxisSize: widget.scrollable ? MainAxisSize.max : MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty ||
+            widget.onClearFilters != null) ...[
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (widget.dateFilterText != null && widget.dateFilterText!.isNotEmpty)
+                Expanded(
+                  child: Text(
+                    widget.dateFilterText!,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      fontSize: 12,
                     ),
                   ),
-                );
-              },
-            );
-          },
-        ),
+                )
+              else
+                const Spacer(),
+              if (widget.onClearFilters != null)
+                TextButton(
+                  onPressed: widget.onClearFilters,
+                  child: const Text('Borrar filtros'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (widget.scrollable)
+          Expanded(child: _buildEventsGrid(context, events, scrollable: true))
+        else
+          _buildEventsGrid(context, events),
       ],
     );
   }

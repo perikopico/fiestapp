@@ -17,7 +17,7 @@ class EventService {
     final r = await supa
         .from('events_view')
         .select(
-          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url, category_ids, category_names, category_icons, category_colors',
+          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url, lat, lng, venue_id, category_ids, category_names, category_icons, category_colors',
         )
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -109,7 +109,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url,category_ids,category_names,category_icons,category_colors',
+          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url,lat,lng,venue_id,category_ids,category_names,category_icons,category_colors',
         );
 
     // Filtros básicos
@@ -440,6 +440,7 @@ class EventService {
     id, title, image_url, maps_url, place, is_featured, price,
     starts_at, city_id, category_id,
     city_name, category_name, category_icon, category_color, info_url,
+    lat, lng, venue_id,
     category_ids, category_names, category_icons, category_colors
   ''');
 
@@ -581,6 +582,8 @@ class EventService {
               'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
               'owner_rejected_reason': event.ownerRejectedReason,
               'distance_km': event.distanceKm,
+              'lat': event.lat,
+              'lng': event.lng,
               'category_ids': event.categoryIds,
               'category_names': event.categoryNames,
               'category_icons': event.categoryIcons,
@@ -739,7 +742,8 @@ class EventService {
               'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
               'owner_rejected_reason': event.ownerRejectedReason,
               'distance_km': event.distanceKm,
-              // Agregar categorías múltiples
+              'lat': event.lat,
+              'lng': event.lng,
               'category_ids': categoryIds,
               'category_names': categoryNames,
               'category_icons': categoryIcons,
@@ -833,12 +837,13 @@ class EventService {
             'owner_approved_at': event.ownerApprovedAt?.toIso8601String(),
             'owner_rejected_reason': event.ownerRejectedReason,
             'distance_km': event.distanceKm,
+            'lat': event.lat,
+            'lng': event.lng,
             'category_ids': event.categoryIds,
             'category_names': event.categoryNames,
             'category_icons': event.categoryIcons,
             'category_colors': event.categoryColors,
           };
-          // Reemplazar el evento en la lista
           events[i] = Event.fromMap(updatedMap);
         }
       }
@@ -870,7 +875,7 @@ class EventService {
         final r = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url, category_ids, category_names, category_icons, category_colors',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url, lat, lng, venue_id, category_ids, category_names, category_icons, category_colors',
             )
             .filter('id', 'in', '(${batch.join(',')})');
 

@@ -36,6 +36,7 @@ import '../auth/profile_screen.dart';
 import 'widgets/bottom_nav_bar.dart';
 import 'widgets/auth_banner.dart';
 import '../event/event_detail_screen.dart';
+import '../onboarding/splash_video_screen.dart';
 
 // ==== Búsqueda unificada ====
 enum SearchMode { city, event }
@@ -49,7 +50,10 @@ class CityEventGroup {
   final int? cityId;
   final double? distanceKm; // Distancia desde el usuario a la ciudad
   final List<Event> events;
-  final bool isUserLocation; // true si es la ciudad donde está el usuario
+  final bool isUserLocation;
+  /// Coordenadas de la ciudad para fallback de distancia cuando el evento no tiene venueCoordinates.
+  final double? cityLat;
+  final double? cityLng;
 
   CityEventGroup({
     required this.cityName,
@@ -57,6 +61,8 @@ class CityEventGroup {
     this.distanceKm,
     required this.events,
     this.isUserLocation = false,
+    this.cityLat,
+    this.cityLng,
   });
 }
 
@@ -331,16 +337,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _syncStateWithProvider();
         
         // Solo después de cargar todos los datos, inicializar el video
-        // IMPORTANTE: Solo reproducir el video si NO viene desde SplashVideoScreen
-        // Si viene desde SplashVideoScreen, el video ya se reprodujo allí
-        if (mounted && widget.preloadedData == null) {
-          // Solo reproducir video si NO hay datos pre-cargados (no viene desde SplashVideoScreen)
+        // IMPORTANTE: No reproducir el overlay si ya se vio el video de splash esta sesión
+        // (p. ej. Splash → Permisos → Dashboard: no preloadedData pero el video ya se reprodujo)
+        final alreadySawSplash = SplashVideoScreen.hasPlayedOnce;
+        if (mounted && widget.preloadedData == null && !alreadySawSplash) {
           setState(() {
-            _showIntro = true; // Activar overlay solo si no viene desde SplashVideoScreen
+            _showIntro = true;
           });
           _initializeIntroVideo();
         } else {
-          // Si viene desde SplashVideoScreen, el video ya se reprodujo, solo mostrar diálogo de auth
           if (mounted) {
             _showAuthDialogAfterVideo();
           }
@@ -633,9 +638,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Muestra el diálogo de autenticación después de que el video termine
   void _showAuthDialogAfterVideo() {
     if (!mounted) return;
-    
-    // Pequeño delay para asegurar que la UI esté lista
-    Future.delayed(const Duration(milliseconds: 300), () {
+    // Breve delay para que la UI esté lista. AuthBanner aplica además
+    // un delay extra para dar tiempo al deep link de OAuth (Google).
+    Future.delayed(const Duration(milliseconds: 400), () {
       if (mounted && !AuthService.instance.isAuthenticated) {
         AuthBanner.showAuthDialog(context);
       }
@@ -1275,6 +1280,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         distanceKm: distanceKm,
         events: cityEvents,
         isUserLocation: isUserLocation,
+        cityLat: city?.lat,
+        cityLng: city?.lng,
       ));
     }
     
@@ -1881,12 +1888,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Logo para AppBar/SliverAppBar. Si no existe assets/logo/queplan_logo.png, se muestra "QuePlan".
   /// Escala y recorta el PNG para reducir el padding transparente y que el icono visible llene el espacio.
   Widget _buildAppBarLogo() {
-    const double logoHeight = 48;
-    const double scale = 2.0;
+    const double logoHeight = 62;   // 48 * 1.3
+    const double scale = 2.6;       // 2.0 * 1.3
+    const double width = 234;       // 180 * 1.3
     return Center(
       child: SizedBox(
         height: logoHeight,
-        width: 180,
+        width: width,
         child: ClipRect(
           child: Center(
             child: Transform.scale(
@@ -1899,7 +1907,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   return Text(
                     'QuePlan',
                     style: TextStyle(
-                      fontSize: 20,
+                      fontSize: 26,
                       fontWeight: FontWeight.w600,
                       color: Theme.of(context).colorScheme.onSurface,
                     ),
@@ -2139,31 +2147,75 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildFilterPanel() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Contenido de filtros siempre visible y compacto
           _buildExpandedFilterContent(),
         ],
       ),
     );
   }
 
-  Widget _buildExpandedFilterContent() {
+  static const Color _headerLabelGray = Color(0xFF111827); // text-gray-900
+
+  /// Header: [ Explorar .................... Borrar filtros ]. Siempre visible.
+  /// "Borrar filtros" solo si hay filtros activos. Padding vertical reducido.
+  Widget _buildFiltersHeader() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.only(bottom: 4, top: 0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            'Explorar',
+            style: theme.textTheme.bodySmall?.copyWith(
+              fontSize: 13,
+              fontWeight: FontWeight.bold,
+              color: _headerLabelGray,
+            ),
+          ),
+          if (_hasActiveFilters())
+            TextButton(
+              onPressed: _clearFilters,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                foregroundColor: colorScheme.primary,
+              ),
+              child: Text(
+                'Borrar filtros',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            )
+          else
+            const SizedBox.shrink(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExpandedFilterContent() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Contenido según el modo - Compacto
-          // Categorías en slide horizontal compacto (sin slider de distancia)
+          _buildFiltersHeader(),
           SizedBox(
             height: 50,
             child: _buildHorizontalCategoriesList(),
           ),
           if (_mode == LocationMode.city) ...[
-            // Modo Ciudad: Búsqueda de ciudad
             UnifiedSearchBar(
               selectedCityId: _selectedCityId,
               onCitySelected: (city) {
@@ -2173,8 +2225,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     _selectedCityId = city.id;
                     _selectedCityIds = {city.id};
                     _selectedCityName = city.name;
-                    // Limpiar searchTerm cuando se selecciona una ciudad
-                    // para evitar conflictos entre cityIds y searchTerm
                     _searchEventTerm = null;
                   });
                   _updateCurrentProvinceId();
@@ -2183,36 +2233,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
               },
               onSearchChanged: null,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
           ],
-          const SizedBox(height: 12),
-          // Chips de fecha: Hoy, 7 Días, 1 Mes (por defecto), Calendario - Compacto
-          // ScrollView horizontal para evitar que se rompa el layout
+          const SizedBox(height: 6),
           SizedBox(
-            height: 40, // Altura fija para los chips
+            height: 40,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               physics: const BouncingScrollPhysics(),
               child: Row(
                 children: [
-                  FilterChip(
-                    label: const Text('Hoy'),
-                    selected: _isToday,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) {
+                  _buildTimeChip(
+                    label: 'Hoy',
+                    isSelected: _isToday,
+                    isDefaultSelection: false,
+                    onTap: () {
                       _onFilterInteraction();
-                      // Calcular el rango de "Hoy" en el momento del clic para asegurar precisión
-                      final r = todayRange();
-                      // Recargar inmediatamente con el rango calculado (esto actualizará el estado internamente)
-                      _reloadWithDateRange(from: r.from, to: r.to);
+                      _reloadWithDateRange(
+                        from: todayRange().from,
+                        to: todayRange().to,
+                      );
                     },
                   ),
                   const SizedBox(width: 6),
-                  FilterChip(
-                    label: const Text('7 Días'),
-                    selected: _isNext7Days,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) {
+                  _buildTimeChip(
+                    label: '7 Días',
+                    isSelected: _isNext7Days,
+                    isDefaultSelection: false,
+                    onTap: () {
                       _onFilterInteraction();
                       final r = next7DaysRange();
                       setState(() {
@@ -2225,11 +2273,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   const SizedBox(width: 6),
-                  FilterChip(
-                    label: const Text('1 Mes'),
-                    selected: _isNext30Days,
-                    visualDensity: VisualDensity.compact,
-                    onSelected: (_) {
+                  _buildTimeChip(
+                    label: '1 Mes',
+                    isSelected: _isNext30Days,
+                    isDefaultSelection: true,
+                    onTap: () {
                       _onFilterInteraction();
                       final r = next30DaysRange();
                       setState(() {
@@ -2242,62 +2290,99 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     },
                   ),
                   const SizedBox(width: 6),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.calendar_today, size: 14),
-                    label: const Text('Calendario'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      minimumSize: const Size(0, 32),
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () {
-                      _onFilterInteraction();
-                      _showDateRangePicker();
-                    },
-                  ),
-                  // Chip "Borrar filtros" estilo galleta roja solo si hay filtros activos
-                  if (_hasActiveFilters()) ...[
-                    const SizedBox(width: 6),
-                    InkWell(
-                      onTap: _clearFilters,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFEF2F2), // bg-red-50
-                          border: Border.all(
-                            color: const Color(0xFFFCA5A5), // border-red-300
-                            width: 1,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.close,
-                              size: 14,
-                              color: const Color(0xFFEF4444), // text-red-500
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Borrar filtros',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                                color: const Color(0xFFEF4444), // text-red-500
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
+                  _buildCalendarChip(theme: theme, colorScheme: colorScheme),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  static const Color _chipInactiveBg = Color(0xFFF9FAFB);
+  static const Color _chipInactiveBorder = Color(0xFFE5E7EB);
+  static const Color _chipInactiveText = Color(0xFF6B7280);
+  /// Estado por defecto (Todas, 1 Mes): negro/gris. Azul = filtro activo/modificado.
+  static const Color _chipDefaultSelectedBg = Color(0xFF1F2937); // gray-800
+
+  Widget _buildTimeChip({
+    required String label,
+    required bool isSelected,
+    required bool isDefaultSelection,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final useDefaultStyle = isSelected && isDefaultSelection;
+    final bg = isSelected
+        ? (useDefaultStyle ? _chipDefaultSelectedBg : colorScheme.primary)
+        : _chipInactiveBg;
+    final border = isSelected
+        ? (useDefaultStyle ? _chipDefaultSelectedBg : colorScheme.primary)
+        : _chipInactiveBorder;
+    final fg = isSelected
+        ? (useDefaultStyle ? Colors.white : colorScheme.onPrimary)
+        : _chipInactiveText;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontSize: 13,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                color: fg,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarChip({required ThemeData theme, required ColorScheme colorScheme}) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          _onFilterInteraction();
+          _showDateRangePicker();
+        },
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: _chipInactiveBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _chipInactiveBorder, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.calendar_today, size: 14, color: _chipInactiveText),
+              const SizedBox(width: 6),
+              Text(
+                'Calendario',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: _chipInactiveText,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2311,13 +2396,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
       scrollDirection: Axis.horizontal,
       padding: const EdgeInsets.symmetric(horizontal: 4),
       children: [
-        // Chip "Todas" estilo Pill compacto
+        // Chip "Todas" estilo Pill compacto (estado por defecto → gray-800 cuando seleccionado)
         Padding(
           padding: const EdgeInsets.only(right: 8),
           child: _buildCompactCategoryChip(
             label: AppLocalizations.of(context)?.allCategories ?? 'Todas',
             icon: Icons.grid_view,
             isSelected: _selectedCategoryId == null,
+            isDefaultSelection: true,
             categoryColor: Colors.grey,
             onTap: () {
               // Intentar usar Provider si está disponible, sino usar solo estado local
@@ -2346,6 +2432,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               label: category.name,
               icon: iconFromName(category.icon),
               isSelected: isSelected,
+              isDefaultSelection: false,
               categoryColor: categoryColor,
               onTap: () {
                 // Intentar usar Provider si está disponible, sino usar solo estado local
@@ -2370,57 +2457,57 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  /// Construye un chip compacto de categoría (estilo horizontal)
+  /// Construye un chip compacto de categoría (estilo horizontal).
+  /// isDefaultSelection (ej. "Todas"): seleccionado = gray-800. Categoría específica = primary (azul).
   Widget _buildCompactCategoryChip({
     required String label,
     required IconData icon,
     required bool isSelected,
+    required bool isDefaultSelection,
     required Color categoryColor,
     required VoidCallback onTap,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        constraints: const BoxConstraints(
-          minHeight: 36,
-          maxHeight: 36, // Altura fija compacta de 36px
-        ),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? categoryColor.withOpacity(0.15)
-              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
-          borderRadius: BorderRadius.circular(16),
-          border: isSelected
-              ? Border.all(color: categoryColor, width: 1.5)
-              : Border.all(
-                  color: Theme.of(context).colorScheme.outline.withOpacity(0.1),
-                  width: 1,
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final useDefaultStyle = isSelected && isDefaultSelection;
+    final bg = isSelected
+        ? (useDefaultStyle ? _chipDefaultSelectedBg : colorScheme.primary)
+        : _chipInactiveBg;
+    final border = isSelected
+        ? (useDefaultStyle ? _chipDefaultSelectedBg : colorScheme.primary)
+        : _chipInactiveBorder;
+    final iconColor = isSelected
+        ? (useDefaultStyle ? Colors.white : colorScheme.onPrimary)
+        : _chipInactiveText;
+    final textColor = iconColor;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 36, maxHeight: 36),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border, width: 1),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 16, color: iconColor),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontSize: 13,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                  color: textColor,
                 ),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 16, // Icono pequeño
-              color: isSelected
-                  ? categoryColor
-                  : Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                fontSize: 13,
-                color: isSelected
-                    ? categoryColor
-                    : Theme.of(context).colorScheme.onSurface,
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -2989,7 +3076,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       ),
                       const SizedBox(height: 8),
                     ],
-                    if (!_isLoading) ...[_buildFilterPanel()],
+                    if (!_isLoading) ...[
+                      _buildFilterPanel(),
+                      const SizedBox(height: 12),
+                    ],
                     // Etiqueta dinámica del filtro de fecha
                     // Resultados de búsqueda
                     if (_searchEventTerm != null &&
@@ -3047,20 +3137,21 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       )
                     else
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 12, 0, 20), // Sin padding horizontal, la lista maneja su propio padding
+                        padding: const EdgeInsets.fromLTRB(0, 4, 0, 20),
                         child: UpcomingEventsSection(
                           eventsByCity: _eventsByCity,
                           selectedCategoryId: _selectedCategoryId,
                           onClearFilters: _clearFilters,
                           showCategory: true,
                           dateFilterText: _getDateFilterInfoText(),
-                          // Información de búsqueda activa (búsqueda de texto o filtros aplicados)
                           hasActiveSearch: (_searchEventTerm != null && _searchEventTerm!.isNotEmpty) ||
                               _selectedCategoryId != null ||
                               _selectedCityId != null ||
                               _fromDate != null ||
                               _toDate != null,
                           searchTerm: _searchEventTerm,
+                          userLat: _userLat,
+                          userLng: _userLng,
                         ),
                       ),
                     // Sección "Cerca de ti" (solo en modo Ciudad, mostrando eventos cercanos a tu ubicación real)
@@ -3177,9 +3268,11 @@ class UpcomingEventsSection extends StatelessWidget {
   final VoidCallback? onClearFilters;
   final bool showCategory;
   final String? dateFilterText;
-  // Información de búsqueda activa
   final bool hasActiveSearch;
   final String? searchTerm;
+  /// Ubicación del usuario (GPS) para distancia Haversine en EventCard.
+  final double? userLat;
+  final double? userLng;
 
   const UpcomingEventsSection({
     super.key,
@@ -3190,22 +3283,22 @@ class UpcomingEventsSection extends StatelessWidget {
     this.dateFilterText,
     this.hasActiveSearch = false,
     this.searchTerm,
+    this.userLat,
+    this.userLng,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Eliminado el contenedor blanco envolvente para diseño moderno estilo Airbnb
-    // La lista fluye directamente sobre el fondo de la pantalla
     return UpcomingList(
       eventsByCity: eventsByCity,
       selectedCategoryId: selectedCategoryId,
       onClearFilters: onClearFilters,
       showCategory: showCategory,
-      // Texto del filtro de fecha activo
       dateFilterText: dateFilterText,
-      // Información de búsqueda activa
       hasActiveSearch: hasActiveSearch,
       searchTerm: searchTerm,
+      userLat: userLat,
+      userLng: userLng,
     );
   }
 }

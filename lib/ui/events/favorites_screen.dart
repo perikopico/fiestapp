@@ -138,7 +138,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-      child: UpcomingList(events: upcoming),
+      child: UpcomingList(events: upcoming, scrollable: true),
     );
   }
 
@@ -190,7 +190,7 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
-      child: UpcomingList(events: past),
+      child: UpcomingList(events: past, scrollable: true),
     );
   }
 }

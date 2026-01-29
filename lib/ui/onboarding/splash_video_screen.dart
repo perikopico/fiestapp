@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../services/logger_service.dart';
+import '../../services/splash_video_cache_service.dart';
 
 class SplashVideoScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -74,6 +75,23 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
     _initializeVideo();
   }
 
+  VideoPlayerController? _controllerFromSource(SplashVideoSource source) {
+    switch (source.kind) {
+      case SplashVideoSourceKind.asset:
+        return source.assetPath != null
+            ? VideoPlayerController.asset(source.assetPath!)
+            : null;
+      case SplashVideoSourceKind.file:
+        return source.file != null
+            ? VideoPlayerController.file(source.file!)
+            : null;
+      case SplashVideoSourceKind.network:
+        return source.networkUrl != null
+            ? VideoPlayerController.networkUrl(Uri.parse(source.networkUrl!))
+            : null;
+    }
+  }
+
   /// Pre-carga la siguiente pantalla para que esté lista cuando termine el video
   Future<void> _preloadNextScreen() async {
     if (_isPreloading) return;
@@ -108,16 +126,12 @@ class _SplashVideoScreenState extends State<SplashVideoScreen> with SingleTicker
   }
 
   Future<void> _initializeVideo() async {
-    // Si ya se reprodujo una vez, no inicializar de nuevo
-    if (SplashVideoScreen.hasPlayedOnce) {
-      return;
-    }
-    
+    if (SplashVideoScreen.hasPlayedOnce) return;
+
     try {
-      // Inicializar el controlador de video
-      // NOTA: Debes colocar tu video en assets/videos/splash.mp4
-      _controller = VideoPlayerController.asset('assets/videos/splash.mp4');
-      
+      final source = await SplashVideoCacheService.instance.getVideoSource();
+      _controller ??= _controllerFromSource(source) ?? VideoPlayerController.asset('assets/videos/splash.mp4');
+
       await _controller!.initialize();
       
       if (mounted && !SplashVideoScreen.hasPlayedOnce) {

@@ -1,6 +1,7 @@
 import 'package:intl/intl.dart';
 import 'dart:convert';
 import '../services/favorites_service.dart';
+import '../utils/validation_utils.dart';
 
 class Event {
   final String id;
@@ -30,6 +31,33 @@ class Event {
   final DateTime? ownerApprovedAt;
   final String? ownerRejectedReason;
   final double? distanceKm; // Distancia en km (solo viene de events_within_radius)
+  /// Coordenadas del evento/recinto (events.lat/lng o venue). Prioridad: DB > maps_url.
+  final double? lat;
+  final double? lng;
+
+  /// Coordenadas del recinto para distancia. Prioridad: [lat]/[lng] de BD > [mapsUrl] (?query=lat,lng).
+  /// NO usar ciudad; fallback ciudad se aplica en la UI si esto es null.
+  ({double lat, double lng})? get venueCoordinates {
+    if (lat != null && lng != null && ValidationUtils.isValidCoordinates(lat, lng)) {
+      return (lat: lat!, lng: lng!);
+    }
+    final url = mapsUrl;
+    if (url == null || url.isEmpty) return null;
+    try {
+      final uri = Uri.parse(url);
+      final q = uri.queryParameters;
+      if (!q.containsKey('query')) return null;
+      final parts = q['query']!.split(',');
+      if (parts.length != 2) return null;
+      final parsedLat = double.tryParse(parts[0].trim());
+      final parsedLng = double.tryParse(parts[1].trim());
+      if (parsedLat == null || parsedLng == null) return null;
+      if (!ValidationUtils.isValidCoordinates(parsedLat, parsedLng)) return null;
+      return (lat: parsedLat, lng: parsedLng);
+    } catch (_) {
+      return null;
+    }
+  }
   
   /// Campo calculado que indica si el evento es favorito (no viene de Supabase)
   bool get isFavorite => FavoritesService.instance.isFavorite(id);
@@ -71,6 +99,8 @@ class Event {
     this.ownerApprovedAt,
     this.ownerRejectedReason,
     this.distanceKm,
+    this.lat,
+    this.lng,
     this.categoryIds,
     this.categoryNames,
     this.categoryIcons,
@@ -160,6 +190,8 @@ class Event {
           : null,
       ownerRejectedReason: m['owner_rejected_reason'] as String?,
       distanceKm: (m['distance_km'] as num?)?.toDouble(),
+      lat: (m['lat'] as num?)?.toDouble(),
+      lng: (m['lng'] as num?)?.toDouble(),
       categoryIds: categoryIds,
       categoryNames: categoryNames,
       categoryIcons: categoryIcons,

@@ -37,26 +37,27 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
 
-    // Si ya hay sesión activa (por ejemplo, porque el usuario acaba de
-    // confirmar el email y Supabase ha creado la sesión vía deep link),
-    // cerramos automáticamente la pantalla de login.
     if (_authService.isAuthenticated) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pop(true);
-        }
+        if (mounted) _navigateToDashboardAndClose();
       });
+      return;
     }
 
-    // Escuchar cambios de autenticación: si durante el login llega un evento
-    // de "signedIn" (por ejemplo, tras confirmar email en el navegador),
-    // cerramos esta pantalla para llevar al usuario de vuelta donde estaba.
     _authSub = _authService.authStateChanges.listen((state) {
       if (!mounted) return;
       if (state.event == AuthChangeEvent.signedIn) {
-        Navigator.of(context).pop(true);
+        _authSub?.cancel();
+        _navigateToDashboardAndClose();
       }
     });
+  }
+
+  /// Cierra el login y lleva al usuario al Dashboard (borrando Favoritos, Perfil, etc. del stack).
+  void _navigateToDashboardAndClose() {
+    if (!mounted) return;
+    final nav = Navigator.of(context, rootNavigator: true);
+    nav.popUntil((route) => route.isFirst);
   }
 
   Future<void> _handleLogin() async {
@@ -74,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
 
       if (!mounted) return;
-      Navigator.of(context).pop(true); // Retorna true para indicar login exitoso
+      _navigateToDashboardAndClose();
     } catch (e) {
       if (!mounted) return;
       setState(() {

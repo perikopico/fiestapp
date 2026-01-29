@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fiestapp/services/auth_service.dart';
 import 'package:fiestapp/l10n/app_localizations.dart';
 import '../../auth/login_screen.dart';
@@ -11,36 +13,60 @@ class AuthBanner {
   /// Muestra el diálogo flotante de autenticación si el usuario no está autenticado
   /// IMPORTANTE: Este método solo debe llamarse DESPUÉS de que el video de splash termine
   static Future<void> showAuthDialog(BuildContext context) async {
-    // Si el usuario ya está autenticado, no mostrar el diálogo
-    if (AuthService.instance.isAuthenticated) {
-      return;
-    }
+    if (AuthService.instance.isAuthenticated) return;
 
-    // Esperar un poco para que la UI termine de cargar después del video
-    await Future.delayed(const Duration(milliseconds: 300));
-
+    // Dar tiempo a que Supabase procese el deep link de OAuth (p. ej. retorno desde Google).
+    // Así, si el usuario volvió de "Continuar con Google", no mostramos el diálogo de nuevo.
+    await Future.delayed(const Duration(milliseconds: 450));
     if (!context.mounted) return;
+    if (AuthService.instance.isAuthenticated) return;
 
-    // Verificar si el usuario se autenticó mientras esperábamos
-    if (AuthService.instance.isAuthenticated) {
-      return;
-    }
+    await Future.delayed(const Duration(milliseconds: 450));
+    if (!context.mounted) return;
+    if (AuthService.instance.isAuthenticated) return;
 
-    // Mostrar el diálogo con useRootNavigator para asegurar que esté en la capa correcta
     await showDialog(
       context: context,
       barrierDismissible: true,
-      useRootNavigator: true, // Usar el root navigator para estar por encima de todo
-      builder: (context) => _AuthDialog(),
+      useRootNavigator: true,
+      builder: (context) => const _AuthDialog(),
     );
   }
 }
 
-class _AuthDialog extends StatelessWidget {
+class _AuthDialog extends StatefulWidget {
+  const _AuthDialog();
+
+  @override
+  State<_AuthDialog> createState() => _AuthDialogState();
+}
+
+class _AuthDialogState extends State<_AuthDialog> {
+  StreamSubscription<AuthState>? _authSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _authSub = AuthService.instance.authStateChanges.listen((state) {
+      if (!mounted) return;
+      if (state.event == AuthChangeEvent.signedIn) {
+        _authSub?.cancel();
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _authSub?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final navigator = Navigator.of(context, rootNavigator: true);
 
     return Dialog(
       shape: RoundedRectangleBorder(
@@ -75,7 +101,7 @@ class _AuthDialog extends StatelessWidget {
                     alignment: Alignment.centerRight,
                     child: IconButton(
                       icon: Icon(Icons.close, color: colorScheme.onSurfaceVariant),
-                      onPressed: () => Navigator.of(context).pop(),
+                      onPressed: () => navigator.pop(),
                       style: IconButton.styleFrom(
                         backgroundColor: colorScheme.surfaceContainerHighest.withOpacity(0.5),
                       ),
@@ -109,8 +135,8 @@ class _AuthDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
+                      navigator.pop();
+                      navigator.push(
                         MaterialPageRoute(
                           builder: (_) => const RegisterScreen(),
                         ),
@@ -132,8 +158,8 @@ class _AuthDialog extends StatelessWidget {
                 Expanded(
                   child: FilledButton.tonal(
                     onPressed: () {
-                      Navigator.of(context).pop();
-                      Navigator.of(context).push(
+                      navigator.pop();
+                      navigator.push(
                         MaterialPageRoute(
                           builder: (_) => const LoginScreen(),
                         ),
@@ -155,7 +181,7 @@ class _AuthDialog extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             TextButton(
-              onPressed: () => Navigator.of(context).pop(),
+              onPressed: () => navigator.pop(),
               style: TextButton.styleFrom(
                 foregroundColor: colorScheme.onSurfaceVariant,
                 padding: const EdgeInsets.symmetric(vertical: 8),

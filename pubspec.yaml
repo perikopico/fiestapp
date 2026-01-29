@@ -94,7 +94,7 @@ flutter:
   assets:
   - assets/events.json
   - .env
-  - assets/videos/
+  - assets/videos/splash.mp4
   - assets/logo/
   # To add assets to your application, add an assets section, like this:
   # assets:
@@ -134,3 +134,4 @@ flutter_launcher_icons:
   image_path: "assets/logo/icono2.png"
   adaptive_icon_background: "#0175C2"
   adaptive_icon_foreground: "assets/logo/icono2.png"
+  remove_alpha_ios: true

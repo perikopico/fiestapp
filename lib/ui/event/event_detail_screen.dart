@@ -145,7 +145,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _openDirections() async {
     final coordinates = _extractCoordinatesFromMapsUrl(widget.event.mapsUrl);
     if (coordinates == null) {
-      // Si no hay coordenadas, usar el mapsUrl normal
       await UrlHelper.openGoogleMapsUrl(
         context,
         widget.event.mapsUrl,
@@ -153,14 +152,29 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       );
       return;
     }
-
-    // Abrir Google Maps con direcciones usando helper seguro
     await UrlHelper.openGoogleMapsDirections(
       context,
       coordinates.latitude,
       coordinates.longitude,
       errorMessage: 'No se puede abrir Google Maps con direcciones',
     );
+  }
+
+  /// Distancia precisa por carretera (Google Distance Matrix o similar).
+  /// SOLO en EventDetailScreen: el usuario ya mostró interés explícito.
+  /// TODO: Implementar llamada a API de Google (Distance Matrix) o enlace a mapas.
+  /// Obtener ubicación actual (Geolocator), origen = user, destino = event.venueCoordinates.
+  /// Retornar km reales para mostrar en la pantalla de detalle (ej. "A 14.2 km").
+  /// Ubicación sugerida de uso: al construir el widget de "Cómo llegar" / botón de direcciones.
+  static Future<double?> fetchPreciseDistance(
+    double userLat,
+    double userLng,
+    double venueLat,
+    double venueLng,
+  ) async {
+    // TODO: Integrar Google Distance Matrix API (origen/destino) y devolver distancia en km.
+    // Evitar usar en listas; solo aquí en detalle.
+    return null;
   }
 
   /// Verifica si el evento tiene fecha/hora válida

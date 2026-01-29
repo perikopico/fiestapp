@@ -6,8 +6,6 @@ import 'package:fiestapp/l10n/app_localizations.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:geolocator/geolocator.dart';
 import 'ui/dashboard/dashboard_screen.dart';
 import 'ui/onboarding/permissions_onboarding_screen.dart';
 import 'ui/onboarding/splash_video_screen.dart';
@@ -225,29 +223,11 @@ class _QuePlanState extends State<QuePlan> {
 
   Future<void> _checkOnboardingStatus() async {
     final hasSeen = await OnboardingService.instance.hasSeenPermissionOnboarding();
-    
-    // Verificar si los permisos de ubicación están concedidos
-    bool hasLocationPermission = false;
-    try {
-      final locationPermission = await Geolocator.checkPermission();
-      hasLocationPermission = locationPermission == LocationPermission.whileInUse ||
-          locationPermission == LocationPermission.always;
-    } catch (e) {
-      LoggerService.instance.error('Error al verificar permisos de ubicación', error: e);
-      // Si falla la verificación con Geolocator, intentar con permission_handler
-      try {
-        final status = await Permission.location.status;
-        hasLocationPermission = status.isGranted;
-      } catch (e2) {
-        LoggerService.instance.error('Error al verificar permisos con permission_handler', error: e2);
-      }
-    }
-    
-    // Mostrar onboarding si:
-    // 1. No ha visto el onboarding, O
-    // 2. Ya lo vio pero no tiene permisos de ubicación concedidos
-    final shouldShowOnboarding = !hasSeen || !hasLocationPermission;
-    
+    // No comprobar permisos aquí: evitar cualquier diálogo de permisos antes del video.
+    // El video SIEMPRE es lo primero. Tras el video, se muestra onboarding de permisos
+    // (si !hasSeen) o el Dashboard. Los permisos se piden solo en PermissionsOnboardingScreen.
+    final shouldShowOnboarding = !hasSeen;
+
     if (mounted) {
       setState(() {
         _showOnboarding = shouldShowOnboarding;

@@ -182,6 +182,13 @@ $RECYCLE.BIN/
 
 # End of https://www.toptal.com/developers/gitignore/api/flutter,android,windows,macos,linux
 
+### Python ###
+venv/
+scripts/venv/
+
+### Temporary / cache ###
+*.sfk
+
 ### Custom - Environment files ###
 # Archivos de variables de entorno (contienen credenciales sensibles)
 .env

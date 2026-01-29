@@ -12,8 +12,8 @@ NC='\033[0m'
 echo "📱 Generando iconos de Android para QuePlan"
 echo ""
 
-# Verificar que existe el logo
-LOGO_PATH="assets/logo/icono.png"
+# Verificar que existe el logo (icono actual de launcher)
+LOGO_PATH="assets/logo/icono2.png"
 
 if [ ! -f "$LOGO_PATH" ]; then
     echo -e "${RED}❌ Error: No se encuentra el logo en $LOGO_PATH${NC}"
