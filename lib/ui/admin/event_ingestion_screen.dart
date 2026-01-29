@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../../services/event_ingestion_service.dart';
 import '../../services/city_service.dart';
+import '../common/app_bar_logo.dart';
 
 class EventIngestionScreen extends StatefulWidget {
   const EventIngestionScreen({super.key});
@@ -217,7 +218,10 @@ class _EventIngestionScreenState extends State<EventIngestionScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Ingesta de Eventos JSON'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

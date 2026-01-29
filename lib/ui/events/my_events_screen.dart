@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../models/event.dart';
 import '../../services/event_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 import '../event/event_detail_screen.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 import 'package:intl/intl.dart';
@@ -96,7 +97,10 @@ class _MyEventsScreenState extends State<MyEventsScreen>
     if (!_authService.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Mis eventos'),
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         ),
         body: Center(
           child: Column(
@@ -122,12 +126,25 @@ class _MyEventsScreenState extends State<MyEventsScreen>
       );
     }
 
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Mis eventos'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Material(
+            color: theme.scaffoldBackgroundColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorColor: theme.colorScheme.primary,
+              indicatorWeight: 3,
+              tabs: [
             Tab(
               text: 'Publicados (${_publishedEvents.length})',
             ),
@@ -137,7 +154,9 @@ class _MyEventsScreenState extends State<MyEventsScreen>
             Tab(
               text: 'Rechazados (${_rejectedEvents.length})',
             ),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
       body: _buildBody(context),

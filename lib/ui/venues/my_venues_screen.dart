@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import '../../models/venue.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 import 'owner_events_screen.dart';
 
 /// Pantalla para que el propietario vea sus locales y gestione eventos
@@ -68,7 +69,10 @@ class _MyVenuesScreenState extends State<MyVenuesScreen> {
     if (!AuthService.instance.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Mis Locales'),
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         ),
         body: Center(
           child: Column(
@@ -94,8 +98,12 @@ class _MyVenuesScreenState extends State<MyVenuesScreen> {
     }
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Mis Locales'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

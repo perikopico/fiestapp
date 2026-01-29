@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 
 /// Pantalla para que el usuario introduzca el código de verificación
 /// que recibió del administrador
@@ -151,7 +152,10 @@ class _EnterVerificationCodeScreenState extends State<EnterVerificationCodeScree
     if (!AuthService.instance.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Verificar código de propiedad'),
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         ),
         body: Center(
           child: Column(
@@ -177,8 +181,12 @@ class _EnterVerificationCodeScreenState extends State<EnterVerificationCodeScree
     }
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Verificar código de propiedad'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: _isLoadingRequests
           ? const Center(child: CircularProgressIndicator())

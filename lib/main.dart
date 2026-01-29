@@ -257,13 +257,16 @@ class _QuePlanState extends State<QuePlan> {
   }
 
   Widget _buildHomeScreen() {
-    // Usar una key única para evitar que se recree el splash cuando el ValueListenableBuilder se reconstruye
+    // Primero el video; después del video ir a permisos (si no los ha visto) o al Dashboard.
+    final nextAfterVideo = _showOnboarding
+        ? const PermissionsOnboardingScreen()
+        : const DashboardScreen();
     return ChangeNotifierProvider(
       create: (_) => DashboardProvider(),
       child: SplashVideoScreen(
         key: _splashKey,
-        nextScreen: const DashboardScreen(),
-        isDashboard: true,
+        nextScreen: nextAfterVideo,
+        isDashboard: !_showOnboarding,
       ),
     );
   }
@@ -508,9 +511,7 @@ class _QuePlanState extends State<QuePlan> {
             ),
           ),
 
-          home: _showOnboarding
-              ? const PermissionsOnboardingScreen()
-              : _buildHomeScreen(),
+          home: _buildHomeScreen(),
         );
       },
     );

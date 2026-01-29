@@ -95,6 +95,7 @@ flutter:
   - assets/events.json
   - .env
   - assets/videos/
+  - assets/logo/
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg
@@ -130,6 +131,6 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/logo/icono.png"
+  image_path: "assets/logo/icono2.png"
   adaptive_icon_background: "#0175C2"
-  adaptive_icon_foreground: "assets/logo/icono.png"
+  adaptive_icon_foreground: "assets/logo/icono2.png"

@@ -16,6 +16,7 @@ class FCMTokenService {
   FirebaseMessaging? _messaging;
   String? _currentToken;
   bool _isInitialized = false;
+  bool _listenerSetup = false;
   
   SupabaseClient? get _client {
     try {
@@ -32,93 +33,79 @@ class FCMTokenService {
     
     try {
       _messaging = FirebaseMessaging.instance;
+      // Solo consultar estado; no pedir permiso (evita diálogo al arranque)
+      final settings = await _messaging!.getNotificationSettings();
       
-      // Solicitar permisos de notificación
-      final settings = await _messaging!.requestPermission(
+      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+        await _fetchTokenAndSetupListener();
+      }
+      _isInitialized = true;
+    } catch (e) {
+      debugPrint('❌ Error al inicializar FCMTokenService: $e');
+      _isInitialized = true;
+    }
+  }
+
+  /// Solicita permiso de notificaciones cuando la app ya mostró video/onboarding (p. ej. al entrar en el Dashboard).
+  Future<void> requestPermissionIfNeeded() async {
+    if (!_isInitialized) await initialize();
+    if (_messaging == null) return;
+    final settings = await _messaging!.getNotificationSettings();
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      await _fetchTokenAndSetupListener();
+      return;
+    }
+    try {
+      final newSettings = await _messaging!.requestPermission(
         alert: true,
         badge: true,
         sound: true,
       );
-      
-      if (settings.authorizationStatus == AuthorizationStatus.authorized) {
-        debugPrint("✅ Permisos de notificación concedidos");
-        
-        // En iOS, primero debemos obtener el token APNS antes del token FCM
-        if (Platform.isIOS) {
-          bool apnsTokenObtained = false;
-          // Intentar obtener el token APNS con múltiples reintentos
-          for (int attempt = 0; attempt < 5; attempt++) {
-            try {
-              final apnsToken = await _messaging!.getAPNSToken();
-              if (apnsToken != null) {
-                debugPrint("✅ Token APNS obtenido: ${apnsToken.substring(0, 20)}...");
-                apnsTokenObtained = true;
-                break;
-              } else {
-                if (attempt < 4) {
-                  debugPrint("⚠️ Token APNS es null, reintentando en ${(attempt + 1) * 2} segundos... (intento ${attempt + 1}/5)");
-                  await Future.delayed(Duration(seconds: (attempt + 1) * 2));
-                }
-              }
-            } catch (e) {
-              debugPrint("⚠️ Error al obtener token APNS (intento ${attempt + 1}/5): $e");
-              if (attempt < 4) {
-                await Future.delayed(Duration(seconds: (attempt + 1) * 2));
-              }
-            }
-          }
-          
-          if (!apnsTokenObtained) {
-            debugPrint("⚠️ No se pudo obtener token APNS después de 5 intentos");
-            debugPrint("⚠️ El token FCM puede no estar disponible hasta que el token APNS esté listo");
-            debugPrint("⚠️ Esto es normal en iOS - el token se obtendrá automáticamente cuando esté disponible");
-            // No lanzar error, simplemente continuar - el token se obtendrá más tarde
-          }
-        }
-        
-        // Obtener token inicial (puede fallar en iOS si APNS no está listo, pero no es crítico)
-        String? token;
-        try {
-          token = await _messaging!.getToken();
-        } catch (e) {
-          debugPrint("⚠️ No se pudo obtener token FCM inicialmente: $e");
-          if (Platform.isIOS) {
-            debugPrint("⚠️ Esto es normal en iOS si el token APNS aún no está disponible");
-            debugPrint("⚠️ El token se obtendrá automáticamente cuando el token APNS esté listo");
-          }
-          // No lanzar error, el token se obtendrá más tarde cuando esté disponible
-        }
-        if (token != null && token.isNotEmpty) {
-          _currentToken = token;
-          debugPrint("🔑 FCM TOKEN obtenido: ${token.substring(0, 20)}...");
-          
-          // Guardar token si el usuario está autenticado
-          if (_authService.isAuthenticated) {
-            await saveTokenToSupabase(token);
-          }
-        } else {
-          debugPrint("⚠️ Token FCM no disponible aún - se obtendrá cuando esté listo");
-        }
-        
-        // Escuchar cambios en el token
-        _messaging!.onTokenRefresh.listen((newToken) {
-          debugPrint("🔄 FCM TOKEN ACTUALIZADO");
-          _currentToken = newToken;
-          if (_authService.isAuthenticated) {
-            saveTokenToSupabase(newToken).catchError((e) {
-              debugPrint('❌ Error al guardar token actualizado: $e');
-            });
-          }
-        });
+      if (newSettings.authorizationStatus == AuthorizationStatus.authorized) {
+        await _fetchTokenAndSetupListener();
       } else {
-        debugPrint("⚠️ Permisos de notificación: ${settings.authorizationStatus}");
+        debugPrint("⚠️ Permisos de notificación: ${newSettings.authorizationStatus}");
       }
-      
-      _isInitialized = true;
     } catch (e) {
-      debugPrint('❌ Error al inicializar FCMTokenService: $e');
+      debugPrint('❌ Error al solicitar permiso FCM: $e');
     }
   }
+
+  Future<void> _fetchTokenAndSetupListener() async {
+    if (_messaging == null) return;
+    if (Platform.isIOS) {
+      for (int attempt = 0; attempt < 5; attempt++) {
+        try {
+          final apnsToken = await _messaging!.getAPNSToken();
+          if (apnsToken != null) break;
+          if (attempt < 4) await Future.delayed(Duration(seconds: (attempt + 1) * 2));
+        } catch (e) {
+          if (attempt < 4) await Future.delayed(Duration(seconds: (attempt + 1) * 2));
+        }
+      }
+    }
+    try {
+      final token = await _messaging!.getToken();
+      if (token != null && token.isNotEmpty) {
+        _currentToken = token;
+        if (_authService.isAuthenticated) await saveTokenToSupabase(token);
+      }
+    } catch (e) {
+      debugPrint("⚠️ No se pudo obtener token FCM: $e");
+    }
+    if (!_listenerSetup) {
+      _listenerSetup = true;
+      _messaging!.onTokenRefresh.listen((newToken) {
+        _currentToken = newToken;
+        if (_authService.isAuthenticated) {
+          saveTokenToSupabase(newToken).catchError((e) {
+            debugPrint('❌ Error al guardar token actualizado: $e');
+          });
+        }
+      });
+    }
+  }
+
   
   /// Guarda el token FCM en Supabase
   Future<void> saveTokenToSupabase(String? token) async {
@@ -228,38 +215,8 @@ class FCMTokenService {
           debugPrint("🔑 FCM TOKEN obtenido: ${_currentToken!.substring(0, 20)}...");
         }
         return _currentToken;
-      } else {
-        debugPrint('⚠️ Permisos de notificación no concedidos: ${settings.authorizationStatus}');
-        // Intentar solicitar permisos de nuevo
-        final newSettings = await messaging.requestPermission(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
-        
-        if (newSettings.authorizationStatus == AuthorizationStatus.authorized) {
-          // En iOS, primero debemos obtener el token APNS antes del token FCM
-          if (Platform.isIOS) {
-            try {
-              final apnsToken = await messaging.getAPNSToken();
-              if (apnsToken == null) {
-                debugPrint("⚠️ Token APNS es null, esperando...");
-                await Future.delayed(const Duration(seconds: 1));
-                await messaging.getAPNSToken();
-              }
-            } catch (e) {
-              debugPrint("⚠️ Error al obtener token APNS: $e");
-            }
-          }
-          
-          _currentToken = await messaging.getToken();
-          if (_currentToken != null) {
-            debugPrint("🔑 FCM TOKEN obtenido después de conceder permisos: ${_currentToken!.substring(0, 20)}...");
-          }
-          return _currentToken;
-        }
       }
-      
+      // No pedir permiso aquí; usar requestPermissionIfNeeded() desde el Dashboard
       return null;
     } catch (e) {
       debugPrint('❌ Error al obtener token FCM: $e');

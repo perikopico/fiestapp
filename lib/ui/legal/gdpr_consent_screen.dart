@@ -4,6 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../utils/url_helper.dart';
 import '../../services/gdpr_consent_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../common/app_bar_logo.dart';
 
 class GDPRConsentScreen extends StatefulWidget {
   final bool isFirstTime;
@@ -116,7 +117,10 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)?.dataConsent ?? 'Consentimiento de Datos'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         automaticallyImplyLeading: !widget.isFirstTime,
       ),
       body: _isLoading
@@ -171,9 +175,11 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
+                  Text(
                     'Puedes personalizar qué datos quieres compartir con nosotros:',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   
@@ -226,10 +232,13 @@ class _GDPRConsentScreenState extends State<GDPRConsentScreen> {
                   
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton(
+                    child: FilledButton(
                       onPressed: _saveConsents,
-                      style: ElevatedButton.styleFrom(
+                      style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                       child: const Text('Guardar y continuar'),
                     ),

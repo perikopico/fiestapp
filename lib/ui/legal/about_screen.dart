@@ -4,6 +4,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/url_helper.dart';
 import '../../l10n/app_localizations.dart';
+import '../common/app_bar_logo.dart';
 import 'gdpr_consent_screen.dart';
 
 class AboutScreen extends StatefulWidget {
@@ -67,7 +68,10 @@ class _AboutScreenState extends State<AboutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(AppLocalizations.of(context)?.aboutQuePlan ?? 'Sobre QuePlan'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -76,25 +80,23 @@ class _AboutScreenState extends State<AboutScreen> {
           Center(
             child: Column(
               children: [
-                const Icon(
+                Icon(
                   Icons.event,
                   size: 80,
-                  color: Colors.blue,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'QuePlan',
-                  style: TextStyle(
-                    fontSize: 32,
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Versión $_appVersion (Build $_buildNumber)',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 14,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -177,9 +179,8 @@ class _AboutScreenState extends State<AboutScreen> {
           Center(
             child: Text(
               '© ${DateTime.now().year} QuePlan',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),
@@ -189,9 +190,8 @@ class _AboutScreenState extends State<AboutScreen> {
           Center(
             child: Text(
               'Todos los derechos reservados',
-              style: TextStyle(
-                color: Colors.grey[600],
-                fontSize: 12,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
           ),

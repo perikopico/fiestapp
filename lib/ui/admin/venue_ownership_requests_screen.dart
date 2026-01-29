@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:intl/intl.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 import '../venues/verify_ownership_screen.dart';
 
 class VenueOwnershipRequestsScreen extends StatefulWidget {
@@ -148,7 +149,10 @@ class _VenueOwnershipRequestsScreenState extends State<VenueOwnershipRequestsScr
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Solicitudes de Propiedad'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

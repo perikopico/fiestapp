@@ -1,8 +1,10 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
-import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:add_2_calendar/add_2_calendar.dart' as add2cal;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -19,7 +21,6 @@ import '../../utils/validation_utils.dart';
 import '../../services/logger_service.dart';
 import '../../services/notification_alerts_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/services.dart';
 
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -68,20 +69,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _toggleFollowing() async {
-    // Feedback háptico
     HapticFeedback.lightImpact();
-    
     final newValue = !_isFollowing;
-    
-    // Actualizar estado local inmediatamente
-    setState(() {
-      _isFollowing = newValue;
-    });
-    
-    // Guardar en persistencia
+    setState(() => _isFollowing = newValue);
     await _alertsService.setEventFollowed(widget.event.id, newValue);
-    
-    // Mostrar feedback visual
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -89,6 +80,24 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             newValue
                 ? '¡Listo! Te avisaremos de eventos similares'
                 : 'Has dejado de seguir este evento',
+          ),
+          duration: const Duration(seconds: 2),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleFavorite() async {
+    HapticFeedback.lightImpact();
+    final newValue = !_isFavorite;
+    setState(() => _isFavorite = newValue);
+    await FavoritesLocalService.instance.toggleFavorite(widget.event.id);
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            newValue ? 'Añadido a favoritos' : 'Eliminado de favoritos',
           ),
           duration: const Duration(seconds: 2),
           behavior: SnackBarBehavior.floating,
@@ -171,6 +180,33 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
            priceLower.startsWith('gratis');
   }
 
+  String get _shareText => [
+        '${widget.event.title} - ${widget.event.cityName ?? ''}'.trim(),
+        (widget.event.place ?? '').trim(),
+        '${DateFormat('EEE, d MMM • HH:mm', 'es').format(widget.event.startsAt)}'.trim(),
+        (widget.event.mapsUrl ?? '').trim(),
+      ].where((s) => s.isNotEmpty).join('\n');
+
+  void _share() {
+    final text = _shareText;
+    if (text.isEmpty) return;
+    Rect sharePositionOrigin = Rect.zero;
+    try {
+      final box = context.findRenderObject() as RenderBox?;
+      if (box != null && box.hasSize) {
+        final pos = box.localToGlobal(Offset.zero);
+        sharePositionOrigin = Rect.fromLTWH(pos.dx, pos.dy, box.size.width, box.size.height);
+      } else {
+        final size = MediaQuery.sizeOf(context);
+        sharePositionOrigin = Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0);
+      }
+    } catch (_) {
+      final size = MediaQuery.sizeOf(context);
+      sharePositionOrigin = Rect.fromLTWH(size.width / 2, size.height / 2, 0, 0);
+    }
+    Share.share(text, sharePositionOrigin: sharePositionOrigin);
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -179,210 +215,185 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         widget.event.infoUrl!.isNotEmpty &&
         ValidationUtils.isValidUrl(widget.event.infoUrl!);
     final showStickyFooter = hasInfoUrl || hasMapsUrl;
-    final shareText = [
-      '${widget.event.title} - ${widget.event.cityName ?? ''}'.trim(),
-      (widget.event.place ?? '').trim(),
-      '${widget.event.formattedDate} ${widget.event.formattedTime}'.trim(),
-      (widget.event.mapsUrl ?? '').trim(),
-    ].where((s) => s.isNotEmpty).join('\n');
+    final topPadding = MediaQuery.viewPaddingOf(context).top;
 
-    return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Detalle del evento'),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: theme.colorScheme.surface,
-        actions: [
-          IconButton(
-            icon: Icon(
-              _isFollowing ? Icons.notifications : Icons.notifications_outlined,
-              color: _isFollowing
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.onSurface,
-            ),
-            onPressed: _toggleFollowing,
-            tooltip: _isFollowing ? 'Dejar de seguir' : 'Seguir evento',
-          ),
-          IconButton(
-            icon: Icon(
-              _isFavorite ? Icons.favorite : Icons.favorite_border,
-              color: _isFavorite
-                  ? theme.colorScheme.error
-                  : theme.colorScheme.onSurface,
-            ),
-            onPressed: () async {
-              await FavoritesLocalService.instance.toggleFavorite(widget.event.id);
-              if (mounted) {
-                setState(() {
-                  _isFavorite = !_isFavorite;
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      _isFavorite
-                          ? 'Añadido a favoritos'
-                          : 'Eliminado de favoritos',
-                    ),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
-            tooltip: _isFavorite ? 'Quitar de favoritos' : 'Añadir a favoritos',
-          ),
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'report') _showReportDialog();
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'report',
-                child: Row(
-                  children: [
-                    Icon(Icons.flag, color: Colors.red, size: 20),
-                    SizedBox(width: 8),
-                    Text('Reportar evento'),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarColor: theme.scaffoldBackgroundColor,
+        systemNavigationBarIconBrightness: theme.brightness == Brightness.dark ? Brightness.light : Brightness.dark,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _buildHeroImage(context, theme),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          widget.event.title,
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
+      child: Scaffold(
+        extendBodyBehindAppBar: true,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        body: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  _buildSliverAppBar(context, theme, topPadding),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 20, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.event.title,
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 10),
-                        _buildBlockA(context, theme),
-                        const SizedBox(height: 16),
-                        _buildBlockB(context, theme),
-                        const SizedBox(height: 20),
-                        _buildDescriptionSection(context, widget.event),
-                        const SizedBox(height: 20),
-                        _buildActionButtons(context, theme, shareText),
-                        if (!showStickyFooter) const SizedBox(height: 24),
-                      ],
+                          const SizedBox(height: 10),
+                          _buildBlockA(context, theme),
+                          const SizedBox(height: 16),
+                          _buildBlockB(context, theme),
+                          const SizedBox(height: 20),
+                          _buildDescriptionSection(context, widget.event),
+                          const SizedBox(height: 24),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-          if (showStickyFooter) _buildStickyFooter(context, theme, hasInfoUrl, hasMapsUrl),
-        ],
+            if (showStickyFooter) _buildStickyFooter(context, theme, hasInfoUrl, hasMapsUrl),
+          ],
+        ),
       ),
     );
   }
 
-  static const double _heroHeight = 288; // h-72, más inmersiva
-  static const double _heroRadius = 20;  // rounded-b-xl
+  static const double _heroHeight = 320;
 
-  Widget _buildHeroImage(BuildContext context, ThemeData theme) {
-    final radius = BorderRadius.only(
-      bottomLeft: Radius.circular(_heroRadius),
-      bottomRight: Radius.circular(_heroRadius),
-    );
-    if (widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty) {
-      return GestureDetector(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
-            ),
-          );
-        },
-        child: SizedBox(
-          height: _heroHeight,
-          width: double.infinity,
-          child: Stack(
-            fit: StackFit.expand,
+  Widget _buildSliverAppBar(BuildContext context, ThemeData theme, double topPadding) {
+    final hasImage = widget.event.imageUrl != null && widget.event.imageUrl!.isNotEmpty;
+
+    return SliverAppBar(
+      expandedHeight: _heroHeight,
+      pinned: false,
+      stretch: true,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      automaticallyImplyLeading: false,
+      leadingWidth: 56,
+      leading: Padding(
+        padding: EdgeInsets.only(left: 12, top: topPadding + 8),
+        child: _FloatingGlassButton(
+          icon: Icons.arrow_back,
+          onTap: () => Navigator.of(context).pop(),
+        ),
+      ),
+      actions: [
+        Padding(
+          padding: EdgeInsets.only(right: 8, top: topPadding + 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              ClipRRect(
-                borderRadius: radius,
-                child: Hero(
-                  tag: 'event-img-${widget.event.id}',
-                  child: Image.network(
-                    widget.event.imageUrl!,
-                    width: double.infinity,
-                    height: double.infinity,
-                    fit: BoxFit.cover,
-                    alignment: _alignmentFromString(widget.event.imageAlignment),
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        color: theme.colorScheme.surfaceContainerLowest,
-                        alignment: Alignment.center,
-                        child: Icon(
-                          Icons.event,
-                          size: 56,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      );
-                    },
-                  ),
-                ),
+              _FloatingGlassButton(icon: Icons.share, onTap: _share),
+              const SizedBox(width: 8),
+              _FloatingFavoriteButton(
+                isFavorite: _isFavorite,
+                onTap: _toggleFavorite,
               ),
-              Positioned(
-                top: 8,
-                right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.6),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.fullscreen, color: Colors.white, size: 16),
-                      SizedBox(width: 4),
-                      Text(
-                        'Ampliar',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              const SizedBox(width: 8),
+              _FloatingGlassButton(
+                icon: Icons.more_vert,
+                onTap: () => _showOverlayMenu(context, theme),
               ),
             ],
           ),
         ),
-      );
-    }
-    return SizedBox(
-      height: _heroHeight,
-      width: double.infinity,
-      child: ClipRRect(
-        borderRadius: radius,
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (hasImage)
+              GestureDetector(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => FullscreenImageScreen(imageUrl: widget.event.imageUrl!),
+                    ),
+                  );
+                },
+                child: Hero(
+                  tag: 'event-img-${widget.event.id}',
+                  child: Image.network(
+                    widget.event.imageUrl!,
+                    fit: BoxFit.cover,
+                    alignment: _alignmentFromString(widget.event.imageAlignment),
+                    errorBuilder: (_, __, ___) => _heroPlaceholder(theme),
+                  ),
+                ),
+              )
+            else
+              _heroPlaceholder(theme),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.3),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        collapseMode: CollapseMode.parallax,
+      ),
+    );
+  }
+
+  Widget _heroPlaceholder(ThemeData theme) {
+    return Container(
+      color: theme.colorScheme.surfaceContainerLowest,
+      alignment: Alignment.center,
+      child: Icon(Icons.event, size: 56, color: theme.colorScheme.onSurfaceVariant),
+    );
+  }
+
+  void _showOverlayMenu(BuildContext context, ThemeData theme) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => SafeArea(
         child: Container(
-          color: theme.colorScheme.surfaceContainerLowest,
-          alignment: Alignment.center,
-          child: Icon(
-            Icons.event,
-            size: 56,
-            color: theme.colorScheme.onSurfaceVariant,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(
+                  _isFollowing ? Icons.notifications : Icons.notifications_outlined,
+                  color: _isFollowing ? theme.colorScheme.primary : null,
+                ),
+                title: Text(_isFollowing ? 'Dejar de seguir' : 'Seguir evento'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _toggleFollowing();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.flag_outlined, color: Colors.red),
+                title: const Text('Reportar evento'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showReportDialog();
+                },
+              ),
+            ],
           ),
         ),
       ),
@@ -438,11 +449,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
-  /// Bloque B: filas con iconos – Fecha+Hora y Lugar+Ciudad.
+  /// Bloque B: filas Fecha y Ubicación con iconos bg-blue-50 / bg-red-50.
   Widget _buildBlockB(BuildContext context, ThemeData theme) {
-    final primary = theme.colorScheme.primary;
-    final onSurface = theme.colorScheme.onSurface;
-    final muted = theme.colorScheme.onSurfaceVariant;
+    const bgBlue = Color(0xFFEFF6FF);
+    const bgRed = Color(0xFFFEF2F2);
+    const gray500 = Color(0xFF6B7280);
+    const gray900 = Color(0xFF111827);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -451,64 +463,83 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.calendar_today, size: 24, color: primary),
-              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: bgBlue,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.calendar_today, size: 24, color: theme.colorScheme.primary),
+              ),
+              const SizedBox(width: 14),
               Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: onSurface,
-                      fontWeight: FontWeight.w600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Fecha', style: theme.textTheme.labelMedium?.copyWith(color: gray500, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Text(
+                      DateFormat('EEE, d MMM • HH:mm', 'es').format(widget.event.startsAt),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: gray900,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    children: [
-                      TextSpan(
-                        text: DateFormat('EEE, d MMM', 'es').format(widget.event.startsAt),
-                      ),
-                      TextSpan(
-                        text: ' · ${DateFormat('HH:mm', 'es').format(widget.event.startsAt)}',
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w500,
-                          color: muted,
-                        ),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: _addToCalendar,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Text(
+                'Añadir al calendario',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
         ] else
           _buildNoDatePill(context, theme),
         if (widget.event.place != null && widget.event.place!.isNotEmpty) ...[
-          if (_hasValidDateTime) const SizedBox(height: 4),
+          if (_hasValidDateTime) const SizedBox(height: 4) else const SizedBox(height: 12),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(Icons.location_on, size: 24, color: primary),
-              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: bgRed,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.location_on, size: 24, color: theme.colorScheme.error),
+              ),
+              const SizedBox(width: 14),
               Expanded(
-                child: RichText(
-                  text: TextSpan(
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: onSurface,
-                      fontWeight: FontWeight.w600,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Ubicación', style: theme.textTheme.labelMedium?.copyWith(color: gray500, fontSize: 12)),
+                    const SizedBox(height: 2),
+                    Text(
+                      [widget.event.place, widget.event.cityName]
+                          .whereType<String>()
+                          .where((s) => s.isNotEmpty)
+                          .join(', '),
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        color: gray900,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    children: [
-                      TextSpan(text: widget.event.place!),
-                      if (widget.event.cityName != null &&
-                          widget.event.cityName!.isNotEmpty)
-                        TextSpan(
-                          text: ' · ${widget.event.cityName!}',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w500,
-                            color: muted,
-                          ),
-                        ),
-                    ],
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                  ],
                 ),
               ),
             ],
@@ -518,7 +549,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
-  /// Sticky footer: Más información + Cómo llegar (si aplica).
+  Future<void> _addToCalendar() async {
+    final location = [
+      widget.event.place,
+      widget.event.cityName,
+    ].where((s) => s != null && s.isNotEmpty).cast<String>().join(' · ');
+    final calEvent = add2cal.Event(
+      title: widget.event.title,
+      description: widget.event.description ?? '',
+      location: location,
+      startDate: widget.event.startsAt,
+      endDate: widget.event.startsAt.add(const Duration(hours: 2)),
+    );
+    await add2cal.Add2Calendar.addEvent2Cal(calEvent);
+  }
+
+  /// Sticky footer: botón principal fijo, fondo blanco, sombra superior.
   Widget _buildStickyFooter(
     BuildContext context,
     ThemeData theme,
@@ -526,10 +572,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     bool hasMapsUrl,
   ) {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border: Border(top: BorderSide(color: theme.dividerColor)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 16,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
@@ -555,11 +607,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ],
             if (hasMapsUrl)
               Expanded(
-                child: OutlinedButton.icon(
+                child: FilledButton.icon(
                   onPressed: _openDirections,
                   icon: const Icon(Icons.directions, size: 20),
                   label: const Text('Cómo llegar'),
-                  style: OutlinedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -599,93 +651,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildActionButtons(BuildContext context, ThemeData theme, String shareText) {
-    return Column(
-      children: [
-        // Botón compartir
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              if (shareText.isNotEmpty) {
-                // Obtener sharePositionOrigin para iOS
-                Rect sharePositionOrigin = Rect.zero;
-                try {
-                  final RenderBox? box = context.findRenderObject() as RenderBox?;
-                  if (box != null && box.hasSize) {
-                    final position = box.localToGlobal(Offset.zero);
-                    sharePositionOrigin = Rect.fromLTWH(
-                      position.dx,
-                      position.dy,
-                      box.size.width,
-                      box.size.height,
-                    );
-                  } else {
-                    // Fallback: usar el centro de la pantalla
-                    final screenSize = MediaQuery.of(context).size;
-                    sharePositionOrigin = Rect.fromLTWH(
-                      screenSize.width / 2,
-                      screenSize.height / 2,
-                      0,
-                      0,
-                    );
-                  }
-                } catch (e) {
-                  debugPrint('Error al obtener sharePositionOrigin: $e');
-                  // Fallback: usar el centro de la pantalla
-                  final screenSize = MediaQuery.of(context).size;
-                  sharePositionOrigin = Rect.fromLTWH(
-                    screenSize.width / 2,
-                    screenSize.height / 2,
-                    0,
-                    0,
-                  );
-                }
-                Share.share(
-                  shareText,
-                  sharePositionOrigin: sharePositionOrigin,
-                );
-              }
-            },
-            icon: const Icon(Icons.ios_share),
-            label: const Text('Compartir'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        // Botón añadir al calendario
-        SizedBox(
-          width: double.infinity,
-          child: TextButton.icon(
-            onPressed: () async {
-              final location = [
-                widget.event.place,
-                widget.event.cityName,
-              ].where((s) => s != null && s.isNotEmpty).cast<String>().join(' · ');
-
-              final calEvent = add2cal.Event(
-                title: widget.event.title,
-                description: widget.event.description ?? '',
-                location: location,
-                startDate: widget.event.startsAt,
-                endDate: widget.event.startsAt.add(const Duration(hours: 2)),
-              );
-
-              await add2cal.Add2Calendar.addEvent2Cal(calEvent);
-            },
-            icon: const Icon(Icons.calendar_today),
-            label: const Text('Añadir al calendario'),
-          ),
-        ),
-      ],
     );
   }
 
@@ -880,5 +845,131 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         );
       }
     }
+  }
+}
+
+class _FloatingGlassButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _FloatingGlassButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(28),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(28),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                shape: BoxShape.rectangle,
+                borderRadius: BorderRadius.circular(28),
+                color: Colors.white.withOpacity(0.3),
+                border: Border.all(color: Colors.white.withOpacity(0.5), width: 1),
+              ),
+              child: Icon(icon, color: Colors.white, size: 22),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FloatingFavoriteButton extends StatefulWidget {
+  final bool isFavorite;
+  final VoidCallback onTap;
+
+  const _FloatingFavoriteButton({
+    required this.isFavorite,
+    required this.onTap,
+  });
+
+  @override
+  State<_FloatingFavoriteButton> createState() => _FloatingFavoriteButtonState();
+}
+
+class _FloatingFavoriteButtonState extends State<_FloatingFavoriteButton>
+    with SingleTickerProviderStateMixin {
+  static const _duration = Duration(milliseconds: 320);
+
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: _duration);
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.25).chain(
+          CurveTween(curve: Curves.easeOut),
+        ),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.25, end: 1.0).chain(
+          CurveTween(curve: Curves.elasticOut),
+        ),
+        weight: 55,
+      ),
+    ]).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.linear),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _handleTap() {
+    widget.onTap();
+    _controller.forward(from: 0);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final icon = widget.isFavorite ? Icons.favorite : Icons.favorite_border;
+    final color = widget.isFavorite ? theme.colorScheme.error : Colors.white;
+
+    return ScaleTransition(
+      scale: _scale,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _handleTap,
+          borderRadius: BorderRadius.circular(28),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  color: Colors.white.withOpacity(0.3),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.5),
+                    width: 1,
+                  ),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

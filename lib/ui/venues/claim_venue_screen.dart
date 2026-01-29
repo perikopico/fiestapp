@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../models/venue.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 
 class ClaimVenueScreen extends StatefulWidget {
   final Venue venue;
@@ -97,8 +98,12 @@ class _ClaimVenueScreenState extends State<ClaimVenueScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Solicitar Propiedad'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -328,10 +333,13 @@ class _ClaimVenueScreenState extends State<ClaimVenueScreen> {
               const SizedBox(height: 16),
               
               // Botón de envío
-              ElevatedButton(
+              FilledButton(
                 onPressed: _isLoading ? null : _submitRequest,
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
                 child: _isLoading
                     ? const SizedBox(

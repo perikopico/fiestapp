@@ -5,6 +5,7 @@ import '../../models/category.dart';
 import '../../services/notification_preferences_service.dart';
 import '../../services/category_service.dart';
 import '../../services/city_service.dart';
+import '../common/app_bar_logo.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 import 'widgets/notification_rule_card.dart';
 
@@ -177,7 +178,10 @@ class _NotificationSettingsScreenState
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Configuración de notificaciones'),
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         ),
         body: const Center(child: CircularProgressIndicator()),
         bottomNavigationBar: const BottomNavBar(activeRoute: 'notifications'),
@@ -188,7 +192,10 @@ class _NotificationSettingsScreenState
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Configuración de notificaciones'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -228,12 +235,12 @@ class _NotificationSettingsScreenState
             // Botón Guardar
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton(
+              child: FilledButton(
                 onPressed: _isSaving ? null : _savePreferences,
-                style: ElevatedButton.styleFrom(
+                style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
                 child: _isSaving
@@ -353,7 +360,7 @@ class _NotificationSettingsScreenState
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
               ),
             ),

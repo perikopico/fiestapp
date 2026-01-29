@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:fiestapp/services/admin_moderation_service.dart';
 import '../../models/event.dart';
+import '../common/app_bar_logo.dart';
 import 'admin_event_edit_screen.dart';
 
 enum AdminEventFilter { pending, published }
@@ -347,16 +348,30 @@ class _PendingEventsScreenState extends State<PendingEventsScreen>
         ? _pendingEvents
         : _publishedEvents;
 
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Panel de administración'),
+        title: const AppBarLogo(),
+        centerTitle: true,
         elevation: 0,
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Pendientes'),
-            Tab(text: 'Publicados'),
-          ],
+        backgroundColor: theme.scaffoldBackgroundColor,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Material(
+            color: theme.scaffoldBackgroundColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorColor: theme.colorScheme.primary,
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(text: 'Pendientes'),
+                Tab(text: 'Publicados'),
+              ],
+            ),
+          ),
         ),
       ),
       body: _isLoading

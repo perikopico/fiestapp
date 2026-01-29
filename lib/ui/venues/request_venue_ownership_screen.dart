@@ -6,6 +6,7 @@ import '../../services/venue_service.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/city_service.dart' show City, CityService;
+import '../common/app_bar_logo.dart';
 import 'claim_venue_screen.dart';
 import '../common/venue_search_field.dart';
 
@@ -105,7 +106,10 @@ class _RequestVenueOwnershipScreenState extends State<RequestVenueOwnershipScree
     if (!_authService.isAuthenticated) {
       return Scaffold(
         appBar: AppBar(
-          title: const Text('Solicitar ser propietario'),
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         ),
         body: Center(
           child: Column(
@@ -131,8 +135,12 @@ class _RequestVenueOwnershipScreenState extends State<RequestVenueOwnershipScree
     }
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Reclamar un lugar'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),

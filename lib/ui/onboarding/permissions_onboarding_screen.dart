@@ -4,6 +4,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
 import '../../services/onboarding_service.dart';
 import '../dashboard/dashboard_screen.dart';
+import '../common/app_bar_logo.dart';
 
 class PermissionsOnboardingScreen extends StatefulWidget {
   const PermissionsOnboardingScreen({super.key});
@@ -127,9 +128,14 @@ class _PermissionsOnboardingScreenState
         body: SafeArea(
           child: Column(
             children: [
+              // Logo (misma identidad que el resto de la app)
+              Padding(
+                padding: const EdgeInsets.only(top: 8, bottom: 8),
+                child: const AppBarLogo(),
+              ),
               // Indicadores de página
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: List.generate(
@@ -162,25 +168,22 @@ class _PermissionsOnboardingScreenState
                 ),
               ),
 
-              // Botón de acción
+              // Botón de acción (FilledButton y radio 14 como en la app)
               Padding(
-                padding: const EdgeInsets.all(24),
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
                 child: SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  child: FilledButton(
                     onPressed: _nextPage,
-                    style: ElevatedButton.styleFrom(
+                    style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                       ),
                     ),
                     child: Text(
                       isLastPage ? 'Activar permisos' : 'Continuar',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                      ),
+                      style: theme.textTheme.labelLarge,
                     ),
                   ),
                 ),
@@ -219,13 +222,20 @@ class _OnboardingPage extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Icono grande
+          // Icono en contenedor redondeado (estilo Profile/Dashboard)
           Container(
             width: 120,
             height: 120,
             decoration: BoxDecoration(
-              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
-              shape: BoxShape.circle,
+              color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: theme.colorScheme.primary.withOpacity(0.08),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
             child: Icon(
               slide.icon,
@@ -233,25 +243,25 @@ class _OnboardingPage extends StatelessWidget {
               color: theme.colorScheme.primary,
             ),
           ),
-          const SizedBox(height: 48),
+          const SizedBox(height: 40),
 
           // Título
           Text(
             slide.title,
             style: theme.textTheme.titleLarge?.copyWith(
               fontWeight: FontWeight.w700,
-              fontSize: 28,
+              fontSize: 26,
             ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
 
           // Texto descriptivo
           Text(
             slide.text,
             style: theme.textTheme.bodyLarge?.copyWith(
-              fontSize: 16,
               height: 1.5,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
             textAlign: TextAlign.center,
           ),

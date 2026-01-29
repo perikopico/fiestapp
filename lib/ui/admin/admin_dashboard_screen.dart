@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
+import '../common/app_bar_logo.dart';
 
 /// Dashboard de administración con gráficos y estadísticas
 class AdminDashboardScreen extends StatefulWidget {
@@ -164,7 +165,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   Widget build(BuildContext context) {
     if (!AuthService.instance.isAdmin) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Admin Dashboard')),
+        appBar: AppBar(
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        ),
         body: const Center(
           child: Text('Acceso no autorizado'),
         ),
@@ -173,7 +179,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard Admin'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

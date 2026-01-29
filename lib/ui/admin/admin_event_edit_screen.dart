@@ -16,6 +16,7 @@ import '../../services/city_service.dart' show City;
 import '../../services/category_service.dart';
 import '../../services/admin_moderation_service.dart';
 import '../../services/sample_image_service.dart';
+import '../common/app_bar_logo.dart';
 import '../common/city_search_field.dart';
 import '../events/image_crop_screen.dart';
 import '../events/wizard_steps/step5_image.dart'; // Para ImageSelectionOption y _SampleImagePickerDialog
@@ -1144,15 +1145,26 @@ $dayProgram''';
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     if (_isLoadingData) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Editar evento')),
+        appBar: AppBar(
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: theme.scaffoldBackgroundColor,
+        ),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Editar evento')),
+      appBar: AppBar(
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+      ),
       body: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,

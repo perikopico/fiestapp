@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/event.dart';
 import '../../services/favorites_local_service.dart';
 import '../../services/event_service.dart';
+import '../common/app_bar_logo.dart';
 import '../dashboard/widgets/upcoming_list.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 
@@ -68,15 +69,30 @@ class _FavoritesScreenState extends State<FavoritesScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Favoritos'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: 'Próximos'),
-            Tab(text: 'Pasados'),
-          ],
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Material(
+            color: theme.scaffoldBackgroundColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorColor: theme.colorScheme.primary,
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(text: 'Próximos'),
+                Tab(text: 'Pasados'),
+              ],
+            ),
+          ),
         ),
       ),
       body: _buildBody(context),
@@ -90,25 +106,10 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     }
 
     if (_allEvents.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.favorite_border,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Todavía no tienes eventos en favoritos',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      return _buildEmptyState(
+        context,
+        icon: Icons.favorite_border,
+        message: 'Todavía no tienes eventos en favoritos',
       );
     }
 
@@ -128,31 +129,51 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final upcoming = _upcomingEvents;
 
     if (upcoming.isEmpty) {
-      return Center(
+      return _buildEmptyState(
+        context,
+        icon: Icons.event_available,
+        message: 'No tienes eventos favoritos próximos',
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
+      child: UpcomingList(events: upcoming),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, {required IconData icon, required String message}) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.event_available,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Icon(
+                icon,
+                size: 56,
+                color: theme.colorScheme.primary,
+              ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
-              'No tienes eventos favoritos próximos',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              message,
+              style: theme.textTheme.titleMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),
           ],
         ),
-      );
-    }
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-      child: UpcomingList(events: upcoming),
+      ),
     );
   }
 
@@ -160,30 +181,15 @@ class _FavoritesScreenState extends State<FavoritesScreen>
     final past = _pastEvents;
 
     if (past.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.history,
-              size: 64,
-              color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Aún no tienes eventos favoritos que hayan pasado.',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      return _buildEmptyState(
+        context,
+        icon: Icons.history,
+        message: 'Aún no tienes eventos favoritos que hayan pasado.',
       );
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       child: UpcomingList(events: past),
     );
   }

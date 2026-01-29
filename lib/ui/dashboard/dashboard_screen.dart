@@ -27,6 +27,7 @@ import '../../utils/dashboard_utils.dart';
 import '../../services/favorites_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
+import '../../services/fcm_token_service.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
@@ -307,6 +308,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
         // Si el provider no está disponible, continuar sin él
         LoggerService.instance.debug('DashboardProvider no disponible aún', data: {'error': e.toString()});
       }
+    });
+
+    // Pedir permiso de notificaciones después de mostrar el Dashboard (el video ya se vio)
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (!mounted) return;
+      FCMTokenService.instance.requestPermissionIfNeeded();
     });
     
     // IMPORTANTE: Verificar permisos PRIMERO para establecer el modo correcto
@@ -1874,12 +1881,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// Logo para AppBar/SliverAppBar. Si no existe assets/logo/queplan_logo.png, se muestra "QuePlan".
   /// Escala y recorta el PNG para reducir el padding transparente y que el icono visible llene el espacio.
   Widget _buildAppBarLogo() {
-    const double logoHeight = 64;
-    const double scale = 2.2;
+    const double logoHeight = 48;
+    const double scale = 2.0;
     return Center(
       child: SizedBox(
         height: logoHeight,
-        width: 220,
+        width: 180,
         child: ClipRect(
           child: Center(
             child: Transform.scale(
@@ -1888,7 +1895,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _kQuePlanLogoAsset,
                 height: logoHeight,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => const Text('QuePlan'),
+                errorBuilder: (_, __, ___) {
+                  return Text(
+                    'QuePlan',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -2812,7 +2828,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton.icon(
+                FilledButton.icon(
                   onPressed: () {
                     setState(() {
                       _error = null;
@@ -2821,10 +2837,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   },
                   icon: const Icon(Icons.refresh),
                   label: const Text('Reintentar'),
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 24,
                       vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
                     ),
                   ),
                 ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/auth_service.dart';
+import '../common/app_bar_logo.dart';
 
 class VerifyOwnershipScreen extends StatefulWidget {
   final String requestId;
@@ -81,8 +82,12 @@ class _VerifyOwnershipScreenState extends State<VerifyOwnershipScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Verificar Propiedad'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -213,10 +218,13 @@ class _VerifyOwnershipScreenState extends State<VerifyOwnershipScreen> {
                 const SizedBox(height: 16),
                 
                 // Botón de verificación
-                ElevatedButton(
+                FilledButton(
                   onPressed: _isLoading ? null : _verifyCode,
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: _isLoading
                       ? const SizedBox(

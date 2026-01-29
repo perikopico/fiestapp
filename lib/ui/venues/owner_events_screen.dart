@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../common/app_bar_logo.dart';
 import '../../models/event.dart';
 import '../../services/venue_event_approval_service.dart';
 import '../../services/auth_service.dart';
@@ -186,21 +187,30 @@ class _OwnerEventsScreenState extends State<OwnerEventsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(widget.venueName ?? 'Mis Eventos'),
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(
-              icon: Icon(Icons.pending_actions),
-              text: 'Pendientes',
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Material(
+            color: theme.scaffoldBackgroundColor,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              indicatorColor: theme.colorScheme.primary,
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(icon: Icon(Icons.pending_actions), text: 'Pendientes'),
+                Tab(icon: Icon(Icons.event), text: 'Todos'),
+              ],
             ),
-            Tab(
-              icon: Icon(Icons.event),
-              text: 'Todos',
-            ),
-          ],
+          ),
         ),
       ),
       body: _isLoading

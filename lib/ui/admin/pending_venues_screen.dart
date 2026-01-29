@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:intl/intl.dart';
 import '../../models/venue.dart';
 import '../../services/venue_service.dart';
+import '../common/app_bar_logo.dart';
 
 class PendingVenuesScreen extends StatefulWidget {
   const PendingVenuesScreen({super.key});
@@ -220,7 +221,10 @@ class _PendingVenuesScreenState extends State<PendingVenuesScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Lugares Pendientes'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),

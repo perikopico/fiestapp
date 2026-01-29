@@ -5,6 +5,7 @@ import '../../services/category_service.dart';
 import '../../models/category.dart' as models;
 import '../../services/logger_service.dart';
 import '../../l10n/app_localizations.dart';
+import '../common/app_bar_logo.dart';
 
 /// Pantalla de "Mis Alertas" para gestionar notificaciones por categoría
 class AlertsScreen extends StatefulWidget {
@@ -95,9 +96,14 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const Text('Mis Alertas'),
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())

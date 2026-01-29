@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../utils/url_helper.dart';
 import 'package:fiestapp/services/auth_service.dart';
-import '../../services/favorites_service.dart';
 import '../../services/account_deletion_service.dart';
 import '../../services/data_export_service.dart';
+import '../common/app_bar_logo.dart';
 import '../admin/pending_events_screen.dart';
 import '../admin/pending_venues_screen.dart';
 import '../admin/venue_ownership_requests_screen.dart';
@@ -18,6 +19,7 @@ import '../venues/my_venues_screen.dart';
 import '../legal/gdpr_consent_screen.dart';
 import '../legal/about_screen.dart';
 import '../../services/venue_ownership_service.dart';
+import '../../services/favorites_local_service.dart';
 import '../notifications/alerts_screen.dart';
 import '../../main.dart' show appThemeMode;
 import 'login_screen.dart';
@@ -35,12 +37,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   bool _isLoading = false;
   bool _isAdmin = false;
   bool _isVenueOwner = false;
+  int _favoriteCount = 0;
 
   @override
   void initState() {
     super.initState();
     _checkAdminStatus();
     _checkVenueOwnerStatus();
+    _loadFavoriteCount();
+  }
+
+  Future<void> _loadFavoriteCount() async {
+    final ids = await FavoritesLocalService.instance.getFavoriteIds();
+    if (mounted) setState(() => _favoriteCount = ids.length);
   }
 
   Future<void> _checkAdminStatus() async {
@@ -137,12 +146,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = _authService.currentUser;
     final isAuthenticated = _authService.isAuthenticated;
 
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Mi perfil')),
+      backgroundColor: theme.scaffoldBackgroundColor,
+      appBar: AppBar(
+        title: const AppBarLogo(),
+        centerTitle: true,
+        elevation: 0,
+        backgroundColor: theme.scaffoldBackgroundColor,
+      ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -187,7 +203,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ),
                     const SizedBox(height: 32),
                     // Botones de registro e inicio de sesión
-                    ElevatedButton.icon(
+                    FilledButton.icon(
                       onPressed: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -197,8 +213,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       },
                       icon: const Icon(Icons.person_add),
                       label: const Text('Registrarse'),
-                      style: ElevatedButton.styleFrom(
+                      style: FilledButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -214,8 +233,42 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       label: const Text('Iniciar sesión'),
                       style: OutlinedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
+                    const SizedBox(height: 32),
+                    // Información y legal (también visible sin cuenta)
+                    _buildSection(context, 'Información', [
+                      _buildListItem(
+                        context,
+                        icon: Icons.info_outline,
+                        title: 'Sobre QuePlan',
+                        subtitle: 'Versión, descripción y enlaces',
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const AboutScreen(),
+                            ),
+                          );
+                        },
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.privacy_tip,
+                        title: 'Política de Privacidad',
+                        subtitle: 'Cómo protegemos tus datos',
+                        onTap: () => _openPrivacyPolicy(),
+                      ),
+                      _buildListItem(
+                        context,
+                        icon: Icons.description,
+                        title: 'Términos y Condiciones',
+                        subtitle: 'Términos de uso de la app',
+                        onTap: () => _openTerms(),
+                      ),
+                    ]),
                   ] else ...[
                     // Contenido cuando está autenticado
                     Builder(
@@ -330,12 +383,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   );
                                 },
                               ),
-                              // Botón Mis Alertas
+                              // Mis Alertas
                               _buildListItem(
                                 context,
                                 icon: Icons.notifications_active_outlined,
                                 title: 'Mis Alertas',
-                                subtitle: 'Gestionar alertas por categoría',
+                                subtitle: 'Notificaciones por categoría de eventos',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -413,7 +466,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   context,
                                   icon: Icons.business,
                                   title: 'Mis eventos de venues',
-                                  subtitle: 'Aprobar eventos de mis locales',
+                                  subtitle: 'Eventos de tus locales pendientes de aprobar',
                                   onTap: () {
                                     Navigator.of(context).push(
                                       MaterialPageRoute(
@@ -428,21 +481,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.favorite,
                                 title: 'Mis favoritos',
-                                subtitle:
-                                    '${FavoritesService.instance.favorites.length} eventos guardados',
-                                onTap: () {
-                                  Navigator.of(context).push(
+                                subtitle: _favoriteCount == 0
+                                    ? 'Eventos que guardas para ver después'
+                                    : '$_favoriteCount evento${_favoriteCount == 1 ? '' : 's'} guardado${_favoriteCount == 1 ? '' : 's'}',
+                                onTap: () async {
+                                  await Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) => const FavoritesScreen(),
                                     ),
                                   );
+                                  _loadFavoriteCount();
                                 },
                               ),
                               _buildListItem(
                                 context,
                                 icon: Icons.event_note,
                                 title: 'Mis eventos creados',
-                                subtitle: 'Ver los eventos que has creado',
+                                subtitle: 'Eventos que tú has publicado',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -455,8 +510,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.business_center,
                                 title: 'Solicitar ser propietario',
-                                subtitle:
-                                    'Solicitar ser propietario de tu negocio',
+                                subtitle: 'Reclamar tu negocio o lugar en la app',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -470,8 +524,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.vpn_key,
                                 title: 'Verificar código de propiedad',
-                                subtitle:
-                                    'Introduce el código que recibiste del admin',
+                                subtitle: 'Código que te envía el equipo tras solicitar un local',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -503,8 +556,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.settings,
                                 title: 'Gestionar consentimientos',
-                                subtitle:
-                                    'Modificar tus preferencias de privacidad',
+                                subtitle: 'Aceptar o cambiar permisos de datos (RGPD)',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -517,7 +569,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.download,
                                 title: 'Exportar mis datos',
-                                subtitle: 'Descargar todos tus datos (RGPD)',
+                                subtitle: 'Descargar una copia de tus datos (derecho RGPD)',
                                 onTap: _exportUserData,
                               ),
                             ]),
@@ -528,7 +580,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.info_outline,
                                 title: 'Sobre QuePlan',
-                                subtitle: 'Información de la app',
+                                subtitle: 'Versión, descripción y contacto',
                                 onTap: () {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
@@ -541,12 +593,27 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 context,
                                 icon: Icons.badge,
                                 title: 'ID de usuario',
-                                subtitle: user?.id ?? 'N/A',
+                                subtitle: 'Para soporte técnico',
                                 onTap: () {
+                                  final id = user?.id ?? 'N/A';
                                   ScaffoldMessenger.of(context).showSnackBar(
                                     SnackBar(
-                                      content: Text('ID: ${user?.id ?? "N/A"}'),
-                                      duration: const Duration(seconds: 2),
+                                      content: Text('ID: $id'),
+                                      duration: const Duration(seconds: 3),
+                                      action: id != 'N/A'
+                                          ? SnackBarAction(
+                                              label: 'Copiar',
+                                              onPressed: () {
+                                                Clipboard.setData(ClipboardData(text: id));
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text('ID copiado al portapapeles'),
+                                                    duration: Duration(seconds: 1),
+                                                  ),
+                                                );
+                                              },
+                                            )
+                                          : null,
                                     ),
                                   );
                                 },
@@ -554,45 +621,66 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ]),
                             const SizedBox(height: 32),
                             // Cerrar sesión y Eliminar cuenta
-                            Card(
-                              margin: EdgeInsets.zero,
+                            Container(
+                              margin: const EdgeInsets.only(top: 8),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.surface,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.06),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 2),
+                                  ),
+                                ],
+                              ),
                               child: Padding(
-                                padding: const EdgeInsets.all(4.0),
+                                padding: const EdgeInsets.all(12),
                                 child: Column(
                                   children: [
-                                    // Cerrar sesión
-                                    OutlinedButton.icon(
-                                      onPressed: _handleSignOut,
-                                      icon: const Icon(Icons.logout, size: 20),
-                                      label: const Text('Cerrar sesión'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Theme.of(
-                                          context,
-                                        ).colorScheme.error,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 14,
-                                        ),
-                                        minimumSize: const Size(double.infinity, 48),
-                                        side: BorderSide(
-                                          color: Theme.of(context).colorScheme.error,
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _handleSignOut,
+                                        icon: const Icon(Icons.logout, size: 20),
+                                        label: const Text('Cerrar sesión'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.error,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          minimumSize: const Size(double.infinity, 48),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          side: BorderSide(
+                                            color: Theme.of(context).colorScheme.error,
+                                          ),
                                         ),
                                       ),
                                     ),
                                     const SizedBox(height: 10),
-                                    // Eliminar cuenta
-                                    OutlinedButton.icon(
-                                      onPressed: _showDeleteAccountDialog,
-                                      icon: const Icon(Icons.delete_forever, size: 20),
-                                      label: const Text('Eliminar cuenta'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.red,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 14,
+                                    SizedBox(
+                                      width: double.infinity,
+                                      child: OutlinedButton.icon(
+                                        onPressed: _showDeleteAccountDialog,
+                                        icon: const Icon(Icons.delete_forever, size: 20),
+                                        label: const Text('Eliminar cuenta'),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor: Colors.red,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 14,
+                                          ),
+                                          minimumSize: const Size(double.infinity, 48),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          side: const BorderSide(color: Colors.red),
                                         ),
-                                        minimumSize: const Size(double.infinity, 48),
-                                        side: const BorderSide(color: Colors.red),
                                       ),
                                     ),
                                   ],
@@ -615,20 +703,48 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String title,
     List<Widget> children,
   ) {
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.only(left: 4, bottom: 8),
+          padding: const EdgeInsets.only(left: 4, bottom: 10),
           child: Text(
             title,
-            style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
+            style: theme.textTheme.titleSmall?.copyWith(
+              color: theme.colorScheme.primary,
               fontWeight: FontWeight.bold,
+              letterSpacing: 0.2,
             ),
           ),
         ),
-        Card(child: Column(children: children)),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 10,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              for (int i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i < children.length - 1)
+                  Divider(
+                    height: 1,
+                    indent: 56,
+                    endIndent: 16,
+                    color: theme.dividerColor.withOpacity(0.5),
+                  ),
+              ],
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -640,12 +756,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
     String? subtitle,
     required VoidCallback onTap,
   }) {
-    return ListTile(
-      leading: Icon(icon),
-      title: Text(title),
-      subtitle: subtitle != null ? Text(subtitle) : null,
-      trailing: const Icon(Icons.chevron_right),
+    final theme = Theme.of(context);
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 22, color: theme.colorScheme.primary),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            Icon(
+              Icons.chevron_right,
+              color: theme.colorScheme.onSurfaceVariant,
+              size: 24,
+            ),
+          ],
+        ),
+      ),
     );
   }
 

@@ -81,19 +81,20 @@ class HeroBanner extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ElevatedButton.icon(
+                FilledButton.icon(
                   onPressed: onFeaturedTap,
                   icon: const Icon(Icons.chevron_right, size: 18),
                   label: Text(AppLocalizations.of(context)?.viewFeaturedEvents ?? 'Ver eventos destacados'),
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
                       vertical: 10,
                     ),
-                    foregroundColor: const Color(0xFF5b351f),
-                    backgroundColor: const Color(0xFFFFE9DC),
-                    textStyle: const TextStyle(fontWeight: FontWeight.w700),
-                    shape: const StadiumBorder(),
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                     elevation: 0,
                   ),
                 ),
