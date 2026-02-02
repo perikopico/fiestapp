@@ -189,6 +189,10 @@ scripts/venv/
 ### Temporary / cache ###
 *.sfk
 
+### Node / Supabase CLI ###
+node_modules/
+supabase/.temp/
+
 ### Custom - Environment files ###
 # Archivos de variables de entorno (contienen credenciales sensibles)
 .env

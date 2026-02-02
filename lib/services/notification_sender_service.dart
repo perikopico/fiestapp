@@ -70,17 +70,66 @@ class NotificationSenderService {
           return true;
         } else {
           debugPrint('⚠️ Error al enviar notificación: ${responseData['error']}');
+          
+          // Verificar si el error es UNREGISTERED (token inválido)
+          final errorDetails = responseData['details'];
+          if (errorDetails != null && errorDetails['error'] != null) {
+            final fcmError = errorDetails['error'];
+            final errorCode = fcmError['errorCode'] as String?;
+            
+            if (errorCode == 'UNREGISTERED') {
+              debugPrint('🗑️ Token FCM inválido (UNREGISTERED), eliminándolo de la BD');
+              await _deleteInvalidToken(token);
+            }
+          }
+          
           return false;
         }
       } else {
         debugPrint('❌ Error HTTP al enviar notificación: ${response.status}');
         debugPrint('Respuesta: ${response.data}');
+        
+        // Verificar si el error es UNREGISTERED en la respuesta
+        final responseData = response.data;
+        if (responseData != null && responseData['details'] != null) {
+          final errorDetails = responseData['details'];
+          if (errorDetails['error'] != null) {
+            final fcmError = errorDetails['error'];
+            final errorCode = fcmError['errorCode'] as String?;
+            
+            if (errorCode == 'UNREGISTERED') {
+              debugPrint('🗑️ Token FCM inválido (UNREGISTERED), eliminándolo de la BD');
+              await _deleteInvalidToken(token);
+            }
+          }
+        }
+        
         return false;
       }
     } catch (e) {
       debugPrint('❌ Error al enviar notificación: $e');
+      
+      // Intentar extraer información del error si es FunctionException
+      if (e.toString().contains('UNREGISTERED')) {
+        debugPrint('🗑️ Token FCM inválido (UNREGISTERED), eliminándolo de la BD');
+        await _deleteInvalidToken(token);
+      }
+      
       debugPrint('💡 Asegúrate de que la Edge Function "send_fcm_notification" esté desplegada');
       return false;
+    }
+  }
+  
+  /// Elimina un token FCM inválido de la base de datos
+  Future<void> _deleteInvalidToken(String token) async {
+    try {
+      await _client
+          .from('user_fcm_tokens')
+          .delete()
+          .eq('token', token);
+      debugPrint('✅ Token inválido eliminado: ${token.substring(0, 20)}...');
+    } catch (e) {
+      debugPrint('⚠️ Error al eliminar token inválido: $e');
     }
   }
   
@@ -98,7 +147,7 @@ class NotificationSenderService {
       return false;
     }
     
-    bool allSuccess = true;
+    bool atLeastOneSuccess = false;
     for (final token in tokens) {
       final success = await sendToToken(
         token: token,
@@ -106,12 +155,13 @@ class NotificationSenderService {
         body: body,
         data: data,
       );
-      if (!success) {
-        allSuccess = false;
+      if (success) {
+        atLeastOneSuccess = true;
       }
+      // Continuamos con los demás tokens aunque uno falle
     }
     
-    return allSuccess;
+    return atLeastOneSuccess;
   }
   
   /// Envía notificación cuando un evento es aprobado

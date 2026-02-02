@@ -6,6 +6,10 @@ import '../../services/analytics_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/logger_service.dart';
 import '../common/app_bar_logo.dart';
+import 'pending_events_screen.dart';
+import 'pending_venues_screen.dart';
+import 'venue_ownership_requests_screen.dart';
+import 'event_ingestion_screen.dart';
 
 /// Dashboard de administración con gráficos y estadísticas
 class AdminDashboardScreen extends StatefulWidget {
@@ -199,6 +203,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Acciones rápidas
+                    _buildQuickActions(context),
+                    const SizedBox(height: 24),
                     // KPIs
                     _buildKPICards(),
                     const SizedBox(height: 24),
@@ -217,6 +224,106 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildQuickActions(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Acciones',
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            _buildActionCard(
+              context,
+              icon: Icons.pending_actions,
+              label: 'Eventos pendientes',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PendingEventsScreen()),
+              ),
+            ),
+            _buildActionCard(
+              context,
+              icon: Icons.place,
+              label: 'Lugares pendientes',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const PendingVenuesScreen()),
+              ),
+            ),
+            _buildActionCard(
+              context,
+              icon: Icons.verified_user,
+              label: 'Solicitudes propiedad',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const VenueOwnershipRequestsScreen()),
+              ),
+            ),
+            _buildActionCard(
+              context,
+              icon: Icons.upload_file,
+              label: 'Ingesta JSON',
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const EventIngestionScreen()),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionCard(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: theme.colorScheme.outline.withOpacity(0.3),
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 20, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

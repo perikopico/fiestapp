@@ -88,6 +88,27 @@ def is_free_price(price: str) -> bool:
     free_keywords = ['gratis', 'entrada libre', 'donativo', 'libre']
     return any(keyword in price_lower for keyword in free_keywords)
 
+
+def parse_external_id(id_val: Any) -> Optional[int]:
+    """
+    Extrae el external_id numérico del id del JSON.
+    - evt_001 -> 1, evt_042 -> 42
+    - 123 (int) -> 123
+    """
+    if id_val is None:
+        return None
+    if isinstance(id_val, int):
+        return id_val
+    import re
+    s = str(id_val).strip()
+    m = re.search(r'evt_?(\d+)', s, re.I)
+    if m:
+        return int(m.group(1))
+    try:
+        return int(s)
+    except ValueError:
+        return None
+
 def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url: str) -> str:
     """
     Genera sentencias SQL INSERT directas para eventos
@@ -105,18 +126,48 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
     
     sql_lines = [
         "-- ============================================",
-        "-- SQL generado automáticamente para insertar eventos desde JSON",
+        "-- SQL generado automáticamente para eventos desde JSON",
         f"-- Fecha de generación: {datetime.now().isoformat()}",
         f"-- Total de eventos: {len(events_json)}",
-        "-- Formato: INSERTs directos con imágenes secuenciales por categoría",
+        "-- Soporta: new (INSERT/UPSERT), modified (UPDATE), cancelled (soft delete)",
+        "-- Venues: Se crean automáticamente desde 'place' si no existen (status=approved)",
+        "-- Requiere: migración 030 (external_id), 044 (event_translations), 005 (venues)",
+        "-- Ejecutar en Supabase SQL Editor (bypass RLS para crear venues approved)",
         "-- ============================================",
         "",
     ]
     
-    # Generar INSERTs para cada evento
+    # Generar SQL para cada evento
     for event in events_json:
-        event_id = str(uuid.uuid4())
-        title_raw = event.get('title', '')
+        json_id = event.get('id')
+        external_id = parse_external_id(json_id)
+        status = (event.get('status') or 'new').lower().strip()
+        
+        # status "cancelled": solo UPDATE para marcar como rechazado
+        if status == 'cancelled':
+            if external_id is None:
+                print(f"⚠️  Advertencia: Evento sin id válido para cancelled - ignorado", file=sys.stderr)
+                continue
+            sql_lines.append(f"-- Cancelled: {json_id} (external_id={external_id})")
+            sql_lines.append(f"UPDATE public.events SET status = 'rejected' WHERE external_id = {external_id};")
+            sql_lines.append("")
+            continue
+        
+        # Para new/modified: UPSERT
+        event_uuid = str(uuid.uuid4())
+        
+        # Soportar formato nuevo (translations) y legacy (title/description directos)
+        translations = event.get('translations', {})
+        if translations:
+            # Formato nuevo: translations.es.title, translations.es.description
+            es_block = translations.get('es', {})
+            title_raw = es_block.get('title', '') or event.get('title', '')
+            description = es_block.get('description', '') or event.get('description', '')
+        else:
+            # Formato legacy
+            title_raw = event.get('title', '')
+            description = event.get('description', '')
+        
         city_name = event.get('city', '').strip()
         if not city_name:
             # Primero, intentar extraer ciudad del título si está entre paréntesis
@@ -206,7 +257,8 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         price = event.get('price', '')
         is_free = is_free_price(price) if price else False
         
-        description = event.get('description', '').replace("'", "''") if event.get('description') else None
+        # description ya extraída arriba (formato translations o legacy)
+        description = description.replace("'", "''") if description else None
         maps_url = event.get('gmaps_link', event.get('maps_url', '')).strip() if event.get('gmaps_link') or event.get('maps_url') else None
         if maps_url:
             maps_url = maps_url.replace("'", "''")
@@ -236,22 +288,109 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         # Escapar comillas en city_name para SQL
         city_name_escaped = city_name.replace("'", "''")
         
-        # Generar INSERT
-        sql_lines.append("INSERT INTO public.events (id, title, place, maps_url, image_url, is_featured, is_free, starts_at, city_id, category_id, status, description, image_alignment, town) VALUES (")
-        sql_lines.append(f"      '{event_id}',")
-        sql_lines.append(f"      '{title}',")
-        sql_lines.append(f"      {f"'{place}'" if place else 'NULL'},")
-        sql_lines.append(f"      {f"'{maps_url}'" if maps_url else 'NULL'},")
-        sql_lines.append(f"      {image_url},")
-        sql_lines.append("      FALSE,")
-        sql_lines.append(f"      {str(is_free).upper()},")
-        sql_lines.append(f"      '{starts_at}'::timestamptz,")
-        sql_lines.append(f"      (SELECT id FROM public.cities WHERE LOWER(name) = LOWER('{city_name_escaped}') LIMIT 1),")
-        sql_lines.append(f"      (SELECT id FROM public.categories WHERE LOWER(slug) = '{category_slug}' LIMIT 1),")
-        sql_lines.append("      'published',")
-        sql_lines.append(f"      {f"'{description}'" if description else 'NULL'},")
-        sql_lines.append("      'center',")
-        sql_lines.append(f"      '{city_name_escaped}');")
+        # external_id para UPSERT (si no se pudo parsear, usar 0 y advertir - no recomendado)
+        if external_id is None:
+            external_id = 0
+            print(f"⚠️  Advertencia: Evento '{title[:40]}...' sin id válido - usando external_id=0. Añade 'id': 'evt_XXX' al JSON.", file=sys.stderr)
+        
+        # Extraer lat/lng de gmaps_link si existe (?query=lat,lng)
+        venue_lat = venue_lng = None
+        if maps_url:
+            import re
+            qmatch = re.search(r'[?&]query=([^&]+)', maps_url)
+            if qmatch:
+                parts = qmatch.group(1).split(',')
+                if len(parts) >= 2:
+                    try:
+                        venue_lat = float(parts[0].strip())
+                        venue_lng = float(parts[1].strip())
+                    except ValueError:
+                        pass
+        
+        # Bloques para event_translations (se usan dentro del DO)
+        trans_inserts = []
+        trans_obj = event.get('translations', {}) or {}
+        for lang_code, lang_label in [('en', 'English'), ('de', 'German'), ('zh', 'Chinese')]:
+            lang_block = trans_obj.get(lang_code, {}) if isinstance(trans_obj, dict) else {}
+            if not lang_block:
+                lang_block = {
+                    'title': event.get(f'title_{lang_code}', ''),
+                    'description': event.get(f'description_{lang_code}', ''),
+                }
+            trans_title = (lang_block.get('title') or '').strip().replace("'", "''")
+            trans_desc = (lang_block.get('description') or '').strip().replace("'", "''")
+            if trans_title:
+                trans_inserts.append((lang_code, trans_title, trans_desc))
+        
+        # UPSERT con DO block (permite new y modified)
+        # Crea venue si place existe y no está creado; sin venue aprobado el evento no puede aceptarse
+        place_escaped = place.replace("'", "''") if place else None
+        sql_lines.append(f"-- {status.upper()}: {json_id or 'sin id'} | {title[:50]}...")
+        sql_lines.append("DO $$")
+        sql_lines.append("DECLARE")
+        sql_lines.append("  v_event_id uuid;")
+        sql_lines.append("  v_venue_id uuid;")
+        sql_lines.append("  v_city_id int8;")
+        sql_lines.append("BEGIN")
+        sql_lines.append(f"  SELECT id INTO v_city_id FROM public.cities WHERE LOWER(name) = LOWER('{city_name_escaped}') LIMIT 1;")
+        sql_lines.append("")
+        # Crear o obtener venue si hay place (evento solo se acepta si venue existe y está aprobado)
+        if place_escaped:
+            lat_sql = str(venue_lat) if venue_lat is not None else 'NULL'
+            lng_sql = str(venue_lng) if venue_lng is not None else 'NULL'
+            sql_lines.append("  IF v_city_id IS NOT NULL THEN")
+            sql_lines.append("    INSERT INTO public.venues (name, city_id, address, lat, lng, status)")
+            sql_lines.append(f"    VALUES ('{place_escaped}', v_city_id, NULL, {lat_sql}, {lng_sql}, 'approved')")
+            sql_lines.append("    ON CONFLICT (name, city_id) DO UPDATE SET status = 'approved', updated_at = now()")
+            sql_lines.append("    RETURNING id INTO v_venue_id;")
+            sql_lines.append("  ELSE")
+            sql_lines.append("    v_venue_id := NULL;")
+            sql_lines.append("  END IF;")
+            sql_lines.append("")
+        else:
+            sql_lines.append("  v_venue_id := NULL;")
+            sql_lines.append("")
+        sql_lines.append("  INSERT INTO public.events (id, external_id, title, place, maps_url, image_url, is_featured, is_free, starts_at, city_id, category_id, status, description, image_alignment, town, venue_id)")
+        sql_lines.append("  VALUES (")
+        sql_lines.append(f"    gen_random_uuid(),")
+        sql_lines.append(f"    {external_id}::bigint,")
+        sql_lines.append(f"    '{title}',")
+        sql_lines.append(f"    {f"'{place}'" if place else 'NULL'},")
+        sql_lines.append(f"    {f"'{maps_url}'" if maps_url else 'NULL'},")
+        sql_lines.append(f"    {image_url},")
+        sql_lines.append("    FALSE,")
+        sql_lines.append(f"    {str(is_free).upper()},")
+        sql_lines.append(f"    '{starts_at}'::timestamptz,")
+        sql_lines.append(f"    v_city_id,")
+        sql_lines.append(f"    (SELECT id FROM public.categories WHERE LOWER(slug) = '{category_slug}' LIMIT 1),")
+        sql_lines.append("    'published',")
+        sql_lines.append(f"    {f"'{description}'" if description else 'NULL'},")
+        sql_lines.append("    'center',")
+        sql_lines.append(f"    '{city_name_escaped}',")
+        sql_lines.append("    v_venue_id")
+        sql_lines.append("  )")
+        sql_lines.append("  ON CONFLICT (external_id) WHERE (external_id IS NOT NULL) DO UPDATE SET")
+        sql_lines.append("    title = EXCLUDED.title,")
+        sql_lines.append("    description = EXCLUDED.description,")
+        sql_lines.append("    place = EXCLUDED.place,")
+        sql_lines.append("    maps_url = EXCLUDED.maps_url,")
+        sql_lines.append("    image_url = EXCLUDED.image_url,")
+        sql_lines.append("    is_free = EXCLUDED.is_free,")
+        sql_lines.append("    starts_at = EXCLUDED.starts_at,")
+        sql_lines.append("    city_id = EXCLUDED.city_id,")
+        sql_lines.append("    category_id = EXCLUDED.category_id,")
+        sql_lines.append("    town = EXCLUDED.town,")
+        sql_lines.append("    venue_id = EXCLUDED.venue_id")
+        sql_lines.append("  RETURNING id INTO v_event_id;")
+        sql_lines.append("")
+        
+        for lang_code, trans_title, trans_desc in trans_inserts:
+            sql_lines.append(f"  INSERT INTO public.event_translations (event_id, language_code, title, description)")
+            sql_lines.append(f"  VALUES (v_event_id, '{lang_code}', '{trans_title}', {f"'{trans_desc}'" if trans_desc else 'NULL'})")
+            sql_lines.append(f"  ON CONFLICT (event_id, language_code) DO UPDATE SET title = EXCLUDED.title, description = EXCLUDED.description;")
+            sql_lines.append("")
+        
+        sql_lines.append("END $$;")
         sql_lines.append("")
     
     return "\n".join(sql_lines)

@@ -27,10 +27,10 @@ SELECT cron.schedule(
   '*/5 * * * *', -- Cada 5 minutos
   $$
   SELECT net.http_post(
-    url := 'https://[TU-PROJECT-REF].supabase.co/functions/v1/process-pending-notifications',
+    url := 'https://oudofaiekedtaovrdqeo.supabase.co/functions/v1/process-pending-notifications',
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
-      'Authorization', 'Bearer [TU-SERVICE-ROLE-KEY]'
+      'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91ZG9mYWlla2VkdGFvdnJkcWVvIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MjI3NTg4MywiZXhwIjoyMDc3ODUxODgzfQ.DmsxMPWEAtn-TJNLpGvWY6Lqvu4KeYz83BYYslqLCFA'
     ),
     body := '{}'::jsonb
   ) AS request_id;

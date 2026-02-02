@@ -2,15 +2,21 @@
 // Pantalla de configuración de preferencias de notificaciones (accesible desde perfil)
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../services/city_service.dart';
 import '../../services/category_service.dart';
 import '../../services/fcm_topic_service.dart';
 import '../../services/fcm_token_service.dart';
+import '../../services/onboarding_service.dart';
 import '../common/app_bar_logo.dart';
+import '../dashboard/dashboard_screen.dart';
 import '../../models/category.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
-  const NotificationSettingsScreen({super.key});
+  /// Si true, se muestra como paso del onboarding (sin AppBar con back, botón Continuar).
+  final bool isOnboarding;
+
+  const NotificationSettingsScreen({super.key, this.isOnboarding = false});
 
   @override
   State<NotificationSettingsScreen> createState() =>
@@ -212,17 +218,23 @@ class _NotificationSettingsScreenState
       
       if (!mounted) return;
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Preferencias de notificaciones guardadas'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
-      // Volver atrás después de un breve delay
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (mounted) {
-        Navigator.of(context).pop();
+      if (widget.isOnboarding) {
+        await OnboardingService.instance.markNotificationPreferencesSeen();
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const DashboardScreen()),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✅ Preferencias de notificaciones guardadas'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
       }
     } catch (e) {
       debugPrint('Error al guardar preferencias: $e');
@@ -266,30 +278,45 @@ class _NotificationSettingsScreenState
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
-    return Scaffold(
+
+    final scaffold = Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const Text('Notificaciones'),
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
+      appBar: widget.isOnboarding
+          ? null
+          : AppBar(
+              title: const Text('Notificaciones'),
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
       body: SafeArea(
         child: _isLoading
             ? const Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  // Contenido scrollable
+                  if (widget.isOnboarding) ...[
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8, bottom: 8),
+                      child: const AppBarLogo(),
+                    ),
+                  ],
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(horizontal: 24),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (widget.isOnboarding) ...[
+                            Text(
+                              'Configura tus notificaciones',
+                              style: theme.textTheme.headlineSmall?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                          ],
                           const SizedBox(height: 16),
-                          
                           // Explicación simple
                           Container(
                             padding: const EdgeInsets.all(16),
@@ -722,7 +749,7 @@ class _NotificationSettingsScreenState
                                 ),
                               )
                             : Text(
-                                'Guardar preferencias',
+                                widget.isOnboarding ? 'Continuar' : 'Guardar preferencias',
                                 style: theme.textTheme.labelLarge,
                               ),
                       ),
@@ -732,6 +759,17 @@ class _NotificationSettingsScreenState
               ),
       ),
     );
+
+    if (widget.isOnboarding) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) SystemNavigator.pop();
+        },
+        child: scaffold,
+      );
+    }
+    return scaffold;
   }
 
   Widget _buildNotificationInfoItem(

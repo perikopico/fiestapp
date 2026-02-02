@@ -1,19 +1,21 @@
 # Plan de Traducción de Eventos Dinámicos
 
-## Problema
-Los eventos se crean dinámicamente (por administradores y usuarios), y necesitan traducciones automáticas a múltiples idiomas (ES, EN, DE, ZH).
+## Estado actual (implementado)
 
-## Solución Recomendada: Híbrida
+- **Tabla `event_translations`**: Migración 044 creada. Almacena título y descripción en EN, DE, ZH por evento.
+- **Panel admin**: En la pantalla de edición/aprobación de eventos hay una sección expandible "Traducciones (EN, DE, ZH)" donde el admin puede añadir título y descripción en inglés, alemán y chino.
+- **Entrada por JSON**: Formato definido en `FORMATO_JSON_EVENTOS_MULTIIDIOMA.md`. Instrucciones para Gemini en `INSTRUCCIONES_GEMINI_ENTRADA_EVENTOS.md`.
+- **Pendiente**: Modificar la lógica de visualización para que la app muestre el título/descripción traducido según el idioma del dispositivo (ver sección "Al mostrar eventos" más abajo).
+
+## Problema
+Los eventos se crean dinámicamente (por administradores y usuarios), y necesitan traducciones a múltiples idiomas (ES, EN, DE, ZH).
+
+## Solución implementada
 
 ### 1. Al crear/editar un evento:
-- Traducir automáticamente usando API (Google Translate, DeepL, etc.)
-- Guardar todas las traducciones en la base de datos
-- Campo original: idioma en que se creó el evento
-- Traducciones: guardar en tabla separada o JSON
-
-### 2. Al mostrar eventos:
-- Consultar traducción según el idioma del usuario
-- Si no existe traducción, mostrar original o traducir on-the-fly (fallback)
+- Usuario crea en un solo idioma (típicamente español) → se guarda en `events.title` y `events.description`.
+- Admin revisa y puede añadir traducciones EN, DE, ZH en el panel → se guardan en `event_translations`.
+- Eventos desde JSON (Gemini) pueden traer ya las 4 traducciones en el formato definido.
 
 ### 3. Estructura de Base de Datos
 

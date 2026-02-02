@@ -6,10 +6,7 @@ import 'package:fiestapp/services/auth_service.dart';
 import '../../services/account_deletion_service.dart';
 import '../../services/data_export_service.dart';
 import '../common/app_bar_logo.dart';
-import '../admin/pending_events_screen.dart';
-import '../admin/pending_venues_screen.dart';
-import '../admin/venue_ownership_requests_screen.dart';
-import '../admin/event_ingestion_screen.dart';
+import '../admin/admin_dashboard_screen.dart';
 import '../events/favorites_screen.dart';
 import '../events/my_events_screen.dart';
 import '../venues/owner_events_screen.dart';
@@ -20,7 +17,6 @@ import '../legal/gdpr_consent_screen.dart';
 import '../legal/about_screen.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/favorites_local_service.dart';
-import '../notifications/alerts_screen.dart';
 import '../notifications/notification_settings_screen.dart';
 import '../../main.dart' show appThemeMode;
 import 'login_screen.dart';
@@ -137,9 +133,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     // Si es admin, abrir directamente el panel
     if (!mounted) return;
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute(builder: (_) => const PendingEventsScreen()));
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AdminDashboardScreen()),
+    );
   }
 
   @override
@@ -398,100 +394,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                   );
                                 },
                               ),
-                              // Mis Alertas
-                              _buildListItem(
-                                context,
-                                icon: Icons.notifications_active_outlined,
-                                title: 'Mis Alertas',
-                                subtitle: 'Notificaciones por categoría de eventos',
-                                onTap: () {
-                                  Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => const AlertsScreen(),
-                                    ),
-                                  );
-                                },
-                              ),
-                              if (_isAdmin) ...[
+                              if (_isAdmin)
                                 _buildListItem(
                                   context,
                                   icon: Icons.admin_panel_settings,
                                   title: 'Panel de administración',
-                                  subtitle: 'Gestionar eventos pendientes',
+                                  subtitle: 'Eventos, lugares, solicitudes e ingesta',
                                   onTap: _openAdminPanel,
                                 ),
-                                _buildListItem(
-                                  context,
-                                  icon: Icons.upload_file,
-                                  title: 'Ingesta de eventos JSON',
-                                  subtitle: 'Subir/modificar eventos desde JSON',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const EventIngestionScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                _buildListItem(
-                                  context,
-                                  icon: Icons.place,
-                                  title: 'Lugares pendientes',
-                                  subtitle: 'Aprobar o rechazar lugares',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const PendingVenuesScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                _buildListItem(
-                                  context,
-                                  icon: Icons.verified_user,
-                                  title: 'Solicitudes de propiedad',
-                                  subtitle: 'Gestionar solicitudes de locales',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const VenueOwnershipRequestsScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
-                              if (_isVenueOwner) ...[
-                                _buildListItem(
-                                  context,
-                                  icon: Icons.store,
-                                  title: 'Mis locales',
-                                  subtitle: 'Ver y gestionar mis locales',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) => const MyVenuesScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                                _buildListItem(
-                                  context,
-                                  icon: Icons.business,
-                                  title: 'Mis eventos de venues',
-                                  subtitle: 'Eventos de tus locales pendientes de aprobar',
-                                  onTap: () {
-                                    Navigator.of(context).push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            const OwnerEventsScreen(),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ],
                               _buildListItem(
                                 context,
                                 icon: Icons.favorite,
@@ -550,6 +460,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 },
                               ),
                             ]),
+                            if (_isVenueOwner) ...[
+                              const SizedBox(height: 24),
+                              _buildSection(context, 'Mis venues', [
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.store,
+                                  title: 'Mis locales',
+                                  subtitle: 'Ver y gestionar mis locales',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => const MyVenuesScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                                _buildListItem(
+                                  context,
+                                  icon: Icons.business,
+                                  title: 'Mis eventos de venues',
+                                  subtitle: 'Eventos de tus locales pendientes de aprobar',
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            const OwnerEventsScreen(),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ]),
+                            ],
                             const SizedBox(height: 24),
                             // Legal y Privacidad
                             _buildSection(context, 'Legal y Privacidad', [

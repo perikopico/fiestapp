@@ -5,25 +5,15 @@ import '../../events/event_wizard_screen.dart';
 import '../../auth/profile_screen.dart';
 import '../../notifications/notifications_screen.dart';
 import '../../../services/notifications_count_service.dart';
-import '../../../main.dart' show appThemeMode;
 
 class BottomNavBar extends StatelessWidget {
   final String? activeRoute;
-  
+
   const BottomNavBar({super.key, this.activeRoute});
 
-  // Detectar qué pantalla está activa
   String _getCurrentRoute(BuildContext context) {
-    // Si se proporciona explícitamente, usarlo
     if (activeRoute != null) return activeRoute!;
-    
-    // Intentar detectar por el contexto
-    // Si no podemos hacer pop, estamos en el dashboard (primera pantalla)
-    if (!Navigator.of(context).canPop()) {
-      return 'home';
-    }
-    
-    // Por defecto, asumir que estamos en el dashboard
+    if (!Navigator.of(context).canPop()) return 'home';
     return 'home';
   }
 
@@ -31,121 +21,92 @@ class BottomNavBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final currentRoute = _getCurrentRoute(context);
     final theme = Theme.of(context);
-    
-    // Contenedor completamente transparente - sin fondo
-    // El Scaffold ya tiene extendBody: true, así que el fondo se extiende detrás
+    final isDark = theme.brightness == Brightness.dark;
+
     return Container(
-      // Contenedor completamente transparente - sin fondo
-      decoration: const BoxDecoration(
-        color: Colors.transparent,
-      ),
-      height: 90, // Altura suficiente para la galleta flotante
-      padding: const EdgeInsets.only(bottom: 8),
+      height: 72,
+      padding: const EdgeInsets.only(bottom: 12, left: 24, right: 24),
       child: Center(
         child: Container(
-          height: 70,
-          constraints: const BoxConstraints(maxWidth: 320), // Ancho máximo de la galleta
+          height: 52,
+          constraints: const BoxConstraints(maxWidth: 240),
           decoration: BoxDecoration(
-            // Sin fondo - solo borde y sombra para definir la isla flotante
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(26),
             border: Border.all(
-              color: theme.colorScheme.outline.withOpacity(0.15),
+              color: (isDark ? Colors.white : Colors.black).withOpacity(0.08),
               width: 0.5,
             ),
-            // Efecto glassmorphism (blur)
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.1),
-                blurRadius: 20,
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 24,
                 offset: const Offset(0, 4),
                 spreadRadius: 0,
               ),
             ],
-            // Sin fondo de color - completamente transparente
-            color: Colors.transparent,
           ),
-          // BackdropFilter para el efecto de vidrio (glassmorphism)
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(32),
+            borderRadius: BorderRadius.circular(26),
             child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30), // Efecto de vidrio esmerilado
+              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
               child: Container(
-                // Fondo semitransparente para el efecto glassmorphism
                 decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withOpacity(0.7), // Fondo semitransparente
-                  borderRadius: BorderRadius.circular(32),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      (isDark ? Colors.white : Colors.white).withOpacity(0.25),
+                      (isDark ? Colors.white : Colors.white).withOpacity(0.12),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(26),
                 ),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    // Botón Casa (Inicio)
                     _NavBarButton(
-                      icon: Icons.home,
-                      label: 'Inicio',
+                      icon: Icons.home_rounded,
+                      semanticLabel: 'Inicio',
                       isActive: currentRoute == 'home' || currentRoute == '',
-                      onTap: () {
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      },
+                      onTap: () => Navigator.of(context).popUntil((route) => route.isFirst),
                     ),
-                    // Botón Favoritos
                     _NavBarButton(
-                      icon: Icons.favorite_border,
-                      label: 'Fav',
+                      icon: Icons.favorite_border_rounded,
+                      semanticLabel: 'Favoritos',
                       isActive: currentRoute == 'favorites',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const FavoritesScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+                      ),
                     ),
-                    // Botón Crear Evento (más grande y destacado)
                     _NavBarButton(
-                      icon: Icons.add_circle,
-                      label: 'Crear',
+                      icon: Icons.add_circle_rounded,
+                      semanticLabel: 'Crear evento',
                       isActive: currentRoute == 'submit',
                       isAddButton: true,
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const EventWizardScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const EventWizardScreen()),
+                      ),
                     ),
-                    // Botón Notificaciones (con badge)
                     ValueListenableBuilder<int>(
                       valueListenable: NotificationsCountService.instance.unreadCount,
-                      builder: (context, count, _) {
-                        return _NavBarButton(
-                          icon: Icons.notifications_outlined,
-                          label: 'Notis',
-                          isActive: currentRoute == 'notifications',
-                          badgeCount: count > 0 ? count : null,
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const NotificationsScreen(),
-                              ),
-                            );
-                          },
-                        );
-                      },
+                      builder: (context, count, _) => _NavBarButton(
+                        icon: Icons.notifications_outlined,
+                        semanticLabel: 'Notificaciones',
+                        isActive: currentRoute == 'notifications',
+                        badgeCount: count > 0 ? count : null,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                        ),
+                      ),
                     ),
-                    // Botón Cuenta (integrado en la barra)
                     _NavBarButton(
-                      icon: Icons.person,
-                      label: 'Cuenta',
+                      icon: Icons.person_outline_rounded,
+                      semanticLabel: 'Cuenta',
                       isActive: currentRoute == 'profile',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ProfileScreen(),
-                          ),
-                        );
-                      },
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                      ),
                     ),
                   ],
                 ),
@@ -160,108 +121,70 @@ class BottomNavBar extends StatelessWidget {
 
 class _NavBarButton extends StatelessWidget {
   final IconData icon;
-  final String label;
   final VoidCallback onTap;
   final bool isActive;
-  final bool isDisabled;
   final bool isAddButton;
   final int? badgeCount;
+  final String? semanticLabel;
 
   const _NavBarButton({
     required this.icon,
-    required this.label,
     required this.onTap,
     this.isActive = false,
-    this.isDisabled = false,
     this.isAddButton = false,
     this.badgeCount,
+    this.semanticLabel,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = isDisabled
-        ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
-        : (isActive
-            ? theme.colorScheme.primary
-            : theme.colorScheme.onSurfaceVariant);
+    final color = isActive
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurfaceVariant.withOpacity(0.8);
 
     return Expanded(
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: isDisabled ? null : onTap,
+      child: Semantics(
+        label: semanticLabel,
+        button: true,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
           borderRadius: BorderRadius.circular(20),
           child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
-            decoration: isActive
-                ? BoxDecoration(
-                    color: theme.colorScheme.primaryContainer.withOpacity(0.4),
-                    borderRadius: BorderRadius.circular(20),
-                  )
-                : null,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
               children: [
-                Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Icon(
-                      icon,
-                      size: isAddButton ? 26 : 22,
-                      color: isAddButton && !isActive
-                          ? theme.colorScheme.primary
-                          : color,
-                    ),
-                    // Badge de notificaciones
-                    if (badgeCount != null && badgeCount! > 0)
-                      Positioned(
-                        right: -8,
-                        top: -6,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: theme.colorScheme.error,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(
-                              color: theme.colorScheme.surface,
-                              width: 1.5,
-                            ),
-                          ),
-                          constraints: const BoxConstraints(
-                            minWidth: 16,
-                            minHeight: 16,
-                          ),
-                          child: Text(
-                            badgeCount! > 99 ? '99+' : badgeCount.toString(),
-                            style: TextStyle(
-                              color: theme.colorScheme.onError,
-                              fontSize: 9,
-                              fontWeight: FontWeight.bold,
-                              height: 1,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                Icon(
+                  icon,
+                  size: isAddButton ? 28 : 24,
+                  color: isAddButton && !isActive ? theme.colorScheme.primary : color,
+                ),
+                if (badgeCount != null && badgeCount! > 0)
+                  Positioned(
+                    right: 4,
+                    top: 2,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.error,
+                        borderRadius: BorderRadius.circular(10),
                       ),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 9,
-                    fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
-                    color: isDisabled
-                        ? theme.colorScheme.onSurfaceVariant.withOpacity(0.4)
-                        : (isActive
-                            ? theme.colorScheme.primary
-                            : theme.colorScheme.onSurfaceVariant),
+                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                      child: Text(
+                        badgeCount! > 99 ? '99+' : badgeCount.toString(),
+                        style: TextStyle(
+                          color: theme.colorScheme.onError,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
               ],
             ),
           ),

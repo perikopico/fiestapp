@@ -1,3 +1,5 @@
+import 'dart:ui' show PlatformDispatcher;
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 
@@ -26,6 +28,8 @@ class EventService {
         .toList();
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con traducciones según idioma del dispositivo
+    await _enrichWithTranslations(events);
     // Enriquecer con categorías múltiples
     await _enrichEventsWithMultipleCategories(events);
     return events;
@@ -44,6 +48,7 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    await _enrichWithTranslations(events);
     // Enriquecer con categorías múltiples
     await _enrichEventsWithMultipleCategories(events);
     return events;
@@ -67,6 +72,8 @@ class EventService {
     
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    // Enriquecer con traducciones según idioma del dispositivo
+    await _enrichWithTranslations(events);
     // Enriquecer con categorías múltiples
     await _enrichEventsWithMultipleCategories(events);
     return events;
@@ -320,6 +327,7 @@ class EventService {
       await _enrichEventsWithCategory(limitedEvents);
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(limitedEvents);
+      await _enrichWithTranslations(limitedEvents);
       // Enriquecer con categorías múltiples
       await _enrichEventsWithMultipleCategories(limitedEvents);
       return limitedEvents;
@@ -376,6 +384,7 @@ class EventService {
       
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(filteredEvents);
+      await _enrichWithTranslations(filteredEvents);
       // Enriquecer con categorías múltiples
       await _enrichEventsWithMultipleCategories(filteredEvents);
       return filteredEvents;
@@ -492,6 +501,7 @@ class EventService {
 
     // Obtener description desde la tabla base para cada evento
     await _enrichEventsWithDescription(events);
+    await _enrichWithTranslations(events);
     // Enriquecer con categorías múltiples
     await _enrichEventsWithMultipleCategories(events);
 
@@ -852,6 +862,86 @@ class EventService {
     }
   }
 
+  /// Enriquece los eventos con traducciones según el idioma del dispositivo.
+  /// Si el idioma es en, de o zh y existe traducción, reemplaza title y description.
+  Future<void> _enrichWithTranslations(List<Event> events) async {
+    if (events.isEmpty) return;
+
+    final langCode = PlatformDispatcher.instance.locale.languageCode;
+    if (langCode == 'es') return; // Español usa el título/descripción original de events
+
+    if (langCode != 'en' && langCode != 'de' && langCode != 'zh') return;
+
+    try {
+      final eventIds = events.map((e) => e.id).toList();
+      final batchSize = 50;
+      final transMap = <String, ({String title, String? description})>{};
+
+      for (int i = 0; i < eventIds.length; i += batchSize) {
+        final batch = eventIds.skip(i).take(batchSize).toList();
+        final res = await supa
+            .from('event_translations')
+            .select('event_id, title, description')
+            .eq('language_code', langCode)
+            .filter('event_id', 'in', '(${batch.join(',')})');
+
+        if (res is List) {
+          for (final item in res) {
+            final m = item as Map<String, dynamic>;
+            transMap[m['event_id'] as String] = (
+              title: m['title'] as String,
+              description: m['description'] as String?,
+            );
+          }
+        }
+      }
+
+      for (int i = 0; i < events.length; i++) {
+        final t = transMap[events[i].id];
+        if (t == null || t.title.isEmpty) continue;
+
+        final e = events[i];
+        final updatedMap = {
+          'id': e.id,
+          'title': t.title,
+          'starts_at': e.startsAt.toIso8601String(),
+          'city_name': e.cityName,
+          'category_name': e.categoryName,
+          'category_icon': e.categoryIcon,
+          'category_color': e.categoryColor,
+          'place': e.place,
+          'image_url': e.imageUrl,
+          'category_id': e.categoryId,
+          'city_id': e.cityId,
+          'price': e.price,
+          'maps_url': e.mapsUrl,
+          'description': t.description ?? e.description,
+          'image_alignment': e.imageAlignment,
+          'info_url': e.infoUrl,
+          'status': e.status,
+          'venue_id': e.venueId,
+          'owner_approved': e.ownerApproved,
+          'owner_approved_at': e.ownerApprovedAt?.toIso8601String(),
+          'owner_rejected_reason': e.ownerRejectedReason,
+          'distance_km': e.distanceKm,
+          'lat': e.lat,
+          'lng': e.lng,
+          'category_ids': e.categoryIds,
+          'category_names': e.categoryNames,
+          'category_icons': e.categoryIcons,
+          'category_colors': e.categoryColors,
+        };
+        events[i] = Event.fromMap(updatedMap);
+      }
+    } catch (e, stackTrace) {
+      LoggerService.instance.error(
+        'Error al enriquecer eventos con traducciones',
+        error: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
+
   /// Obtiene eventos por sus IDs
   Future<List<Event>> fetchEventsByIds(List<String> ids) async {
     if (ids.isEmpty) {
@@ -892,6 +982,7 @@ class EventService {
 
       // Obtener description desde la tabla base para cada evento
       await _enrichEventsWithDescription(allEvents);
+      await _enrichWithTranslations(allEvents);
       // Enriquecer con categorías múltiples
       await _enrichEventsWithMultipleCategories(allEvents);
 
@@ -1279,6 +1370,7 @@ class EventService {
 
       // Enriquecer con descripciones
       await _enrichEventsWithDescription(duplicates);
+      await _enrichWithTranslations(duplicates);
       // Enriquecer con categorías múltiples
       await _enrichEventsWithMultipleCategories(duplicates);
 

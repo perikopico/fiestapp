@@ -15,6 +15,7 @@ import '../../services/event_service.dart';
 import '../../services/city_service.dart' show City;
 import '../../services/category_service.dart';
 import '../../services/admin_moderation_service.dart';
+import '../../services/event_translation_service.dart';
 import '../../services/sample_image_service.dart';
 import '../common/app_bar_logo.dart';
 import '../common/city_search_field.dart';
@@ -47,6 +48,15 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
   final EventService _eventService = EventService.instance;
   final CategoryService _categoryService = CategoryService();
   final AdminModerationService _adminService = AdminModerationService.instance;
+  final EventTranslationService _translationService = EventTranslationService.instance;
+
+  // Controllers para traducciones (EN, DE, ZH)
+  final _transTitleEn = TextEditingController();
+  final _transDescEn = TextEditingController();
+  final _transTitleDe = TextEditingController();
+  final _transDescDe = TextEditingController();
+  final _transTitleZh = TextEditingController();
+  final _transDescZh = TextEditingController();
 
   List<Category> _categories = [];
   bool _isLoadingData = true;
@@ -150,10 +160,26 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
   Future<void> _loadData() async {
     try {
       final categories = await _categoryService.fetchAll();
+      final translations = await _translationService.fetchForEvent(widget.event.id);
 
       if (mounted) {
         setState(() {
           _categories = categories;
+          final tEn = translations['en'];
+          final tDe = translations['de'];
+          final tZh = translations['zh'];
+          if (tEn != null) {
+            _transTitleEn.text = tEn.title;
+            _transDescEn.text = tEn.description ?? '';
+          }
+          if (tDe != null) {
+            _transTitleDe.text = tDe.title;
+            _transDescDe.text = tDe.description ?? '';
+          }
+          if (tZh != null) {
+            _transTitleZh.text = tZh.title;
+            _transDescZh.text = tZh.description ?? '';
+          }
           // Buscar la categoría correcta de la lista cargada
           if (_initialCategoryId != null && categories.isNotEmpty) {
             try {
@@ -200,6 +226,12 @@ class _AdminEventEditScreenState extends State<AdminEventEditScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _placeController.dispose();
+    _transTitleEn.dispose();
+    _transDescEn.dispose();
+    _transTitleDe.dispose();
+    _transDescDe.dispose();
+    _transTitleZh.dispose();
+    _transDescZh.dispose();
     for (final controller in _dailyProgramControllers.values) {
       controller.dispose();
     }
@@ -882,6 +914,21 @@ $dayProgram''';
       // Preparar lista de categorías
       final categoryIds = _selectedCategories.map((c) => c.id!).toList();
 
+      // Guardar traducciones (antes de actualizar el evento)
+      try {
+        await _translationService.saveTranslations(
+          widget.event.id,
+          {
+            'en': (title: _transTitleEn.text, description: _transDescEn.text),
+            'de': (title: _transTitleDe.text, description: _transDescDe.text),
+            'zh': (title: _transTitleZh.text, description: _transDescZh.text),
+          },
+        );
+      } catch (e) {
+        debugPrint('Error al guardar traducciones: $e');
+        // No bloquear el guardado principal si fallan las traducciones
+      }
+
       // Actualizar el evento
       await _eventService.updateEvent(
         eventId: widget.event.id,
@@ -1119,6 +1166,94 @@ $dayProgram''';
     );
   }
 
+  Widget _buildTranslationsSection() {
+    return ExpansionTile(
+      initiallyExpanded: false,
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(top: 8, bottom: 8),
+      title: Row(
+        children: [
+          Icon(
+            Icons.translate,
+            size: 20,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            'Traducciones (EN, DE, ZH)',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ),
+        ],
+      ),
+      subtitle: const Padding(
+        padding: EdgeInsets.only(top: 4),
+        child: Text(
+          'Añade título y descripción en otros idiomas para que usuarios con idioma distinto al español vean el evento traducido.',
+          style: TextStyle(fontSize: 12),
+        ),
+      ),
+      children: [
+        _buildTranslationFields('Inglés (EN)', _transTitleEn, _transDescEn),
+        const SizedBox(height: 16),
+        _buildTranslationFields('Alemán (DE)', _transTitleDe, _transDescDe),
+        const SizedBox(height: 16),
+        _buildTranslationFields('Chino (ZH)', _transTitleZh, _transDescZh),
+      ],
+    );
+  }
+
+  Widget _buildTranslationFields(
+    String langLabel,
+    TextEditingController titleController,
+    TextEditingController descController,
+  ) {
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              langLabel,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: titleController,
+              decoration: InputDecoration(
+                labelText: 'Título',
+                hintText: 'Título en $langLabel',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                isDense: true,
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: descController,
+              decoration: InputDecoration(
+                labelText: 'Descripción',
+                hintText: 'Descripción en $langLabel',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                alignLabelWithHint: true,
+                isDense: true,
+              ),
+              maxLines: 3,
+              minLines: 1,
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   String _getCategoryDescription(String categoryName) {
     final lowerName = categoryName.toLowerCase();
 
@@ -1224,6 +1359,10 @@ $dayProgram''';
                         });
                       },
                     ),
+                    const SizedBox(height: 24),
+
+                    // === SECCIÓN: Traducciones (otros idiomas) ===
+                    _buildTranslationsSection(),
                     const SizedBox(height: 32),
 
                     // === SECCIÓN: Fecha y horario ===

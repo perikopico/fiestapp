@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../services/onboarding_service.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../common/app_bar_logo.dart';
+import 'notification_preferences_screen.dart';
 
 class PermissionsOnboardingScreen extends StatefulWidget {
   const PermissionsOnboardingScreen({super.key});
@@ -87,10 +88,20 @@ class _PermissionsOnboardingScreenState
       );
     }
 
-    // Navegar a la pantalla principal
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const DashboardScreen()),
-    );
+    // Verificar si necesita configurar notificaciones
+    final hasSeenNotifications = await OnboardingService.instance.hasSeenNotificationPreferences();
+    
+    if (!hasSeenNotifications) {
+      // Navegar a la pantalla de configuración de notificaciones
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const NotificationPreferencesScreen()),
+      );
+    } else {
+      // Navegar directamente al dashboard
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const DashboardScreen()),
+      );
+    }
   }
 
   void _onPageChanged(int index) {
