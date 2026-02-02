@@ -7,6 +7,7 @@ class OnboardingService {
   static final OnboardingService instance = OnboardingService._();
 
   static const String _keyHasSeenPermissionOnboarding = 'hasSeenPermissionOnboarding';
+  static const String _keyHasSeenNotificationPreferences = 'hasSeenNotificationPreferences';
 
   /// Verifica si el usuario ya ha visto el onboarding de permisos
   Future<bool> hasSeenPermissionOnboarding() async {
@@ -20,10 +21,23 @@ class OnboardingService {
     await prefs.setBool(_keyHasSeenPermissionOnboarding, true);
   }
 
-  /// Resetea el flag (útil para testing)
+  /// Verifica si el usuario ya ha configurado las preferencias de notificaciones
+  Future<bool> hasSeenNotificationPreferences() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool(_keyHasSeenNotificationPreferences) ?? false;
+  }
+
+  /// Marca que el usuario ha configurado las preferencias de notificaciones
+  Future<void> markNotificationPreferencesSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_keyHasSeenNotificationPreferences, true);
+  }
+
+  /// Resetea todos los flags (útil para testing)
   Future<void> reset() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_keyHasSeenPermissionOnboarding);
+    await prefs.remove(_keyHasSeenNotificationPreferences);
   }
 }
 

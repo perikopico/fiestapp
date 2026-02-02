@@ -13,6 +13,7 @@ import 'services/favorites_service.dart';
 import 'services/onboarding_service.dart';
 import 'services/fcm_token_service.dart';
 import 'services/notification_handler.dart';
+import 'services/notifications_count_service.dart';
 import 'services/logger_service.dart';
 import 'package:provider/provider.dart';
 import 'providers/dashboard_provider.dart';
@@ -169,6 +170,14 @@ Future<void> _initializeBackgroundServices() async {
           } catch (e) {
             LoggerService.instance.error('Error al obtener token FCM', error: e);
           }
+          
+          // Inicializar conteo de notificaciones y empezar polling
+          NotificationsCountService.instance.getUnreadCount().then((_) {
+            NotificationsCountService.instance.startPolling();
+            LoggerService.instance.info('Servicio de conteo de notificaciones iniciado');
+          }).catchError((e) {
+            LoggerService.instance.error('Error al inicializar conteo de notificaciones', error: e);
+          });
         } else if (event == AuthChangeEvent.signedOut) {
           LoggerService.instance.info('Usuario cerró sesión');
           
@@ -183,6 +192,10 @@ Future<void> _initializeBackgroundServices() async {
           } catch (e) {
             LoggerService.instance.error('Error al obtener token FCM para eliminar', error: e);
           }
+          
+          // Detener polling de notificaciones y resetear conteo
+          NotificationsCountService.instance.stopPolling();
+          NotificationsCountService.instance.unreadCount.value = 0;
           
           // Recargar favoritos desde local
           FavoritesService.instance.init();

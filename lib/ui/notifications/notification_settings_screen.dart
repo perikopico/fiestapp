@@ -1,13 +1,13 @@
 // lib/ui/notifications/notification_settings_screen.dart
+// Pantalla de configuración de preferencias de notificaciones (accesible desde perfil)
+
 import 'package:flutter/material.dart';
-import '../../models/notification_rule.dart';
-import '../../models/category.dart';
-import '../../services/notification_preferences_service.dart';
-import '../../services/category_service.dart';
 import '../../services/city_service.dart';
+import '../../services/category_service.dart';
+import '../../services/fcm_topic_service.dart';
+import '../../services/fcm_token_service.dart';
 import '../common/app_bar_logo.dart';
-import '../dashboard/widgets/bottom_nav_bar.dart';
-import 'widgets/notification_rule_card.dart';
+import '../../models/category.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
   const NotificationSettingsScreen({super.key});
@@ -19,395 +19,912 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState
     extends State<NotificationSettingsScreen> {
-  final _prefsService = NotificationPreferencesService.instance;
-  final _categoryService = CategoryService();
-  final _cityService = CityService.instance;
-
-  bool _notificationsEnabled = true;
-  bool _notifyForFavorites = true;
-  List<NotificationRule> _rules = [];
+  final CityService _cityService = CityService.instance;
+  final CategoryService _categoryService = CategoryService();
+  final FCMTopicService _topicService = FCMTopicService.instance;
+  
+  List<City> _cities = [];
   List<Category> _categories = [];
-  List<City> _allCities = [];
+  Set<String> _selectedCities = {};
+  Set<String> _selectedCategories = {};
   bool _isLoading = true;
   bool _isSaving = false;
-
-  // Default province (Cádiz)
-  static const int _defaultProvinceId = 1;
+  bool _showCategories = false;
+  Map<String, List<City>> _citiesByRegion = {}; // Ciudades agrupadas por región
+  String _searchQuery = ''; // Búsqueda de ciudades
+  List<String> _searchSuggestions = []; // Sugerencias de búsqueda
+  final FocusNode _searchFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     _loadData();
+    _searchFocusNode.addListener(_onSearchFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _searchFocusNode.removeListener(_onSearchFocusChange);
+    _searchFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus && _searchQuery.isEmpty) {
+      setState(() {
+        _searchSuggestions = [];
+      });
+    }
+  }
+
+  void _updateSearchSuggestions(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _searchSuggestions = [];
+      });
+      return;
+    }
+
+    final queryLower = query.toLowerCase();
+    final suggestions = <String>[];
+    
+    // Buscar ciudades que coincidan (búsqueda fuzzy)
+    for (final city in _cities) {
+      final cityLower = city.name.toLowerCase();
+      
+      // Coincidencia exacta o que empiece con la búsqueda
+      if (cityLower.startsWith(queryLower)) {
+        suggestions.add(city.name);
+      }
+      // Coincidencia parcial (contiene)
+      else if (cityLower.contains(queryLower)) {
+        suggestions.add(city.name);
+      }
+      // Búsqueda fuzzy: calcular similitud para errores tipográficos comunes
+      else if (_calculateSimilarity(cityLower, queryLower) > 0.6) {
+        suggestions.add(city.name);
+      }
+    }
+    
+    // Limitar a 5 sugerencias y ordenar por relevancia
+    suggestions.sort((a, b) {
+      final aLower = a.toLowerCase();
+      final bLower = b.toLowerCase();
+      final aStarts = aLower.startsWith(queryLower) ? 1 : 0;
+      final bStarts = bLower.startsWith(queryLower) ? 1 : 0;
+      if (aStarts != bStarts) return bStarts.compareTo(aStarts);
+      return aLower.compareTo(bLower);
+    });
+    
+    setState(() {
+      _searchSuggestions = suggestions.take(5).toList();
+    });
+  }
+
+  /// Calcula similitud entre dos strings (Levenshtein simplificado)
+  double _calculateSimilarity(String s1, String s2) {
+    if (s1 == s2) return 1.0;
+    if (s1.isEmpty || s2.isEmpty) return 0.0;
+    
+    // Distancia de Levenshtein simplificada
+    final maxLen = s1.length > s2.length ? s1.length : s2.length;
+    final distance = _levenshteinDistance(s1, s2);
+    return 1.0 - (distance / maxLen);
+  }
+
+  /// Calcula la distancia de Levenshtein entre dos strings
+  int _levenshteinDistance(String s1, String s2) {
+    if (s1.isEmpty) return s2.length;
+    if (s2.isEmpty) return s1.length;
+    
+    final matrix = List.generate(
+      s1.length + 1,
+      (i) => List.generate(s2.length + 1, (j) => 0),
+    );
+    
+    for (int i = 0; i <= s1.length; i++) {
+      matrix[i][0] = i;
+    }
+    for (int j = 0; j <= s2.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (int i = 1; i <= s1.length; i++) {
+      for (int j = 1; j <= s2.length; j++) {
+        final cost = s1[i - 1] == s2[j - 1] ? 0 : 1;
+        matrix[i][j] = [
+          matrix[i - 1][j] + 1,      // deletion
+          matrix[i][j - 1] + 1,      // insertion
+          matrix[i - 1][j - 1] + cost, // substitution
+        ].reduce((a, b) => a < b ? a : b);
+      }
+    }
+    
+    return matrix[s1.length][s2.length];
   }
 
   Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
     try {
-      // Cargar preferencias
-      final prefs = await _prefsService.loadPreferences();
-      _notificationsEnabled = prefs['notificationsEnabled'] as bool;
-      _notifyForFavorites = prefs['notifyForFavorites'] as bool;
-
-      // Cargar categorías
-      _categories = await _categoryService.fetchAll();
-
-      // Cargar ciudades
-      _allCities = await _cityService.fetchCities();
-
-      // Cargar reglas
-      _rules = await _prefsService.loadNotificationRules();
-
-      // Si no hay reglas, crear una por defecto
-      if (_rules.isEmpty) {
-        final allCityIds = _allCities
-            .where((c) => c.provinceId == _defaultProvinceId)
-            .map((c) => c.id)
-            .toList();
-        final allCategoryIds = _categories
-            .where((c) => c.id != null)
-            .map((c) => c.id!)
-            .toList();
-
-        final defaultRule = await _prefsService.createDefaultRule(
-          provinceId: _defaultProvinceId,
-          allCityIds: allCityIds,
-          allCategoryIds: allCategoryIds,
-        );
-        _rules = [defaultRule];
+      // Obtener todas las ciudades (pasar null para obtener todas, no solo Cádiz)
+      final cities = await _cityService.fetchCities(provinceId: null);
+      final categories = await _categoryService.fetchAll();
+      
+      // Cargar suscripciones actuales
+      final subscribedCities = await _topicService.getSubscribedCities();
+      final subscribedCategories = await _topicService.getSubscribedCategories();
+      
+      // Agrupar ciudades por región
+      final citiesByRegion = <String, List<City>>{};
+      for (final city in cities) {
+        final region = city.region ?? 'Sin región';
+        citiesByRegion.putIfAbsent(region, () => []).add(city);
       }
+      
+      setState(() {
+        _cities = cities;
+        _categories = categories;
+        _selectedCities = subscribedCities.toSet();
+        // Si no hay ciudades suscritas, seleccionar todas por defecto
+        if (_selectedCities.isEmpty) {
+          _selectedCities = cities.map((c) => c.name).toSet();
+        }
+        _selectedCategories = subscribedCategories.toSet();
+        _citiesByRegion = citiesByRegion;
+        _isLoading = false;
+      });
     } catch (e) {
       debugPrint('Error al cargar datos: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Error al cargar configuración: $e'),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      setState(() {
+        _isLoading = false;
+      });
     }
   }
 
   Future<void> _savePreferences() async {
-    // Validar reglas activas
-    final invalidRules = _rules
-        .where((r) => r.isActive && !r.isValid)
-        .toList();
-
-    if (invalidRules.isNotEmpty) {
+    if (_selectedCities.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Hay reglas activas sin ciudades o categorías seleccionadas. Corrígelas antes de guardar.',
-          ),
+          content: Text('Selecciona al menos una ciudad para recibir notificaciones'),
           backgroundColor: Colors.orange,
         ),
       );
       return;
     }
 
-    setState(() => _isSaving = true);
+    setState(() {
+      _isSaving = true;
+    });
 
     try {
-      // Guardar preferencias
-      await _prefsService.savePreferences(
-        notificationsEnabled: _notificationsEnabled,
-        notifyForFavorites: _notifyForFavorites,
+      // Actualizar suscripciones de ciudades
+      await _topicService.updateCitySubscriptions(_selectedCities.toList());
+      
+      // Actualizar suscripciones de categorías
+      if (_selectedCategories.isNotEmpty) {
+        await _topicService.updateCategorySubscriptions(_selectedCategories.toList());
+      } else {
+        // Si no hay categorías seleccionadas, desuscribirse de todas
+        final currentCategories = await _topicService.getSubscribedCategories();
+        for (final cat in currentCategories) {
+          await _topicService.unsubscribeFromCategory(cat);
+        }
+      }
+      
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('✅ Preferencias de notificaciones guardadas'),
+          backgroundColor: Colors.green,
+        ),
       );
-
-      // Guardar reglas
-      await _prefsService.saveNotificationRules(_rules);
-
+      
+      // Volver atrás después de un breve delay
+      await Future.delayed(const Duration(milliseconds: 500));
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Preferencias guardadas correctamente'),
-            backgroundColor: Colors.green,
-          ),
-        );
         Navigator.of(context).pop();
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      debugPrint('Error al guardar preferencias: $e');
+      if (!mounted) return;
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al guardar preferencias: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } finally {
       if (mounted) {
-        setState(() => _isSaving = false);
+        setState(() {
+          _isSaving = false;
+        });
       }
     }
   }
 
-  void _addRule() {
-    final newRule = NotificationRule(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      provinceId: _defaultProvinceId,
-      cityIds: [],
-      categoryIds: [],
-      isActive: true,
-    );
+  void _toggleCity(String cityName) {
     setState(() {
-      _rules.add(newRule);
-    });
-  }
-
-  void _updateRule(NotificationRule updatedRule) {
-    setState(() {
-      final index = _rules.indexWhere((r) => r.id == updatedRule.id);
-      if (index != -1) {
-        _rules[index] = updatedRule;
+      if (_selectedCities.contains(cityName)) {
+        _selectedCities.remove(cityName);
+      } else {
+        _selectedCities.add(cityName);
       }
     });
   }
 
-  void _deleteRule(String ruleId) {
+  void _toggleCategory(String categoryName) {
     setState(() {
-      _rules.removeWhere((r) => r.id == ruleId);
+      if (_selectedCategories.contains(categoryName)) {
+        _selectedCategories.remove(categoryName);
+      } else {
+        _selectedCategories.add(categoryName);
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const AppBarLogo(),
-          centerTitle: true,
-          elevation: 0,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        ),
-        body: const Center(child: CircularProgressIndicator()),
-        bottomNavigationBar: const BottomNavBar(activeRoute: 'notifications'),
-      );
-    }
-
     final theme = Theme.of(context);
-
+    
     return Scaffold(
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        title: const AppBarLogo(),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        title: const Text('Notificaciones'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // A) Global switch block
-            _buildGlobalSwitchBlock(theme),
-
-            const SizedBox(height: 32),
-
-            // B) Rules block
-            _buildRulesBlock(theme),
-
-            const SizedBox(height: 32),
-
-            // C) Favorites notifications block
-            _buildFavoritesBlock(theme),
-
-            const SizedBox(height: 32),
-
-            // Info text
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                'Te avisaremos cuando se publiquen eventos que coincidan con al menos una de tus reglas (provincia, ciudades y categorías seleccionadas) y cuando haya novedades en tus eventos favoritos si tienes la opción activada.',
-                style: theme.textTheme.bodySmall,
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Botón Guardar
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: _isSaving ? null : _savePreferences,
-                style: FilledButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-                child: _isSaving
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text(
-                        'Guardar preferencias',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
+      body: SafeArea(
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
+                children: [
+                  // Contenido scrollable
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 16),
+                          
+                          // Explicación simple
+                          Container(
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer.withOpacity(0.3),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: theme.colorScheme.primary.withOpacity(0.2),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline,
+                                      color: theme.colorScheme.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      '¿Cuándo recibirás notificaciones?',
+                                      style: theme.textTheme.titleSmall?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                _buildNotificationInfoItem(
+                                  theme,
+                                  Icons.favorite,
+                                  'Recordatorios de favoritos',
+                                  'Te avisamos 24 horas antes de tus eventos favoritos',
+                                ),
+                                const SizedBox(height: 8),
+                                _buildNotificationInfoItem(
+                                  theme,
+                                  Icons.location_city,
+                                  'Nuevos eventos en tus ciudades',
+                                  'Te notificamos cuando se publique un evento en las ciudades que selecciones',
+                                ),
+                                const SizedBox(height: 8),
+                                _buildNotificationInfoItem(
+                                  theme,
+                                  Icons.warning_amber,
+                                  'Cambios importantes',
+                                  'Te avisamos si cambia la fecha, hora o lugar de tus eventos favoritos',
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 32),
+                          
+                          // Sección de ciudades
+                          Text(
+                            'Ciudades',
+                            style: theme.textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Selecciona las ciudades de las que quieres recibir notificaciones',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Contador de selección
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.location_city,
+                                  size: 16,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  '${_selectedCities.length} de ${_cities.length} ciudades seleccionadas',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Búsqueda de ciudades con sugerencias
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              TextField(
+                                focusNode: _searchFocusNode,
+                                decoration: InputDecoration(
+                                  hintText: 'Buscar ciudad...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () {
+                                            setState(() {
+                                              _searchQuery = '';
+                                              _searchSuggestions = [];
+                                            });
+                                            _searchFocusNode.unfocus();
+                                          },
+                                        )
+                                      : null,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  filled: true,
+                                  fillColor: theme.colorScheme.surface,
+                                ),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value.toLowerCase();
+                                  });
+                                  _updateSearchSuggestions(value);
+                                },
+                                onSubmitted: (value) {
+                                  if (_searchSuggestions.isNotEmpty) {
+                                    // Seleccionar la primera sugerencia
+                                    setState(() {
+                                      _searchQuery = _searchSuggestions.first.toLowerCase();
+                                      _searchSuggestions = [];
+                                    });
+                                    _searchFocusNode.unfocus();
+                                  }
+                                },
+                              ),
+                              
+                              // Mostrar sugerencias
+                              if (_searchSuggestions.isNotEmpty && _searchFocusNode.hasFocus)
+                                Container(
+                                  margin: const EdgeInsets.only(top: 4),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.surface,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: theme.colorScheme.outline.withOpacity(0.2),
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.1),
+                                        blurRadius: 8,
+                                        offset: const Offset(0, 4),
+                                      ),
+                                    ],
+                                  ),
+                                  constraints: const BoxConstraints(maxHeight: 200),
+                                  child: ListView.builder(
+                                    shrinkWrap: true,
+                                    itemCount: _searchSuggestions.length,
+                                    itemBuilder: (context, index) {
+                                      final suggestion = _searchSuggestions[index];
+                                      final isSelected = _selectedCities.contains(suggestion);
+                                      
+                                      return InkWell(
+                                        onTap: () {
+                                          setState(() {
+                                            _searchQuery = suggestion.toLowerCase();
+                                            _searchSuggestions = [];
+                                          });
+                                          _searchFocusNode.unfocus();
+                                        },
+                                        child: Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 16,
+                                            vertical: 12,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.location_city,
+                                                size: 18,
+                                                color: theme.colorScheme.primary,
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Text(
+                                                  suggestion,
+                                                  style: theme.textTheme.bodyMedium,
+                                                ),
+                                              ),
+                                              if (isSelected)
+                                                Icon(
+                                                  Icons.check_circle,
+                                                  size: 18,
+                                                  color: theme.colorScheme.primary,
+                                                ),
+                                            ],
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          
+                          // Botones de selección rápida
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedCities = _cities.map((c) => c.name).toSet();
+                                    });
+                                  },
+                                  icon: const Icon(Icons.select_all, size: 18),
+                                  label: const Text('Seleccionar todo'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _selectedCities.clear();
+                                    });
+                                  },
+                                  icon: const Icon(Icons.deselect, size: 18),
+                                  label: const Text('Deseleccionar todo'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 16),
+                          
+                          // Lista de ciudades agrupadas por región (filtradas por búsqueda)
+                          ..._citiesByRegion.entries.map((entry) {
+                            final region = entry.key;
+                            var citiesInRegion = entry.value;
+                            
+                            // Filtrar por búsqueda si hay query
+                            if (_searchQuery.isNotEmpty) {
+                              citiesInRegion = citiesInRegion
+                                  .where((city) => city.name.toLowerCase().contains(_searchQuery))
+                                  .toList();
+                              if (citiesInRegion.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+                            }
+                            
+                            final allSelectedInRegion = citiesInRegion.every(
+                              (city) => _selectedCities.contains(city.name),
+                            );
+                            final someSelectedInRegion = citiesInRegion.any(
+                              (city) => _selectedCities.contains(city.name),
+                            );
+                            
+                            // Colapsar por defecto, excepto si tiene selecciones
+                            final initiallyExpanded = someSelectedInRegion || _searchQuery.isNotEmpty;
+                            
+                            return _buildRegionSection(
+                              theme,
+                              region: region,
+                              cities: citiesInRegion,
+                              allSelected: allSelectedInRegion,
+                              someSelected: someSelectedInRegion,
+                              initiallyExpanded: initiallyExpanded,
+                            );
+                          }),
+                          
+                          const SizedBox(height: 32),
+                          
+                          // Toggle para mostrar categorías (opcional)
+                          InkWell(
+                            onTap: () {
+                              setState(() {
+                                _showCategories = !_showCategories;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(16),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: theme.colorScheme.outline.withOpacity(0.2),
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    _showCategories
+                                        ? Icons.expand_less
+                                        : Icons.expand_more,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Filtrar por categorías (opcional)',
+                                          style: theme.textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Recibe notificaciones solo de eventos de categorías específicas',
+                                          style: theme.textTheme.bodySmall?.copyWith(
+                                            color: theme.colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          
+                          // Lista de categorías (si está expandida)
+                          if (_showCategories) ...[
+                            const SizedBox(height: 16),
+                            
+                            // Botones de selección rápida para categorías
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedCategories = _categories.map((c) => c.name).toSet();
+                                      });
+                                    },
+                                    icon: const Icon(Icons.select_all, size: 18),
+                                    label: const Text('Seleccionar todo'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () {
+                                      setState(() {
+                                        _selectedCategories.clear();
+                                      });
+                                    },
+                                    icon: const Icon(Icons.deselect, size: 18),
+                                    label: const Text('Deseleccionar todo'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 16),
+                            
+                            ..._categories.map((category) => _buildSelectionTile(
+                              theme,
+                              title: category.name,
+                              isSelected: _selectedCategories.contains(category.name),
+                              onTap: () => _toggleCategory(category.name),
+                              leading: category.icon != null
+                                  ? Text(
+                                      category.icon!,
+                                      style: const TextStyle(fontSize: 24),
+                                    )
+                                  : null,
+                            )),
+                            if (_selectedCategories.isEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8, bottom: 16),
+                                child: Text(
+                                  'Si no seleccionas ninguna categoría, recibirás notificaciones de todas',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          
+                          const SizedBox(height: 24),
+                        ],
                       ),
+                    ),
+                  ),
+                  
+                  // Botón de guardar
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _isSaving ? null : _savePreferences,
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: _isSaving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                ),
+                              )
+                            : Text(
+                                'Guardar preferencias',
+                                style: theme.textTheme.labelLarge,
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ),
-
-            const SizedBox(height: 32),
-          ],
-        ),
       ),
-      bottomNavigationBar: const BottomNavBar(activeRoute: 'notifications'),
     );
   }
 
-  Widget _buildGlobalSwitchBlock(ThemeData theme) {
-    return Column(
+  Widget _buildNotificationInfoItem(
+    ThemeData theme,
+    IconData icon,
+    String title,
+    String description,
+  ) {
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Notificaciones',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+        Icon(
+          icon,
+          size: 18,
+          color: theme.colorScheme.primary,
         ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Recibir notificaciones',
-                style: theme.textTheme.bodyLarge,
-              ),
-            ),
-            Switch(
-              value: _notificationsEnabled,
-              onChanged: (value) {
-                setState(() {
-                  _notificationsEnabled = value;
-                });
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Si desactivas esta opción, no te avisaremos de nuevos eventos.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRulesBlock(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              'Reglas de notificación',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (!_notificationsEnabled)
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
               Text(
-                'Desactivadas',
+                title,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                description,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
               ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        Text(
-          'Crea reglas para elegir de qué provincias, ciudades y categorías quieres recibir avisos.',
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        ..._rules.asMap().entries.map((entry) {
-          return NotificationRuleCard(
-            key: ValueKey(entry.value.id),
-            rule: entry.value,
-            ruleIndex: entry.key,
-            allCities: _allCities,
-            allCategories: _categories,
-            onChanged: _updateRule,
-            onDelete: _deleteRule,
-            isDisabled: !_notificationsEnabled,
-          );
-        }),
-        if (_notificationsEnabled) ...[
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _addRule,
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar regla'),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-            ),
-          ),
-        ],
       ],
     );
   }
 
-  Widget _buildFavoritesBlock(ThemeData theme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Eventos favoritos',
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.w700,
-          ),
+  Widget _buildRegionSection(
+    ThemeData theme, {
+    required String region,
+    required List<City> cities,
+    required bool allSelected,
+    required bool someSelected,
+    bool initiallyExpanded = false,
+  }) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 16),
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withOpacity(0.2),
         ),
-        const SizedBox(height: 16),
-        Row(
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: initiallyExpanded,
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: const EdgeInsets.only(bottom: 8),
+        title: Row(
           children: [
             Expanded(
               child: Text(
-                'Recibir recordatorios de mis eventos favoritos',
-                style: theme.textTheme.bodyLarge,
+                region,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
-            Switch(
-              value: _notifyForFavorites,
-              onChanged: (value) {
-                setState(() {
-                  _notifyForFavorites = value;
-                });
-              },
+            Text(
+              '${cities.length} ciudades',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          'Te avisaremos cuando se acerque la fecha o haya cambios importantes en los eventos que has marcado como favoritos.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() {
+                      if (allSelected) {
+                        // Deseleccionar todas de la región
+                        for (final city in cities) {
+                          _selectedCities.remove(city.name);
+                        }
+                      } else {
+                        // Seleccionar todas de la región
+                        for (final city in cities) {
+                          _selectedCities.add(city.name);
+                        }
+                      }
+                    });
+                  },
+                  icon: Icon(
+                    allSelected ? Icons.deselect : Icons.select_all,
+                    size: 16,
+                  ),
+                  label: Text(
+                    allSelected ? 'Deseleccionar región' : 'Seleccionar región',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    minimumSize: const Size(0, 32),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+        trailing: Icon(
+          allSelected
+              ? Icons.check_circle
+              : someSelected
+                  ? Icons.indeterminate_check_box
+                  : Icons.circle_outlined,
+          color: allSelected
+              ? theme.colorScheme.primary
+              : someSelected
+                  ? theme.colorScheme.primary.withOpacity(0.6)
+                  : theme.colorScheme.outline,
+        ),
+        children: [
+          ...cities.map((city) => Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: _buildSelectionTile(
+                  theme,
+                  title: city.name,
+                  isSelected: _selectedCities.contains(city.name),
+                  onTap: () => _toggleCity(city.name),
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSelectionTile(
+    ThemeData theme, {
+    required String title,
+    required bool isSelected,
+    required VoidCallback onTap,
+    Widget? leading,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primaryContainer.withOpacity(0.3)
+              : theme.colorScheme.surface,
+          border: Border.all(
+            color: isSelected
+                ? theme.colorScheme.primary
+                : theme.colorScheme.outline.withOpacity(0.2),
+            width: isSelected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            if (leading != null) ...[
+              leading,
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                title,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            Icon(
+              isSelected ? Icons.check_circle : Icons.circle_outlined,
+              color: isSelected
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
-

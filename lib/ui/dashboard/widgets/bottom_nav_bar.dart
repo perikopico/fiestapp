@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../events/favorites_screen.dart';
 import '../../events/event_wizard_screen.dart';
 import '../../auth/profile_screen.dart';
+import '../../notifications/notifications_screen.dart';
+import '../../../services/notifications_count_service.dart';
 import '../../../main.dart' show appThemeMode;
 
 class BottomNavBar extends StatelessWidget {
@@ -113,6 +115,25 @@ class BottomNavBar extends StatelessWidget {
                         );
                       },
                     ),
+                    // Botón Notificaciones (con badge)
+                    ValueListenableBuilder<int>(
+                      valueListenable: NotificationsCountService.instance.unreadCount,
+                      builder: (context, count, _) {
+                        return _NavBarButton(
+                          icon: Icons.notifications_outlined,
+                          label: 'Notis',
+                          isActive: currentRoute == 'notifications',
+                          badgeCount: count > 0 ? count : null,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const NotificationsScreen(),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                    ),
                     // Botón Cuenta (integrado en la barra)
                     _NavBarButton(
                       icon: Icons.person,
@@ -144,6 +165,7 @@ class _NavBarButton extends StatelessWidget {
   final bool isActive;
   final bool isDisabled;
   final bool isAddButton;
+  final int? badgeCount;
 
   const _NavBarButton({
     required this.icon,
@@ -152,6 +174,7 @@ class _NavBarButton extends StatelessWidget {
     this.isActive = false,
     this.isDisabled = false,
     this.isAddButton = false,
+    this.badgeCount,
   });
 
   @override
@@ -181,12 +204,48 @@ class _NavBarButton extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
-                  icon,
-                  size: isAddButton ? 26 : 22,
-                  color: isAddButton && !isActive
-                      ? theme.colorScheme.primary
-                      : color,
+                Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Icon(
+                      icon,
+                      size: isAddButton ? 26 : 22,
+                      color: isAddButton && !isActive
+                          ? theme.colorScheme.primary
+                          : color,
+                    ),
+                    // Badge de notificaciones
+                    if (badgeCount != null && badgeCount! > 0)
+                      Positioned(
+                        right: -8,
+                        top: -6,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.error,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: theme.colorScheme.surface,
+                              width: 1.5,
+                            ),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            badgeCount! > 99 ? '99+' : badgeCount.toString(),
+                            style: TextStyle(
+                              color: theme.colorScheme.onError,
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              height: 1,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(

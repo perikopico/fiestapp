@@ -21,6 +21,7 @@ import '../legal/about_screen.dart';
 import '../../services/venue_ownership_service.dart';
 import '../../services/favorites_local_service.dart';
 import '../notifications/alerts_screen.dart';
+import '../notifications/notification_settings_screen.dart';
 import '../../main.dart' show appThemeMode;
 import 'login_screen.dart';
 import 'register_screen.dart';
@@ -380,6 +381,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         appThemeMode.value = ThemeMode.system;
                                       }
                                     },
+                                  );
+                                },
+                              ),
+                              // Preferencias de Notificaciones
+                              _buildListItem(
+                                context,
+                                icon: Icons.notifications_outlined,
+                                title: 'Preferencias de Notificaciones',
+                                subtitle: 'Configurar ciudades y categorías',
+                                onTap: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => const NotificationSettingsScreen(),
+                                    ),
                                   );
                                 },
                               ),

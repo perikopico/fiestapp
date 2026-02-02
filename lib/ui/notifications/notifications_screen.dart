@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import '../../services/fcm_token_service.dart';
 import '../common/app_bar_logo.dart';
 import 'notification_settings_screen.dart';
+import 'notifications_inbox_screen.dart';
 import '../dashboard/widgets/bottom_nav_bar.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -14,45 +15,29 @@ class NotificationsScreen extends StatefulWidget {
   State<NotificationsScreen> createState() => _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen> {
-  String? _fcmToken;
-  bool _isLoadingToken = true;
-  String? _errorMessage;
+class _NotificationsScreenState extends State<NotificationsScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _currentTab = 0; // 0 = Buzón, 1 = Debug
 
   @override
   void initState() {
     super.initState();
-    _loadFCMToken();
+    if (kDebugMode) {
+      _tabController = TabController(length: 2, vsync: this);
+      _tabController.addListener(() {
+        setState(() {
+          _currentTab = _tabController.index;
+        });
+      });
+    }
   }
 
-  Future<void> _loadFCMToken() async {
-    setState(() {
-      _isLoadingToken = true;
-      _errorMessage = null;
-    });
-
-    try {
-      // Usar el servicio FCMTokenService en lugar de obtener directamente
-      final token = await FCMTokenService.instance.getCurrentToken();
-      
-      if (mounted) {
-        setState(() {
-          _fcmToken = token;
-          _isLoadingToken = false;
-          if (token == null) {
-            _errorMessage = 'No se pudo obtener el token. Verifica que Firebase esté inicializado y los permisos concedidos.';
-          }
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _fcmToken = null;
-          _isLoadingToken = false;
-          _errorMessage = 'Error: ${e.toString()}';
-        });
-      }
+  @override
+  void dispose() {
+    if (kDebugMode) {
+      _tabController.dispose();
     }
+    super.dispose();
   }
 
   @override
@@ -77,53 +62,72 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             label: const Text('Configurar'),
           ),
         ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Contenido principal
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.notifications_none,
-                    size: 64,
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No tienes notificaciones',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Te avisaremos cuando haya nuevos eventos que te interesen',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
+        bottom: kDebugMode
+            ? TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Buzón'),
+                  Tab(text: 'Debug'),
                 ],
-              ),
-            ),
-            
-            // Debug: Mostrar token FCM solo en modo debug
-            if (kDebugMode) ...[
-              const SizedBox(height: 32),
-              _buildFCMTokenDebugSection(context),
-            ],
-          ],
-        ),
+              )
+            : null,
       ),
+      body: kDebugMode && _currentTab == 1
+          ? _buildDebugTab(context)
+          : const NotificationsInboxScreen(),
       bottomNavigationBar: const BottomNavBar(activeRoute: 'notifications'),
     );
   }
 
-  Widget _buildFCMTokenDebugSection(BuildContext context) {
+  Widget _buildDebugTab(BuildContext context) {
+    String? _fcmToken;
+    bool _isLoadingToken = true;
+    String? _errorMessage;
+
+    void _loadFCMToken() async {
+      setState(() {
+        _isLoadingToken = true;
+        _errorMessage = null;
+      });
+
+      try {
+        final token = await FCMTokenService.instance.getCurrentToken();
+        
+        if (mounted) {
+          setState(() {
+            _fcmToken = token;
+            _isLoadingToken = false;
+            if (token == null) {
+              _errorMessage = 'No se pudo obtener el token. Verifica que Firebase esté inicializado y los permisos concedidos.';
+            }
+          });
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _fcmToken = null;
+            _isLoadingToken = false;
+            _errorMessage = 'Error: ${e.toString()}';
+          });
+        }
+      }
+    }
+
+    _loadFCMToken();
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: _buildFCMTokenDebugSection(context, _fcmToken, _isLoadingToken, _errorMessage, _loadFCMToken),
+    );
+  }
+
+  Widget _buildFCMTokenDebugSection(
+    BuildContext context,
+    String? fcmToken,
+    bool isLoadingToken,
+    String? errorMessage,
+    VoidCallback loadFCMToken,
+  ) {
     final theme = Theme.of(context);
     
     return Card(
@@ -151,13 +155,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
             const SizedBox(height: 12),
-            if (_isLoadingToken)
+            if (isLoadingToken)
               const SizedBox(
                 height: 20,
                 width: 20,
                 child: CircularProgressIndicator(strokeWidth: 2),
               )
-            else if (_fcmToken != null) ...[
+            else if (fcmToken != null) ...[
               Text(
                 'Token:',
                 style: theme.textTheme.bodySmall?.copyWith(
@@ -166,7 +170,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               const SizedBox(height: 4),
               SelectableText(
-                _fcmToken!,
+                fcmToken,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontFamily: 'monospace',
                   fontSize: 11,
@@ -175,8 +179,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               const SizedBox(height: 8),
               TextButton.icon(
                 onPressed: () {
-                  // Copiar al portapapeles
-                  Clipboard.setData(ClipboardData(text: _fcmToken!));
+                  Clipboard.setData(ClipboardData(text: fcmToken));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
                       content: Text('Token copiado al portapapeles'),
@@ -198,14 +201,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                _errorMessage ?? 'No se pudo obtener el token FCM',
+                errorMessage ?? 'No se pudo obtener el token FCM',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.error,
                 ),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
-                onPressed: _loadFCMToken,
+                onPressed: loadFCMToken,
                 icon: const Icon(Icons.refresh, size: 16),
                 label: const Text('Reintentar'),
                 style: TextButton.styleFrom(
