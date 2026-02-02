@@ -17,7 +17,7 @@ class EventService {
     final r = await supa
         .from('events_view')
         .select(
-          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url, lat, lng, venue_id, category_ids, category_names, category_icons, category_colors',
+          'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, info_url, lat, lng, venue_id',
         )
         .order('starts_at', ascending: true)
         .limit(limit);
@@ -109,7 +109,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url,lat,lng,venue_id,category_ids,category_names,category_icons,category_colors',
+          'id,title,city_id,city_name,category_id,category_name,starts_at,image_url,maps_url,place,is_featured,price,category_icon,category_color,info_url,lat,lng,venue_id',
         );
 
     // Filtros básicos
@@ -340,11 +340,7 @@ class EventService {
         final firstEvent = res.first as Map<String, dynamic>;
         LoggerService.instance.debug(
           'Primer evento - campos disponibles',
-          data: {
-            'eventId': firstEvent['id'],
-            'tiene_category_ids': firstEvent.containsKey('category_ids'),
-            'tiene_category_names': firstEvent.containsKey('category_names'),
-          },
+          data: {'eventId': firstEvent['id']},
         );
       }
       
@@ -404,7 +400,7 @@ class EventService {
     dynamic qb = supa
         .from('events_view')
         .select(
-          'id, title, place, starts_at, image_url, image_alignment, city_id, city_name, category_id, category_name, category_icon, category_color, price, is_featured, description, info_url, category_ids, category_names, category_icons, category_colors',
+          'id, title, place, starts_at, image_url, image_alignment, city_id, city_name, category_id, category_name, category_icon, category_color, price, is_featured, description, info_url',
         );
 
     // Autocompletado NO debe limitar por ciudad
@@ -440,8 +436,7 @@ class EventService {
     id, title, image_url, maps_url, place, is_featured, price,
     starts_at, city_id, category_id,
     city_name, category_name, category_icon, category_color, info_url,
-    lat, lng, venue_id,
-    category_ids, category_names, category_icons, category_colors
+    lat, lng, venue_id
   ''');
 
     // --- Fechas (en UTC, rango inclusivo/exclusivo) ---
@@ -875,7 +870,7 @@ class EventService {
         final r = await supa
             .from('events_view')
             .select(
-              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url, lat, lng, venue_id, category_ids, category_names, category_icons, category_colors',
+              'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, image_alignment, info_url, lat, lng, venue_id',
             )
             .filter('id', 'in', '(${batch.join(',')})');
 
@@ -884,11 +879,7 @@ class EventService {
           final firstEvent = r.first as Map<String, dynamic>;
           LoggerService.instance.debug(
             'fetchEventsByIds - Primer evento',
-            data: {
-              'eventId': firstEvent['id'],
-              'tiene_category_ids': firstEvent.containsKey('category_ids'),
-              'tiene_category_names': firstEvent.containsKey('category_names'),
-            },
+            data: {'eventId': firstEvent['id']},
           );
         }
         
@@ -1191,7 +1182,7 @@ class EventService {
       final sameDateQuery = supa
           .from('events_view')
           .select(
-            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url, category_ids, category_names, category_icons, category_colors',
+            'id, title, city_id, city_name, category_id, category_name, starts_at, image_url, maps_url, place, is_featured, price, category_icon, category_color, description, image_alignment, info_url',
           )
           .eq('city_id', event.cityId!)
           .neq('id', event.id)
