@@ -320,7 +320,7 @@ class EventIngestionService {
         'info_url': infoUrl.isNotEmpty ? infoUrl : null,
         'city_id': cityId,
         'category_id': categoryId,
-        'status': 'published', // Los eventos ingresados se publican directamente
+        'status': 'pending', // Pendientes para que el admin asigne imagen y publique
         'external_id': eventId, // Almacenar el ID del JSON
       };
 

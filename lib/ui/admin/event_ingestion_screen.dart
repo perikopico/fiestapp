@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -79,8 +80,9 @@ class _EventIngestionScreenState extends State<EventIngestionScreen> {
       if (result != null && result.files.single.path != null) {
         final file = result.files.single;
         
-        String? fileContent = file.bytes != null 
-            ? String.fromCharCodes(file.bytes!)
+        // Decodificar como UTF-8 para que tildes y ñ (ej. Cádiz) se vean bien
+        String? fileContent = file.bytes != null
+            ? utf8.decode(file.bytes!)
             : null;
 
         // Si no hay contenido pero hay path, intentar leerlo
