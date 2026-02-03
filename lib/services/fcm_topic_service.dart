@@ -1,6 +1,7 @@
 // lib/services/fcm_topic_service.dart
 // Servicio para gestionar suscripciones a FCM Topics (ciudades y categorías)
 
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -11,7 +12,16 @@ class FCMTopicService {
   
   static final FCMTopicService instance = FCMTopicService._();
   
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  /// Firebase Messaging solo está disponible después de Firebase.initializeApp().
+  /// Se obtiene de forma lazy para no fallar si la pantalla se abre antes de que termine la init en background.
+  FirebaseMessaging? get _messaging {
+    if (Firebase.apps.isEmpty) return null;
+    try {
+      return FirebaseMessaging.instance;
+    } catch (_) {
+      return null;
+    }
+  }
   
   // Keys para SharedPreferences
   static const String _keySubscribedCities = 'fcm_subscribed_cities';
@@ -50,9 +60,11 @@ class FCMTopicService {
   
   /// Suscribe a notificaciones de una ciudad
   Future<bool> subscribeToCity(String cityName) async {
+    final messaging = _messaging;
+    if (messaging == null) return false;
     try {
       final topic = getCityTopic(cityName);
-      await _messaging.subscribeToTopic(topic);
+      await messaging.subscribeToTopic(topic);
       
       // Guardar en SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -72,9 +84,11 @@ class FCMTopicService {
   
   /// Desuscribe de notificaciones de una ciudad
   Future<bool> unsubscribeFromCity(String cityName) async {
+    final messaging = _messaging;
+    if (messaging == null) return false;
     try {
       final topic = getCityTopic(cityName);
-      await _messaging.unsubscribeFromTopic(topic);
+      await messaging.unsubscribeFromTopic(topic);
       
       // Actualizar SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -129,9 +143,11 @@ class FCMTopicService {
   
   /// Suscribe a notificaciones de una categoría
   Future<bool> subscribeToCategory(String categoryName) async {
+    final messaging = _messaging;
+    if (messaging == null) return false;
     try {
       final topic = getCategoryTopic(categoryName);
-      await _messaging.subscribeToTopic(topic);
+      await messaging.subscribeToTopic(topic);
       
       // Guardar en SharedPreferences
       final prefs = await SharedPreferences.getInstance();
@@ -151,9 +167,11 @@ class FCMTopicService {
   
   /// Desuscribe de notificaciones de una categoría
   Future<bool> unsubscribeFromCategory(String categoryName) async {
+    final messaging = _messaging;
+    if (messaging == null) return false;
     try {
       final topic = getCategoryTopic(categoryName);
-      await _messaging.unsubscribeFromTopic(topic);
+      await messaging.unsubscribeFromTopic(topic);
       
       // Actualizar SharedPreferences
       final prefs = await SharedPreferences.getInstance();

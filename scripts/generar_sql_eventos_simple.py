@@ -131,7 +131,7 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         f"-- Total de eventos: {len(events_json)}",
         "-- Soporta: new (INSERT/UPSERT), modified (UPDATE), cancelled (soft delete)",
         "-- Venues: Se crean automáticamente desde 'place' si no existen (status=approved)",
-        "-- Requiere: migración 030 (external_id), 044 (event_translations), 005 (venues)",
+        "-- Requiere: migración 030 (external_id), 044 (event_translations), 005 (venues), 026 (price), 028 (info_url), image_alignment",
         "-- Ejecutar en Supabase SQL Editor (bypass RLS para crear venues approved)",
         "-- ============================================",
         "",
@@ -253,15 +253,24 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         else:
             starts_at = event.get('starts_at', '').strip()
         
-        # Determinar is_free
-        price = event.get('price', '')
-        is_free = is_free_price(price) if price else False
+        # Precio (texto: "Gratis", "18€", "Desde 10€", etc.) - la BD tiene columna price, no is_free
+        price = (event.get('price') or '').strip()
+        price_escaped = price.replace("'", "''") if price else None  # NULL si vacío
         
         # description ya extraída arriba (formato translations o legacy)
         description = description.replace("'", "''") if description else None
         maps_url = event.get('gmaps_link', event.get('maps_url', '')).strip() if event.get('gmaps_link') or event.get('maps_url') else None
         if maps_url:
             maps_url = maps_url.replace("'", "''")
+        info_url = (event.get('info_url') or '').strip()
+        if info_url:
+            info_url = info_url.replace("'", "''")
+        else:
+            info_url = None
+        image_alignment = (event.get('image_alignment') or 'center').strip()
+        if image_alignment not in ('top', 'center', 'bottom'):
+            image_alignment = 'center'
+        image_alignment_escaped = image_alignment.replace("'", "''")
         
         # Obtener información de la categoría
         category_info = normalize_category(category_name)
@@ -350,7 +359,7 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         else:
             sql_lines.append("  v_venue_id := NULL;")
             sql_lines.append("")
-        sql_lines.append("  INSERT INTO public.events (id, external_id, title, place, maps_url, image_url, is_featured, is_free, starts_at, city_id, category_id, status, description, image_alignment, town, venue_id)")
+        sql_lines.append("  INSERT INTO public.events (id, external_id, title, place, maps_url, image_url, is_featured, price, starts_at, city_id, category_id, status, description, image_alignment, town, venue_id, info_url)")
         sql_lines.append("  VALUES (")
         sql_lines.append(f"    gen_random_uuid(),")
         sql_lines.append(f"    {external_id}::bigint,")
@@ -359,15 +368,16 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         sql_lines.append(f"    {f"'{maps_url}'" if maps_url else 'NULL'},")
         sql_lines.append(f"    {image_url},")
         sql_lines.append("    FALSE,")
-        sql_lines.append(f"    {str(is_free).upper()},")
+        sql_lines.append(f"    {f"'{price_escaped}'" if price_escaped else 'NULL'},")
         sql_lines.append(f"    '{starts_at}'::timestamptz,")
         sql_lines.append(f"    v_city_id,")
         sql_lines.append(f"    (SELECT id FROM public.categories WHERE LOWER(slug) = '{category_slug}' LIMIT 1),")
         sql_lines.append("    'published',")
         sql_lines.append(f"    {f"'{description}'" if description else 'NULL'},")
-        sql_lines.append("    'center',")
+        sql_lines.append(f"    '{image_alignment_escaped}',")
         sql_lines.append(f"    '{city_name_escaped}',")
-        sql_lines.append("    v_venue_id")
+        sql_lines.append("    v_venue_id,")
+        sql_lines.append(f"    {f"'{info_url}'" if info_url else 'NULL'}")
         sql_lines.append("  )")
         sql_lines.append("  ON CONFLICT (external_id) WHERE (external_id IS NOT NULL) DO UPDATE SET")
         sql_lines.append("    title = EXCLUDED.title,")
@@ -375,12 +385,14 @@ def generate_sql_inserts(events_json: List[Dict[str, Any]], supabase_storage_url
         sql_lines.append("    place = EXCLUDED.place,")
         sql_lines.append("    maps_url = EXCLUDED.maps_url,")
         sql_lines.append("    image_url = EXCLUDED.image_url,")
-        sql_lines.append("    is_free = EXCLUDED.is_free,")
+        sql_lines.append("    price = EXCLUDED.price,")
         sql_lines.append("    starts_at = EXCLUDED.starts_at,")
         sql_lines.append("    city_id = EXCLUDED.city_id,")
         sql_lines.append("    category_id = EXCLUDED.category_id,")
         sql_lines.append("    town = EXCLUDED.town,")
-        sql_lines.append("    venue_id = EXCLUDED.venue_id")
+        sql_lines.append("    venue_id = EXCLUDED.venue_id,")
+        sql_lines.append("    info_url = EXCLUDED.info_url,")
+        sql_lines.append("    image_alignment = EXCLUDED.image_alignment")
         sql_lines.append("  RETURNING id INTO v_event_id;")
         sql_lines.append("")
         

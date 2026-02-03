@@ -6,6 +6,8 @@
 
 Extraer eventos de fiestas, cultura, deportes y ocio en la provincia de Cádiz (España) y generar un JSON estructurado listo para importar en la app QuePlan. **Pueden ser eventos nuevos o modificaciones de eventos ya existentes.**
 
+**IMPORTANTE**: Buscar exhaustivamente eventos de **discotecas, pubs, bares con música en vivo y locales nocturnos** en las webs de ayuntamientos de todas las ciudades/pueblos de la provincia. Revisar específicamente las secciones de "Agenda", "Cultura", "Ocio" y "Eventos" de cada ayuntamiento.
+
 ---
 
 ## Campo `status`: nuevo vs modificado
@@ -65,9 +67,9 @@ Genera un array JSON. Cada evento debe seguir **exactamente** esta estructura:
 
 ## Reglas estrictas
 
-1. **ID único y estable**: `evt_` + número (evt_001, evt_002, …). Un mismo evento real debe tener siempre el mismo id. Si actualizas un evento ya existente, usa el mismo id y `"status": "modified"`.
+1. **ID único y estable**: Formato **string con "evt_" + números** (ej: `"evt_001"`, `"evt_002"`, `"evt_042"`). **NO usar solo números, debe ser texto que empiece con "evt_"**. Un mismo evento real debe tener siempre el mismo id. Si actualizas un evento ya existente, usa el mismo id y `"status": "modified"`.
 2. **Traducciones**: Proporciona las 4 traducciones (es, en, de, zh). Si no encuentras la info en otros idiomas, traduce tú el título y descripción desde el español.
-3. **Ciudad**: Usa el nombre oficial de la ciudad. Ciudades válidas incluyen: Barbate, Vejer de la Frontera, Zahara, Cádiz, Jerez de la Frontera, El Puerto de Santa María, Sanlúcar de Barrameda, Conil, Chiclana, Tarifa, Algeciras, Rota, Villaluenga del Rosario, Benalup-Casas Viejas, San Roque, La Línea, etc.
+3. **Ciudad**: Usa el nombre oficial exacto de la ciudad/pueblo. Debes buscar eventos en **TODAS** las ciudades y pueblos de la provincia de Cádiz. Lista completa disponible en `GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md`. Para cada ciudad/pueblo, buscar específicamente en la web del ayuntamiento eventos de discotecas, pubs, bares con música en vivo y locales nocturnos.
 4. **Categoría**: Exactamente una de: `Música`, `Gastronomía`, `Deportes`, `Arte y Cultura`, `Aire Libre`, `Tradiciones`, `Mercadillos`.
 5. **place (lugar/venue)**: Nombre del recinto o lugar donde ocurre el evento. **Importante**: Si el venue no existe en la app, se creará automáticamente. Un evento solo puede ser aceptado/publicado si su venue existe y está aprobado en la app. Incluye siempre el lugar cuando lo conozcas.
 6. **Fecha**: Siempre `YYYY-MM-DD`. Ej: `2026-02-15`.
@@ -116,14 +118,18 @@ Si el evento "Mercado artesanal de Barbate" (evt_001) ya está en la app y cambi
 ```
 Busca eventos de [tema/mes/ciudad] en la provincia de Cádiz y genera un JSON 
 con el formato especificado en INSTRUCCIONES_GEMINI_ENTRADA_EVENTOS.md. 
-Usa status "new" y IDs evt_001, evt_002, etc.
+Busca específicamente eventos de discotecas, pubs, bares con música en vivo en las webs de ayuntamientos.
+Para cada ciudad/pueblo, revisa exhaustivamente la web del ayuntamiento (secciones Agenda, Cultura, Ocio).
+Usa status "new" y IDs con formato "evt_001", "evt_002" (string con prefijo "evt_" seguido de números).
 ```
 
 **Incluyendo actualizaciones:**
 ```
 Busca eventos de [tema/mes/ciudad]. Para cada evento:
-- Si es nuevo: status "new" y un id evt_XXX único.
-- Si ya lo habíamos añadido antes y ha cambiado algo: status "modified" y el mismo id que tenía.
+- Si es nuevo: status "new" y un id con formato "evt_XXX" único (string con prefijo "evt_" seguido de números, ej: "evt_042").
+- Si ya lo habíamos añadido antes y ha cambiado algo: status "modified" y el mismo id que tenía (formato "evt_XXX").
+Busca específicamente eventos de discotecas, pubs, bares con música en vivo en las webs de ayuntamientos.
+Para cada ciudad/pueblo, revisa exhaustivamente la web del ayuntamiento (secciones Agenda, Cultura, Ocio).
 Incluye traducciones en es, en, de, zh.
 ```
 

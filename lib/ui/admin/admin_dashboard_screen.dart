@@ -24,13 +24,21 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _supa = Supabase.instance.client;
   
   bool _isLoading = true;
+  bool? _isAdmin;
   Map<String, dynamic> _stats = {};
   
   @override
   void initState() {
     super.initState();
-    _loadStats();
+    _checkAdminAndLoad();
     _analytics.logScreenView('admin_dashboard');
+  }
+
+  Future<void> _checkAdminAndLoad() async {
+    final isAdmin = await AuthService.instance.isAdmin();
+    if (!mounted) return;
+    setState(() => _isAdmin = isAdmin);
+    if (isAdmin) _loadStats();
   }
 
   Future<void> _loadStats() async {
@@ -66,10 +74,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   Future<int> _getTotalEvents() async {
     try {
-      final res = await _supa
-          .from('events')
-          .select('id', const FetchOptions(count: CountOption.exact));
-      return res.length;
+      final res = await _supa.from('events').select('id');
+      return (res as List).length;
     } catch (e) {
       return 0;
     }
@@ -167,7 +173,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (!AuthService.instance.isAdmin) {
+    if (_isAdmin == null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const AppBarLogo(),
+          centerTitle: true,
+          elevation: 0,
+          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        ),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (!_isAdmin!) {
       return Scaffold(
         appBar: AppBar(
           title: const AppBarLogo(),

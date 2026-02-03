@@ -41,11 +41,13 @@ Debes devolver SIEMPRE un array de objetos JSON con esta estructura EXACTA:
 
 # REGLAS ESTRICTAS
 
-## 1. CAMPO "id" (number, obligatorio)
+## 1. CAMPO "id" (string, obligatorio)
 - Identificador único del evento
-- Para eventos NUEVOS: usa un número único (puede ser secuencial: 1, 2, 3...)
-- Para eventos EXISTENTES que modificas: usa el mismo ID que ya existe
-- Tipo: número entero positivo
+- **Formato OBLIGATORIO**: String con prefijo "evt_" seguido de números (ej: "evt_001", "evt_002", "evt_042")
+- **NO usar solo números**. Debe ser texto que empiece con "evt_"
+- Para eventos NUEVOS: usa un id único con formato "evt_XXX" (puede ser secuencial: "evt_001", "evt_002", "evt_003"...)
+- Para eventos EXISTENTES que modificas: usa el mismo ID que ya existe (formato "evt_XXX")
+- Tipo: string (texto)
 
 ## 2. CAMPO "status" (string, obligatorio)
 - DEBE ser uno de estos valores EXACTOS (case-sensitive):
@@ -93,25 +95,31 @@ Debes devolver SIEMPRE un array de objetos JSON con esta estructura EXACTA:
 - Recomendación: 100-500 caracteres
 - Si no hay descripción disponible, crea una breve basada en el título y categoría
 
-## 8. CAMPO "location_name" (string, obligatorio)
-- Nombre del lugar o venue
-- Ejemplos: "Teatro Falla", "Plaza de la Constitución", "Pabellón Municipal"
-- Si no encuentras el nombre exacto, usa una descripción clara del lugar
+## 8. CAMPO "city" (string, obligatorio)
+- Nombre exacto de la ciudad/pueblo donde ocurre el evento
+- Debe ser uno de los nombres oficiales de la lista completa en `GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md`
+- Ejemplos: "Cádiz", "Jerez de la Frontera", "Barbate", "Vejer de la Frontera"
 
-## 9. CAMPO "gmaps_link" (string, obligatorio)
+## 9. CAMPO "place" o "location_name" (string, obligatorio)
+- Nombre del lugar o venue donde ocurre el evento
+- Ejemplos: "Teatro Falla", "Plaza de la Constitución", "Pabellón Municipal", "Discoteca La Cueva", "Pub El Rincón"
+- Si no encuentras el nombre exacto, usa una descripción clara del lugar
+- **Importante**: Para eventos de discotecas y pubs, incluir siempre el nombre del establecimiento
+
+## 10. CAMPO "gmaps_link" (string, obligatorio)
 - URL completa de Google Maps del lugar
 - Formato: "https://www.google.com/maps?q=LATITUD,LONGITUD"
 - O: "https://www.google.com/maps/place/NOMBRE+DEL+LUGAR"
 - Si no encuentras la ubicación exacta, busca en Google Maps y genera el enlace
 - Si es imposible encontrar la ubicación, usa un enlace genérico a la ciudad
 
-## 10. CAMPO "price" (string, obligatorio)
+## 11. CAMPO "price" (string, obligatorio)
 - Precio como string libre (NO usar números)
 - Ejemplos válidos: "Gratis", "10€", "15-20€", "Desde 10€", "Entrada libre"
 - Si no hay información: "Consultar precio"
 - NO usar: 10, 15.50, "10" (sin símbolo)
 
-## 11. CAMPO "info_url" (string, obligatorio)
+## 12. CAMPO "info_url" (string, obligatorio)
 - Enlace a la fuente original o página de entradas
 - Puede ser: web oficial, venta de entradas, fuente de información
 - Si no hay enlace disponible, usa string vacío ""
@@ -121,26 +129,30 @@ Debes devolver SIEMPRE un array de objetos JSON con esta estructura EXACTA:
 ```json
 [
   {
-    "id": 1,
+    "id": "evt_001",
     "status": "new",
     "date": "2026-01-24",
     "time": "20:00:00",
     "category": "Música",
     "title": "Festival de Flamenco 2026",
     "description": "Gran festival de flamenco con artistas locales e internacionales. Incluye actuaciones en directo, talleres y degustación gastronómica.",
+    "city": "Cádiz",
+    "place": "Teatro Falla",
     "location_name": "Teatro Falla",
     "gmaps_link": "https://www.google.com/maps?q=36.1927,-5.9219",
     "price": "25-35€",
     "info_url": "https://www.festivalflamenco.com"
   },
   {
-    "id": 2,
+    "id": "evt_002",
     "status": "new",
     "date": "2026-01-25",
     "time": "12:00:00",
     "category": "Gastronomía",
     "title": "Ruta de la Tapa 2026",
     "description": "Recorre los mejores bares y restaurantes de la ciudad degustando tapas exclusivas. Incluye mapa de la ruta y descuentos especiales.",
+    "city": "Cádiz",
+    "place": "Centro Histórico",
     "location_name": "Centro Histórico",
     "gmaps_link": "https://www.google.com/maps/place/Centro+Historico",
     "price": "Gratis",
@@ -149,15 +161,17 @@ Debes devolver SIEMPRE un array de objetos JSON con esta estructura EXACTA:
 ]
 ```
 
+**NOTA**: Este formato simplificado es compatible con el script de importación. Si prefieres usar el formato completo con `translations` (es, en, de, zh), consulta `GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md` para el formato extendido.
+
 # CASOS ESPECIALES Y REGLAS ADICIONALES
 
 ## Eventos de varios días
 Si un evento dura varios días, crea UN evento por cada día:
 ```json
 // Evento del 24 de enero
-{"id": 1, "date": "2026-01-24", ...}
+{"id": "evt_001", "date": "2026-01-24", ...}
 // Evento del 25 de enero
-{"id": 2, "date": "2026-01-25", ...}
+{"id": "evt_002", "date": "2026-01-25", ...}
 ```
 
 ## Eventos recurrentes
@@ -187,6 +201,7 @@ Si encuentras "todos los sábados", crea eventos individuales para cada sábado 
 
 Antes de devolver el JSON, verifica:
 - ✅ Todos los campos están presentes
+- ✅ "id" es un string con formato "evt_XXX" (prefijo "evt_" seguido de números, NO solo números)
 - ✅ "date" está en formato "YYYY-MM-DD"
 - ✅ "time" está en formato "HH:MM:SS"
 - ✅ "category" es uno de los 7 valores permitidos
@@ -196,23 +211,27 @@ Antes de devolver el JSON, verifica:
 - ✅ No hay campos adicionales no definidos
 - ✅ Los eventos son reales y verificables
 - ✅ No hay duplicados en el array
+- ✅ Se han buscado eventos de discotecas, pubs y música en vivo en webs de ayuntamientos
 
 # CONTEXTO GEOGRÁFICO
 
 Los eventos que busques deben estar relacionados con:
 - Provincia de Cádiz, España
-- Ciudades principales: Barbate, Vejer de la Frontera, Zahara de los Atunes, Conil, Chiclana, etc.
+- **TODAS** las ciudades y pueblos de la provincia (lista completa en GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md)
+- Ciudades principales: Barbate, Vejer de la Frontera, Zahara de los Atunes, Conil, Chiclana, Cádiz, Jerez, Sanlúcar, etc.
 - Eventos culturales, deportivos, gastronómicos y de ocio de la zona
+- **CRÍTICO**: Buscar específicamente eventos de discotecas, pubs, bares con música en vivo y locales nocturnos en las webs de ayuntamientos de cada ciudad/pueblo
 
 # INSTRUCCIONES DE USO
 
 Cuando te pida buscar eventos:
-1. Analiza las fuentes de información proporcionadas
-2. Extrae todos los eventos relevantes
-3. Estructura cada evento según el formato exacto definido
-4. Asigna IDs únicos (1, 2, 3...)
-5. Marca el "status" según corresponda (nuevo, modificado, cancelado)
-6. Devuelve SOLO el array JSON, sin texto adicional antes o después
+1. Analiza las fuentes de información proporcionadas (webs de ayuntamientos, turismo oficial, etc.)
+2. **Busca exhaustivamente eventos de discotecas, pubs, bares con música en vivo en las webs de ayuntamientos** (secciones Agenda, Cultura, Ocio)
+3. Extrae todos los eventos relevantes de **TODAS** las ciudades/pueblos de la provincia de Cádiz
+4. Estructura cada evento según el formato exacto definido
+5. Asigna IDs únicos con formato "evt_001", "evt_002", "evt_003"... (string con prefijo "evt_")
+6. Marca el "status" según corresponda (nuevo, modificado, cancelado)
+7. Devuelve SOLO el array JSON, sin texto adicional antes o después
 
 IMPORTANTE: Si no encuentras eventos o no hay información suficiente, devuelve un array vacío: []
 

@@ -151,41 +151,42 @@ class _NavBarButton extends StatelessWidget {
           color: Colors.transparent,
           child: InkWell(
             onTap: onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.center,
-              children: [
-                Icon(
-                  icon,
-                  size: isAddButton ? 28 : 24,
-                  color: isAddButton && !isActive ? theme.colorScheme.primary : color,
-                ),
-                if (badgeCount != null && badgeCount! > 0)
-                  Positioned(
-                    right: 4,
-                    top: 2,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.error,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                      child: Text(
-                        badgeCount! > 99 ? '99+' : badgeCount.toString(),
-                        style: TextStyle(
-                          color: theme.colorScheme.onError,
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Stack(
+                clipBehavior: Clip.none,
+                alignment: Alignment.center,
+                children: [
+                  Icon(
+                    icon,
+                    size: isAddButton ? 28 : 24,
+                    color: isAddButton && !isActive ? theme.colorScheme.primary : color,
+                  ),
+                  if (badgeCount != null && badgeCount! > 0)
+                    Positioned(
+                      right: 4,
+                      top: 2,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.error,
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        textAlign: TextAlign.center,
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        child: Text(
+                          badgeCount! > 99 ? '99+' : badgeCount.toString(),
+                          style: TextStyle(
+                            color: theme.colorScheme.onError,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
-                  ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -21,39 +21,63 @@ Realizar una **búsqueda exhaustiva** de eventos en fuentes oficiales y fiables,
 
 ### 2.1 Fuentes prioritarias (oficiales y fiables)
 
-| Tipo de fuente | Ejemplos | URLs típicas |
-|----------------|----------|--------------|
-| **Webs de ayuntamientos** | Barbate, Cádiz, Jerez, Vejer, Tarifa, etc. | `https://www.ayuntamiento-nombre.es`, secciones: agenda, cultura, deportes |
-| **Diputación de Cádiz** | Agenda cultural provincial | `dipucadiz.es`, `agendaculturaldecadiz.es` |
-| **Turismo oficial** | Turismo Cádiz, Costa de la Luz | `turismocadiz.com`, webs de turismo por comarca |
-| **Clubes deportivos** | Federaciones, clubes de fútbol, atletismo, vela | Webs oficiales de clubes, federaciones andaluzas |
-| **Instalaciones deportivas municipales** | Polideportivos, estadios, pistas | Calendarios de reservas/actividades |
-| **Teatros y salas** | Teatro Principal Cádiz, Gran Teatro Falla | Programación oficial |
-| **Museos y centros culturales** | Baluarte de la Candelaria, Fundaciones | Agenda de exposiciones y actividades |
+| Tipo de fuente | Ejemplos | URLs típicas | Qué buscar específicamente |
+|----------------|----------|--------------|---------------------------|
+| **Webs de ayuntamientos** | Barbate, Cádiz, Jerez, Vejer, Tarifa, etc. | `https://www.ayuntamiento-nombre.es`, secciones: agenda, cultura, deportes, ocio | **CRÍTICO**: Buscar eventos de **discotecas, pubs, bares con música en vivo, locales nocturnos**. Revisar secciones de "Agenda", "Cultura", "Ocio", "Eventos", "Actividades". Muchos ayuntamientos publican calendarios de eventos que incluyen actividades nocturnas y de ocio. |
+| **Diputación de Cádiz** | Agenda cultural provincial | `dipucadiz.es`, `agendaculturaldecadiz.es` | Eventos culturales y de ocio de toda la provincia |
+| **Turismo oficial** | Turismo Cádiz, Costa de la Luz | `turismocadiz.com`, webs de turismo por comarca | Eventos turísticos, fiestas, ocio nocturno |
+| **Clubes deportivos** | Federaciones, clubes de fútbol, atletismo, vela | Webs oficiales de clubes, federaciones andaluzas | Competiciones, partidos, eventos deportivos |
+| **Instalaciones deportivas municipales** | Polideportivos, estadios, pistas | Calendarios de reservas/actividades | Eventos deportivos programados |
+| **Teatros y salas** | Teatro Principal Cádiz, Gran Teatro Falla | Programación oficial | Conciertos, espectáculos, eventos culturales |
+| **Museos y centros culturales** | Baluarte de la Candelaria, Fundaciones | Agenda de exposiciones y actividades | Exposiciones, actividades culturales |
+| **Webs de locales nocturnos** | Discotecas, pubs, bares con música | Webs oficiales, redes sociales verificadas | Eventos programados, noches temáticas, conciertos en vivo |
 
 ### 2.2 Búsquedas sugeridas (por categoría)
 
+- **Música**: "conciertos Cádiz", "festivales música Cádiz", "flamenco en vivo [ciudad]", **"discotecas [ciudad] eventos", "pubs [ciudad] música en vivo", "bares con música [ciudad]", "agenda ocio nocturno [ciudad]", "eventos discotecas ayuntamiento [ciudad]"**
 - **Deportes**: "deportes provincia Cádiz", "competiciones deportivas Cádiz", "liga provincial fútbol Cádiz", "regatas Cádiz", "trail running Sierra de Cádiz", "ciclismo Cádiz", "natación Cádiz"
-- **Música**: "conciertos Cádiz", "festivales música Cádiz", "flamenco en vivo [ciudad]"
 - **Gastronomía**: "rutas gastronómicas Cádiz", "ferias del vino Jerez", "tapa Cádiz", "degustaciones"
 - **Arte y Cultura**: "exposiciones Cádiz", "teatro Cádiz", "agenda cultural ayuntamiento"
 - **Tradiciones**: "ferias y fiestas Cádiz", "romerías provincia Cádiz", "Semana Santa Cádiz", "carnaval Cádiz"
 - **Mercadillos**: "mercadillos artesanales Cádiz", "mercado medieval", "mercado semanal [ciudad]"
 - **Aire Libre**: "rutas senderismo Cádiz", "avistamiento aves", "actividades naturaleza"
 
+**IMPORTANTE - Búsqueda exhaustiva de eventos nocturnos**: Para cada ciudad/pueblo, busca específicamente en la web del ayuntamiento:
+- Sección "Agenda de eventos" o "Calendario de actividades"
+- Sección "Ocio" o "Cultura"
+- Eventos de discotecas, pubs, bares con música en vivo
+- Noches temáticas, DJs, conciertos en locales nocturnos
+- Eventos programados en establecimientos de hostelería con música
+
 ### 2.3 Ciudades y comarcas a cubrir
 
-Incluir eventos de **todas** las ciudades de la provincia. Lista de ciudades válidas (usar nombre exacto):
+**OBLIGATORIO**: Incluir eventos de **TODAS** las ciudades y pueblos de la provincia de Cádiz. Para cada ciudad/pueblo, buscar exhaustivamente en:
+1. Web oficial del ayuntamiento (secciones: Agenda, Cultura, Ocio, Eventos)
+2. Webs de turismo local
+3. Fuentes oficiales verificables
 
-**La Janda**: Barbate, Zahara de los Atunes, Vejer de la Frontera, Conil de la Frontera, Medina Sidonia, Benalup-Casas Viejas, Alcalá de los Gazules, Paterna de Rivera
+Lista completa de ciudades y pueblos válidos (usar nombre exacto tal como aparece):
 
-**Bahía de Cádiz**: Cádiz, Jerez de la Frontera, San Fernando, El Puerto de Santa María, Chiclana de la Frontera, Puerto Real, La Barca de la Florida, Guadalcacín, Nueva Jarilla, San Isidro del Guadalete, Torrecera, Estella del Marqués, El Torno
+**La Janda**: 
+- Barbate, Zahara de los Atunes, Vejer de la Frontera, Conil de la Frontera, Medina Sidonia, Benalup-Casas Viejas, Alcalá de los Gazules, Paterna de Rivera
 
-**Costa Noroeste**: Sanlúcar de Barrameda, Chipiona, Rota, Trebujena
+**Bahía de Cádiz**: 
+- Cádiz, Jerez de la Frontera, San Fernando, El Puerto de Santa María, Chiclana de la Frontera, Puerto Real, La Barca de la Florida, Guadalcacín, Nueva Jarilla, San Isidro del Guadalete, Torrecera, Estella del Marqués, El Torno
 
-**Sierra de Cádiz**: Arcos de la Frontera, Ubrique, Olvera, Villamartín, Bornos, Prado del Rey, Algodonales, Puerto Serrano, Alcalá del Valle, San José del Valle, Espera, El Bosque, Grazalema, Setenil de las Bodegas, Benaocaz, Villaluenga del Rosario, El Gastor, Zahara de la Sierra, Algar, Torre Alháquime
+**Costa Noroeste**: 
+- Sanlúcar de Barrameda, Chipiona, Rota, Trebujena
 
-**Campo de Gibraltar**: Algeciras, La Línea de la Concepción, San Roque, Los Barrios, Tarifa, Jimena de la Frontera, Castellar de la Frontera, Sotogrande, Facinas, Tahivilla, San Pablo de Buceite, San Martín del Tesorillo
+**Sierra de Cádiz**: 
+- Arcos de la Frontera, Ubrique, Olvera, Villamartín, Bornos, Prado del Rey, Algodonales, Puerto Serrano, Alcalá del Valle, San José del Valle, Espera, El Bosque, Grazalema, Setenil de las Bodegas, Benaocaz, Villaluenga del Rosario, El Gastor, Zahara de la Sierra, Algar, Torre Alháquime
+
+**Campo de Gibraltar**: 
+- Algeciras, La Línea de la Concepción, San Roque, Los Barrios, Tarifa, Jimena de la Frontera, Castellar de la Frontera, Sotogrande, Facinas, Tahivilla, San Pablo de Buceite, San Martín del Tesorillo
+
+**Otras localidades importantes**:
+- Vejer (también conocido como Vejer de la Frontera)
+- Zahara (puede referirse a Zahara de los Atunes o Zahara de la Sierra - verificar contexto)
+
+**IMPORTANTE**: Para cada ciudad/pueblo, buscar específicamente eventos de discotecas, pubs, bares con música en vivo y locales nocturnos en la web del ayuntamiento correspondiente.
 
 ---
 
@@ -107,7 +131,7 @@ Si no hay horario concreto por día, usa un horario razonable (ej: 10:00 para me
 
 ```json
 {
-  "id": "evt_XXX",
+  "id": "evt_001",
   "status": "new",
   "source_lang": "es",
   "translations": {
@@ -144,7 +168,7 @@ Si no hay horario concreto por día, usa un horario razonable (ej: 10:00 para me
 
 | Campo | Formato | Ejemplo |
 |-------|---------|---------|
-| `id` | evt_001, evt_002, ... | `"evt_042"` |
+| `id` | **String con formato "evt_" + números** (evt_001, evt_002, evt_042, etc.). **NO usar solo números**. Debe ser texto que empiece con "evt_" seguido de números. | `"evt_042"` |
 | `status` | "new", "modified", "cancelled" | `"new"` |
 | `translations.es.title` | Texto | `"Mercado artesanal"` |
 | `translations.es.description` | Texto, mín. 20 caracteres | Descripción útil |
@@ -218,7 +242,8 @@ Usar **exactamente** uno de estos nombres:
 - [ ] Categorías exactamente como en la lista
 - [ ] Si un evento dura N días, hay N eventos (uno por día)
 - [ ] Cada evento tiene `place` cuando el lugar es conocido
-- [ ] IDs únicos y estables (un mismo evento real = mismo id en futuras actualizaciones)
+- [ ] IDs únicos y estables con formato "evt_XXX" (string con prefijo "evt_" seguido de números, ej: "evt_001", "evt_042")
+- [ ] Un mismo evento real = mismo id en futuras actualizaciones
 
 ---
 
@@ -230,13 +255,25 @@ Usar **exactamente** uno de estos nombres:
 Necesito que busques eventos en la provincia de Cádiz (España) siguiendo la guía completa en docs/GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md.
 
 Instrucciones:
-1. Busca en webs de ayuntamientos, Diputación de Cádiz, turismo oficial, clubes deportivos y webs de teatros/museos.
-2. Incluye eventos de: música, gastronomía, deportes, arte y cultura, aire libre, tradiciones y mercadillos.
-3. Si un evento dura varios días, crea un evento por cada día.
-4. Genera un JSON con el formato exacto del documento (translations en es, en, de, zh; campos city, category, place, date, time, price).
-5. Usa status "new" e IDs evt_001, evt_002, etc.
+1. Busca en webs de ayuntamientos (CRÍTICO: revisar secciones de Agenda, Cultura, Ocio para eventos de discotecas, pubs, bares con música en vivo), Diputación de Cádiz, turismo oficial, clubes deportivos y webs de teatros/museos.
+2. Incluye eventos de: música (especialmente discotecas, pubs, música en vivo), gastronomía, deportes, arte y cultura, aire libre, tradiciones y mercadillos.
+3. Para cada ciudad/pueblo de la lista completa del documento, busca exhaustivamente en la web del ayuntamiento eventos de ocio nocturno y locales con música.
+4. Si un evento dura varios días, crea un evento por cada día.
+5. Genera un JSON con el formato exacto del documento (translations en es, en, de, zh; campos city, category, place, date, time, price).
+6. Usa status "new" e IDs con formato "evt_001", "evt_002", etc. (string con prefijo "evt_" seguido de números).
 
 Rango de fechas: [especificar, ej: febrero-marzo 2026]
+```
+
+### Búsqueda por categoría (música - discotecas y pubs)
+
+```
+Busca eventos de MÚSICA (especialmente discotecas, pubs, bares con música en vivo) en la provincia de Cádiz siguiendo docs/GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md.
+
+Fuentes prioritarias: webs de ayuntamientos (secciones Agenda, Cultura, Ocio), webs oficiales de locales nocturnos, turismo local.
+Incluye: eventos en discotecas, pubs con música en vivo, bares con conciertos, noches temáticas, DJs, eventos programados en locales de hostelería con música.
+Para cada ciudad/pueblo de la lista completa, busca exhaustivamente en la web del ayuntamiento.
+Genera JSON con formato completo. Un evento por día si dura varios días. Status "new", IDs con formato "evt_001", "evt_002" (string con prefijo "evt_").
 ```
 
 ### Búsqueda por categoría (deportes)
@@ -246,7 +283,7 @@ Busca eventos DEPORTIVOS en la provincia de Cádiz siguiendo docs/GEMINI_GUIA_CO
 
 Fuentes prioritarias: webs de ayuntamientos (sección deportes), federaciones, clubes, polideportivos municipales.
 Incluye: partidos de liga, torneos, carreras populares, regatas, ciclismo, trail running, natación, etc.
-Genera JSON con formato completo. Un evento por día si dura varios días. Status "new", IDs evt_001, evt_002...
+Genera JSON con formato completo. Un evento por día si dura varios días. Status "new", IDs con formato "evt_001", "evt_002" (string con prefijo "evt_").
 ```
 
 ### Búsqueda por ciudad
@@ -254,9 +291,11 @@ Genera JSON con formato completo. Un evento por día si dura varios días. Statu
 ```
 Busca todos los eventos de [Barbate / Cádiz / Jerez / etc.] en la provincia de Cádiz.
 
-Consulta: web del ayuntamiento, turismo local, agenda cultural.
+Consulta: web del ayuntamiento (CRÍTICO: revisar secciones Agenda, Cultura, Ocio para eventos de discotecas, pubs, música en vivo), turismo local, agenda cultural.
+Busca específicamente eventos de discotecas, pubs, bares con música en vivo y locales nocturnos en la web del ayuntamiento.
 Sigue el formato de docs/GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md.
 Genera JSON con traducciones es, en, de, zh.
+Usa IDs con formato "evt_001", "evt_002" (string con prefijo "evt_").
 ```
 
 ### Actualización de eventos existentes
@@ -265,8 +304,8 @@ Genera JSON con traducciones es, en, de, zh.
 Tengo eventos ya importados en la app. Necesito que busques actualizaciones.
 
 Para cada evento que encuentres:
-- Si es nuevo: status "new" y un id evt_XXX único.
-- Si ya existía y ha cambiado algo (fecha, descripción, precio): status "modified" y el MISMO id que tenía antes.
+- Si es nuevo: status "new" y un id con formato "evt_XXX" único (string con prefijo "evt_" seguido de números, ej: "evt_042").
+- Si ya existía y ha cambiado algo (fecha, descripción, precio): status "modified" y el MISMO id que tenía antes (formato "evt_XXX").
 
 Genera JSON según docs/GEMINI_GUIA_COMPLETA_BUSQUEDA_EVENTOS.md.
 ```

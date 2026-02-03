@@ -61,7 +61,10 @@ class EventIngestionService {
     return isAdmin;
   }
 
-  /// Valida el formato básico del JSON
+  /// Valida el formato básico del JSON.
+  /// Acepta dos formatos:
+  /// 1) Flat: id, status, date, time, category, title, description, location_name, gmaps_link, price, info_url
+  /// 2) Gemini/script: id, status, date, time, category, city, place, translations (con es.title), price
   bool _validateJsonFormat(dynamic json) {
     if (json is! List) {
       return false;
@@ -72,15 +75,88 @@ class EventIngestionService {
         return false;
       }
 
-      final requiredFields = ['id', 'status', 'date', 'time', 'category', 'title', 'description', 'location_name', 'gmaps_link', 'price', 'info_url'];
-      for (final field in requiredFields) {
-        if (!item.containsKey(field)) {
-          return false;
-        }
+      // Campos comunes obligatorios en ambos formatos
+      if (!item.containsKey('id') || !item.containsKey('status') ||
+          !item.containsKey('date') || !item.containsKey('time') ||
+          !item.containsKey('category') || !item.containsKey('price')) {
+        return false;
+      }
+
+      // Formato flat: title, description, location_name, gmaps_link, info_url
+      final hasFlat = item.containsKey('title') &&
+          item.containsKey('description') &&
+          item.containsKey('location_name') &&
+          item.containsKey('gmaps_link') &&
+          item.containsKey('info_url');
+
+      // Formato Gemini: city, place, translations con es
+      final translations = item['translations'];
+      final hasTranslations = translations is Map<String, dynamic> &&
+          translations.containsKey('es') &&
+          (translations['es'] is Map) &&
+          (translations['es'] as Map).containsKey('title');
+      final hasCityPlace = item.containsKey('city') && item.containsKey('place');
+
+      if (!hasFlat && !(hasTranslations && hasCityPlace)) {
+        return false;
       }
     }
 
     return true;
+  }
+
+  /// Parsea external_id: "evt_001" -> 1, 42 -> 42
+  int _parseExternalId(dynamic idVal) {
+    if (idVal == null) throw Exception('id es obligatorio');
+    if (idVal is int) return idVal;
+    final s = idVal.toString().trim();
+    final match = RegExp(r'evt_?(\d+)', caseSensitive: false).firstMatch(s);
+    if (match != null) return int.parse(match.group(1)!);
+    final parsed = int.tryParse(s);
+    if (parsed != null) return parsed;
+    throw Exception('id inválido: $idVal');
+  }
+
+  /// Normaliza un objeto evento del JSON a un mapa con campos planos (title, description, location_name, cityName, etc.)
+  Map<String, dynamic> _normalizeEventData(Map<String, dynamic> eventData) {
+    if (eventData.containsKey('title') && eventData.containsKey('description') && eventData.containsKey('location_name')) {
+      // Ya está en formato flat; asegurar id numérico
+      final id = _parseExternalId(eventData['id']);
+      return {
+        ...eventData,
+        'id': id,
+        'external_id': id,
+      };
+    }
+
+    // Formato Gemini: translations, city, place
+    final translations = eventData['translations'] as Map<String, dynamic>?;
+    final es = translations?['es'] as Map<String, dynamic>?;
+    final title = (es?['title'] as String?)?.trim() ?? '';
+    final description = (es?['description'] as String?)?.trim() ?? '';
+
+    final city = (eventData['city'] as String?)?.trim() ?? '';
+    final place = (eventData['place'] as String?)?.trim() ?? '';
+    final locationName = place.isNotEmpty ? place : city;
+
+    final id = _parseExternalId(eventData['id']);
+
+    return {
+      'id': id,
+      'external_id': id,
+      'status': eventData['status'],
+      'date': eventData['date'],
+      'time': eventData['time'],
+      'category': eventData['category'],
+      'title': title,
+      'description': description,
+      'location_name': locationName,
+      'city_name_for_lookup': city,
+      'gmaps_link': (eventData['gmaps_link'] ?? eventData['maps_url'] ?? '') as String? ?? '',
+      'price': (eventData['price'] as String?) ?? '',
+      'info_url': (eventData['info_url'] as String?) ?? '',
+      'translations': eventData['translations'],
+    };
   }
 
   /// Obtiene el ID de una categoría por nombre
@@ -98,6 +174,31 @@ class EventIngestionService {
     } catch (e) {
       debugPrint('⚠️ Error al buscar categoría "$categoryName": $e');
       return null;
+    }
+  }
+
+  /// Guarda en event_translations las traducciones en, de, zh cuando vienen en el JSON.
+  Future<void> _saveEventTranslationsIfPresent(String eventId, dynamic translations) async {
+    if (translations is! Map<String, dynamic>) return;
+    for (final lang in ['en', 'de', 'zh']) {
+      final block = translations[lang];
+      if (block is! Map<String, dynamic>) continue;
+      final title = (block['title'] as String?)?.trim();
+      if (title == null || title.isEmpty) continue;
+      final description = (block['description'] as String?)?.trim();
+      try {
+        await _client.from('event_translations').upsert(
+          {
+            'event_id': eventId,
+            'language_code': lang,
+            'title': title,
+            'description': (description?.trim().isEmpty ?? true) ? null : description,
+          },
+          onConflict: 'event_id,language_code',
+        );
+      } catch (_) {
+        // No fallar el ingesta si falla la traducción
+      }
     }
   }
 
@@ -135,22 +236,27 @@ class EventIngestionService {
     return null;
   }
 
-  /// Procesa un evento individual según su status
+  /// Procesa un evento individual según su status.
+  /// Acepta formato flat o Gemini; internamente se normaliza.
   Future<EventIngestionResult> _processEvent(
     Map<String, dynamic> eventData,
-    String? cityName,
+    String? defaultCityName,
   ) async {
-    final eventId = eventData['id'] as int;
-    final status = eventData['status'] as String;
-    final date = eventData['date'] as String;
-    final time = eventData['time'] as String;
-    final categoryName = eventData['category'] as String;
-    final title = eventData['title'] as String;
-    final description = eventData['description'] as String;
-    final locationName = eventData['location_name'] as String;
-    final gmapsLink = eventData['gmaps_link'] as String;
-    final price = eventData['price'] as String;
-    final infoUrl = eventData['info_url'] as String? ?? '';
+    final data = _normalizeEventData(eventData);
+    final eventId = data['external_id'] as int;
+    final status = data['status'] as String;
+    final date = data['date'] as String;
+    final time = data['time'] as String;
+    final categoryName = data['category'] as String;
+    final title = data['title'] as String;
+    final description = data['description'] as String;
+    final locationName = data['location_name'] as String;
+    final gmapsLink = (data['gmaps_link'] as String?) ?? '';
+    final price = (data['price'] as String?) ?? '';
+    final infoUrl = (data['info_url'] as String?) ?? '';
+    final cityNameForLookup = (data['city_name_for_lookup'] as String?)?.trim().isNotEmpty == true
+        ? data['city_name_for_lookup'] as String
+        : defaultCityName;
 
     try {
       // Si es 'confirmed', ignorar
@@ -175,20 +281,21 @@ class EventIngestionService {
         );
       }
 
-      // Obtener city_id
-      final cityId = await _findCityId(locationName, gmapsLink, cityName);
+      // Obtener city_id (priorizar ciudad explícita del JSON o ciudad por defecto)
+      final cityId = await _findCityId(locationName, gmapsLink, cityNameForLookup);
       if (cityId == null) {
         return EventIngestionResult(
           eventId: eventId,
           status: status,
           success: false,
-          error: 'No se pudo determinar la ciudad para "$locationName"',
+          error: 'No se pudo determinar la ciudad para "$locationName"${cityNameForLookup != null ? " (ciudad por defecto: $cityNameForLookup)" : ""}',
           action: 'ERROR',
         );
       }
 
-      // Parsear fecha y hora
-      final startsAtStr = '$date $time';
+      // Parsear fecha y hora (normalizar HH:mm -> HH:mm:00 si hace falta)
+      final timeStr = time.length == 5 && time.contains(':') ? '$time:00' : time;
+      final startsAtStr = '$date $timeStr';
       DateTime startsAt;
       try {
         startsAt = DateTime.parse(startsAtStr);
@@ -231,6 +338,7 @@ class EventIngestionService {
           // Si ya existe, actualizarlo en lugar de crear uno nuevo
           final eventUuid = existingEvent['id'] as String;
           await _client.from('events').update(eventMap).eq('id', eventUuid);
+          await _saveEventTranslationsIfPresent(eventUuid, data['translations']);
           return EventIngestionResult(
             eventId: eventId,
             status: status,
@@ -238,7 +346,9 @@ class EventIngestionService {
             action: 'UPDATE (ya existía con este external_id)',
           );
         } else {
-          await _client.from('events').insert(eventMap);
+          final insertRes = await _client.from('events').insert(eventMap).select('id').single();
+          final eventUuid = insertRes['id'] as String;
+          await _saveEventTranslationsIfPresent(eventUuid, data['translations']);
           return EventIngestionResult(
             eventId: eventId,
             status: status,
@@ -257,6 +367,7 @@ class EventIngestionService {
         if (existingEvent != null) {
           final eventUuid = existingEvent['id'] as String;
           await _client.from('events').update(eventMap).eq('id', eventUuid);
+          await _saveEventTranslationsIfPresent(eventUuid, data['translations']);
           return EventIngestionResult(
             eventId: eventId,
             status: status,
@@ -265,7 +376,9 @@ class EventIngestionService {
           );
         } else {
           // Si no se encuentra, crear uno nuevo
-          await _client.from('events').insert(eventMap);
+          final insertRes = await _client.from('events').insert(eventMap).select('id').single();
+          final eventUuid = insertRes['id'] as String;
+          await _saveEventTranslationsIfPresent(eventUuid, data['translations']);
           return EventIngestionResult(
             eventId: eventId,
             status: status,
