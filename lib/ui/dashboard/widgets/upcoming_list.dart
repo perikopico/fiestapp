@@ -8,6 +8,7 @@ import '../../../services/notification_alerts_service.dart';
 import '../../../services/category_service.dart';
 import '../../../utils/accessibility_utils.dart';
 import '../../../utils/distance_utils.dart';
+import '../../../utils/snackbar_utils.dart';
 import '../dashboard_screen.dart'; // Para CityEventGroup
 import 'package:flutter/services.dart';
 
@@ -418,13 +419,7 @@ class _UpcomingListState extends State<UpcomingList> {
       setState(() {});
       
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Has dejado de seguir esta ciudad'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showTopSnackBar(context, message: 'Has dejado de seguir esta ciudad');
       }
       return;
     }
@@ -441,13 +436,7 @@ class _UpcomingListState extends State<UpcomingList> {
       
       // Mostrar feedback visual
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Listo! Te avisaremos de eventos en esta ciudad'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showTopSnackBar(context, message: '¡Listo! Te avisaremos de eventos en esta ciudad');
       }
     } else {
       // CASO B: Hay filtro de categoría activo
@@ -543,13 +532,7 @@ class _UpcomingListState extends State<UpcomingList> {
       setState(() {});
       
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('¡Listo! Te avisaremos de todos los eventos en esta ciudad'),
-            duration: Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
+        showTopSnackBar(context, message: '¡Listo! Te avisaremos de todos los eventos en esta ciudad');
       }
     }
   }
@@ -572,22 +555,17 @@ class _UpcomingListState extends State<UpcomingList> {
       setState(() {});
       
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('¡Listo! Te avisaremos de eventos de $categoryName en esta ciudad'),
-            duration: const Duration(seconds: 2),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showTopSnackBar(
+          context,
+          message: '¡Listo! Te avisaremos de eventos de $categoryName en esta ciudad',
         );
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al configurar notificaciones: ${e.toString()}'),
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
-          ),
+        showTopSnackBar(
+          context,
+          message: 'Error al configurar notificaciones: ${e.toString()}',
+          duration: const Duration(seconds: 3),
         );
       }
     }
@@ -845,30 +823,34 @@ class _UpcomingListState extends State<UpcomingList> {
                             await FavoritesService.instance.toggleFavorite(event.id);
                             if (mounted) {
                               setState(() {});
-                              // Mostrar mensaje de confirmación
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    wasFavorite
-                                        ? 'Eliminado de favoritos'
-                                        : 'Guardado en favoritos. Te avisaremos antes del evento',
-                                  ),
-                                  duration: const Duration(seconds: 2),
-                                ),
+                              showTopSnackBar(
+                                context,
+                                message: wasFavorite
+                                    ? 'Eliminado de favoritos'
+                                    : 'Guardado en favoritos. Te avisaremos antes del evento',
                               );
                             }
                           },
-                          borderRadius: BorderRadius.circular(20),
-                          child: Container(
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: Colors.black.withOpacity(0.5),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              isFavorite ? Icons.favorite : Icons.favorite_border,
-                              size: 14,
-                              color: isFavorite ? Colors.red : Colors.white,
+                          borderRadius: BorderRadius.circular(22),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
+                            child: Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                Transform.translate(
+                                  offset: const Offset(1, 1),
+                                  child: Icon(
+                                    isFavorite ? Icons.favorite : Icons.favorite_border,
+                                    size: 20,
+                                    color: Colors.black.withOpacity(0.45),
+                                  ),
+                                ),
+                                Icon(
+                                  isFavorite ? Icons.favorite : Icons.favorite_border,
+                                  size: 20,
+                                  color: isFavorite ? Colors.red : Colors.white,
+                                ),
+                              ],
                             ),
                           ),
                         ),

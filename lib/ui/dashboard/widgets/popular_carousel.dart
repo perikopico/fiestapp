@@ -6,6 +6,7 @@ import '../../icons/icon_mapper.dart';
 import '../../event/event_detail_screen.dart';
 import '../../../services/favorites_service.dart';
 import '../../../utils/accessibility_utils.dart';
+import '../../../utils/snackbar_utils.dart';
 import '../../common/glass_card.dart';
 
 class PopularCarousel extends StatefulWidget {
@@ -410,24 +411,40 @@ class _PopularCarouselState extends State<PopularCarousel> {
                                   color: Colors.transparent,
                                   child: InkWell(
                                     onTap: () async {
+                                      final wasFavorite = FavoritesService.instance.isFavorite(event.id);
                                       await FavoritesService.instance.toggleFavorite(event.id);
                                       if (mounted) {
                                         setState(() {});
+                                        showTopSnackBar(
+                                          context,
+                                          message: wasFavorite
+                                              ? 'Eliminado de favoritos'
+                                              : 'Guardado en favoritos',
+                                        );
                                       }
                                     },
-                                    borderRadius: BorderRadius.circular(20),
-                                    child: Container(
+                                    borderRadius: BorderRadius.circular(24),
+                                    child: Padding(
                                       padding: const EdgeInsets.all(6),
-                                      decoration: BoxDecoration(
-                                        color: Colors.black.withOpacity(0.5),
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Icon(
-                                        isFavorite ? Icons.favorite : Icons.favorite_border,
-                                        color: isFavorite
-                                            ? Colors.red
-                                            : Colors.white,
-                                        size: 18,
+                                      child: Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          Transform.translate(
+                                            offset: const Offset(1, 1),
+                                            child: Icon(
+                                              isFavorite ? Icons.favorite : Icons.favorite_border,
+                                              size: 24,
+                                              color: Colors.black.withOpacity(0.45),
+                                            ),
+                                          ),
+                                          Icon(
+                                            isFavorite ? Icons.favorite : Icons.favorite_border,
+                                            size: 24,
+                                            color: isFavorite
+                                                ? Colors.red
+                                                : Colors.white,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   ),

@@ -18,6 +18,7 @@ import '../../services/report_service.dart';
 import '../../services/analytics_service.dart';
 import '../../utils/url_helper.dart';
 import '../../utils/validation_utils.dart';
+import '../../utils/snackbar_utils.dart';
 import '../../services/logger_service.dart';
 import '../../services/notification_alerts_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -74,16 +75,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _isFollowing = newValue);
     await _alertsService.setEventFollowed(widget.event.id, newValue);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            newValue
-                ? '¡Listo! Te avisaremos de eventos similares'
-                : 'Has dejado de seguir este evento',
-          ),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
+      showTopSnackBar(
+        context,
+        message: newValue
+            ? '¡Listo! Te avisaremos de eventos similares'
+            : 'Has dejado de seguir este evento',
       );
     }
   }
@@ -94,14 +90,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _isFavorite = newValue);
     await FavoritesLocalService.instance.toggleFavorite(widget.event.id);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            newValue ? 'Añadido a favoritos' : 'Eliminado de favoritos',
-          ),
-          duration: const Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-        ),
+      showTopSnackBar(
+        context,
+        message: newValue ? 'Añadido a favoritos' : 'Eliminado de favoritos',
       );
     }
   }
@@ -962,24 +953,18 @@ class _FloatingFavoriteButtonState extends State<_FloatingFavoriteButton>
         color: Colors.transparent,
         child: InkWell(
           onTap: _handleTap,
-          borderRadius: BorderRadius.circular(28),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  color: Colors.white.withOpacity(0.3),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.5),
-                    width: 1,
-                  ),
+          borderRadius: BorderRadius.circular(29),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Transform.translate(
+                  offset: const Offset(1, 1),
+                  child: Icon(icon, color: Colors.black.withOpacity(0.4), size: 29),
                 ),
-                child: Icon(icon, color: color, size: 22),
-              ),
+                Icon(icon, color: color, size: 29),
+              ],
             ),
           ),
         ),

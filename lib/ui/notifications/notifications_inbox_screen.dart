@@ -4,7 +4,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import '../common/app_bar_logo.dart';
 import '../event/event_detail_screen.dart';
 import '../../services/auth_service.dart';
 import '../../services/notifications_count_service.dart';
@@ -234,32 +233,35 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasUnread = _notifications.any((n) => n['read_at'] == null);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: const AppBarLogo(),
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: theme.scaffoldBackgroundColor,
-        actions: [
-          if (_notifications.any((n) => n['read_at'] == null))
-            TextButton.icon(
-              onPressed: () async {
-                // Marcar todas como leídas
-                for (final notification in _notifications) {
-                  if (notification['read_at'] == null) {
-                    await _markAsRead(notification['id']);
-                  }
-                }
-                await _loadNotifications();
-              },
-              icon: const Icon(Icons.done_all),
-              label: const Text('Marcar todas'),
+      // Sin AppBar: la pantalla padre (NotificationsScreen) ya muestra logo y pestañas
+      body: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasUnread && _notifications.isNotEmpty && !_isLoading && !_hasError)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    for (final notification in _notifications) {
+                      if (notification['read_at'] == null) {
+                        await _markAsRead(notification['id']);
+                      }
+                    }
+                    await _loadNotifications();
+                  },
+                  icon: const Icon(Icons.done_all, size: 18),
+                  label: const Text('Marcar todas'),
+                ),
+              ),
             ),
-        ],
-      ),
-      body: _isLoading
+          Expanded(
+            child: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : _hasError
               ? Center(
@@ -421,6 +423,9 @@ class _NotificationsInboxScreenState extends State<NotificationsInboxScreen> {
                         },
                       ),
                     ),
+          ),
+        ],
+      ),
     );
   }
 }
